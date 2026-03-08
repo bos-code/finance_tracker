@@ -1,5 +1,5 @@
-import { BottomTabs } from "@/components/navigation/bottom-tabs";
+import { BottomTabsNavigator } from "@/navigation/bottom-tabs-navigator";
 
 export default function TabsLayout() {
-  return <BottomTabs />;
+  return <BottomTabsNavigator />;
 }
