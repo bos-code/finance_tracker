@@ -1,6 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
+import { supabaseSignIn, supabaseSignUp, supabaseSignOut } from "@/services/supabase/auth-service";
+import { supabaseClient } from "@/services/supabase/supabase-client";
+import { Session, User } from "@supabase/supabase-js";
 
 type UserSession = {
   uid: string;
@@ -16,8 +18,6 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
 };
 
-const AUTH_STORAGE_KEY = "auth_session";
-
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -25,58 +25,53 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   useEffect(() => {
-    const bootstrap = async () => {
-      try {
-        const rawSession = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-        if (rawSession) {
-          setUser(JSON.parse(rawSession) as UserSession);
-        }
-      } finally {
-        setIsBootstrapping(false);
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          uid: session.user.id,
+          email: session.user.email || "",
+          fullName: session.user.user_metadata?.full_name,
+        });
+      } else {
+        setUser(null);
       }
+      setIsBootstrapping(false);
+    });
+
+    const { data: authListener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          uid: session.user.id,
+          email: session.user.email || "",
+          fullName: session.user.user_metadata?.full_name,
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
     };
-
-    void bootstrap();
   }, []);
 
-  const persistSession = useCallback(async (session: UserSession | null) => {
-    if (!session) {
-      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-      return;
+  const signIn = useCallback(async (email: string, password: string) => {
+    await supabaseSignIn(email, password);
+  }, []);
+
+  const signUp = useCallback(async (fullName: string, email: string, password: string) => {
+    const data = await supabaseSignUp(email, password);
+    // Optionally update user metadata with full name
+    if (data?.user) {
+      await supabaseClient.auth.updateUser({
+        data: { full_name: fullName }
+      });
     }
-
-    await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
   }, []);
-
-  const signIn = useCallback(
-    async (email: string, _password: string) => {
-      const session: UserSession = {
-        uid: "local-user",
-        email,
-      };
-      setUser(session);
-      await persistSession(session);
-    },
-    [persistSession],
-  );
-
-  const signUp = useCallback(
-    async (fullName: string, email: string, _password: string) => {
-      const session: UserSession = {
-        uid: "local-user",
-        email,
-        fullName,
-      };
-      setUser(session);
-      await persistSession(session);
-    },
-    [persistSession],
-  );
 
   const signOut = useCallback(async () => {
-    setUser(null);
-    await persistSession(null);
-  }, [persistSession]);
+    await supabaseSignOut();
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
