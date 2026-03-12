@@ -13,10 +13,11 @@ export async function supabaseSignIn(email: string, password: string) {
   return data;
 }
 
-export async function supabaseSignUp(email: string, password: string) {
+export async function supabaseSignUp(email: string, password: string, fullName?: string) {
   const { data, error } = await supabaseClient.auth.signUp({
     email,
     password,
+    options: fullName ? { data: { full_name: fullName } } : undefined,
   });
 
   if (error) {
@@ -41,3 +42,11 @@ export async function supabaseResetPassword(email: string, redirectToUrl: string
     throw error;
   }
 }
+
+export async function supabaseUpdateName(fullName: string) {
+  const { error } = await supabaseClient.auth.updateUser({
+    data: { full_name: fullName },
+  });
+  if (error) throw error;
+}
+

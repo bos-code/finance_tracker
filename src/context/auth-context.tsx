@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
-import { supabaseSignIn, supabaseSignUp, supabaseSignOut } from "@/services/supabase/auth-service";
+import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseUpdateName } from "@/services/supabase/auth-service";
 import { supabaseClient } from "@/services/supabase/supabase-client";
 import { Session, User } from "@supabase/supabase-js";
 
@@ -16,6 +16,7 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (fullName: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateName: (fullName: string) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -65,17 +66,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signUp = useCallback(async (fullName: string, email: string, password: string) => {
-    const data = await supabaseSignUp(email, password);
-    // Optionally update user metadata with full name
-    if (data?.user) {
-      await supabaseClient.auth.updateUser({
-        data: { full_name: fullName }
-      });
-    }
+    // Pass full_name inside signUp options so it's atomic — avoids a separate
+    // updateUser call that can fail if email-confirmation hasn't established a
+    // session yet.
+    await supabaseSignUp(email, password, fullName);
   }, []);
 
   const signOut = useCallback(async () => {
     await supabaseSignOut();
+  }, []);
+
+  const updateName = useCallback(async (fullName: string) => {
+    await supabaseUpdateName(fullName);
+    setUser((prev) => prev ? { ...prev, fullName } : prev);
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -85,8 +88,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signIn,
       signUp,
       signOut,
+      updateName,
     }),
-    [isBootstrapping, signIn, signOut, signUp, user],
+    [isBootstrapping, signIn, signOut, signUp, updateName, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -20,6 +20,8 @@ import {
   CategoryBreakdown,
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
+import { useCurrency } from "@/context/currency-context";
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -31,15 +33,20 @@ const DONUT_COLORS = [
 
 type ViewMode = "Month" | "Year";
 
-function DonutChart({
-  breakdown,
+/**
+ * TotalRing — displays a single-color ring with the total amount in the centre.
+ * Renamed from "DonutChart" to be honest about what it renders: it is NOT a
+ * segmented donut. Category proportions are shown in the stacked bar below.
+ * A true segmented ring would require react-native-svg (not yet installed).
+ */
+function TotalRing({
   total,
   type,
 }: {
-  breakdown: CategoryBreakdown[];
   total: number;
   type: TransactionType;
 }) {
+  const { formatAmount } = useCurrency();
   const isExp = type === "Expenditure";
   if (total === 0) {
     return (
@@ -62,13 +69,14 @@ function DonutChart({
             {isExp ? "Total exp" : "Total rev"}
           </Text>
           <Text className="text-[14px] font-bold text-slate-900 text-center">
-            {isExp ? "-" : "+"}{total.toLocaleString("en-US")}
+            {isExp ? "-" : "+"}{formatAmount(total)}
           </Text>
         </View>
       </View>
     </View>
   );
 }
+
 
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
   const max = Math.max(...data.map((d) => d.value), 1);
@@ -247,7 +255,8 @@ export function StatsScreen() {
               className="mx-4 mt-4 bg-white rounded-2xl p-5 items-center"
               style={{ shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 }}
             >
-              <DonutChart breakdown={breakdown} total={activeTotal} type={statsType} />
+              <TotalRing total={activeTotal} type={statsType} />
+
 
               {breakdown.length > 0 && (
                 <View className="w-full mt-4">

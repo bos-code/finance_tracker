@@ -19,16 +19,15 @@ import { CustomKeypad } from "@/components/ui/custom-keypad";
 import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
 import { CategoryEditor } from "@/components/ui/category-editor";
-import {
-  EXPENDITURE_CATEGORIES,
-  REVENUE_CATEGORIES,
-  type Category,
-} from "@/constants/categories";
+import { EXPENDITURE_CATEGORIES, REVENUE_CATEGORIES, type Category } from "@/constants/categories";
+import { useCurrency } from "@/context/currency-context";
+import { toLocalDateString } from "@/utils/date";
 
 type TransactionType = "Expenditure" | "Revenue";
 
 export function HomeScreen() {
   const { user } = useAuth();
+  const { currency } = useCurrency();
   const insets = useSafeAreaInsets();
 
   // ── Transaction type ─────────────────────────────────────────────
@@ -109,8 +108,9 @@ export function HomeScreen() {
         amount: rawAmount,
         note,
         category_id: categoryId,
-        transaction_date: date.toISOString(),
+        transaction_date: toLocalDateString(date), // local YYYY-MM-DD, not UTC
       });
+
       setFeedback({ visible: true, type: "success", message: `${type} saved successfully.` });
       setAmount("");
       setNote("");
@@ -177,7 +177,7 @@ export function HomeScreen() {
                 <Text className={`flex-1 font-semibold text-[15px] mr-2 text-right ${amount ? "text-slate-900" : "text-[#94a3b8]"}`}>
                   {amount || "0"}
                 </Text>
-                <Text className="font-bold text-[18px] text-[#94a3b8] ml-2">{symbol}</Text>
+                <Text className="font-bold text-[18px] text-[#94a3b8] ml-2">{currency.symbol}</Text>
               </TouchableOpacity>
             </View>
 
