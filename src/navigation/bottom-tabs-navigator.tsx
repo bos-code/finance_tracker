@@ -10,9 +10,9 @@ type TabIconProps = {
 
 function TabIcon({ focused, icon, title }: TabIconProps) {
   return (
-    <View className="h-full w-full items-center justify-center">
+    <View className="h-full w-full flex items-center justify-center">
       <View
-        className={`h-11 w-11 items-center justify-center rounded-2xl ${
+        className={`h-11 w-11 flex  items-center justify-center rounded-2xl ${
           focused ? "bg-[#1d4ed8]" : "bg-[#e8efff]"
         }`}>
         <Image
@@ -28,7 +28,7 @@ function TabIcon({ focused, icon, title }: TabIconProps) {
       <Text
         numberOfLines={1}
         ellipsizeMode="tail"
-        className={`mb-3 mt-1 w-20 text-center text-[11px] font-semibold leading-none ${
+        className={`mt-1 mb-3 w-20 text-[11px] text-center font-semibold leading-none ${
           focused ? "text-[#1d4ed8]" : "text-[#64748b]"
         }`}>
         {title}
@@ -37,7 +37,7 @@ function TabIcon({ focused, icon, title }: TabIconProps) {
   );
 }
 
-export function BottomTabsNavigator() {
+export function BottomTabs() {
   return (
     <Tabs
       screenOptions={{
@@ -56,7 +56,9 @@ export function BottomTabsNavigator() {
         },
         tabBarStyle: {
           backgroundColor: "#f8faff",
+
           marginHorizontal: 0,
+
           height: 90,
           paddingTop: 0,
           position: "absolute",
@@ -78,6 +80,7 @@ export function BottomTabsNavigator() {
         name="calender/index"
         options={{
           title: "Calendar",
+
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon={icons.calendar} title="Calendar" />
           ),
@@ -88,7 +91,11 @@ export function BottomTabsNavigator() {
         options={{
           title: "Statistical",
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.chartpie} title="Statistical" />
+            <TabIcon
+              focused={focused}
+              icon={icons.chartpie}
+              title="Statistical"
+            />
           ),
         }}
       />
