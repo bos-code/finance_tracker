@@ -25,12 +25,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   useEffect(() => {
-    supabaseClient.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
+    // getSession might return a stale JWT that doesn't include freshly updated metadata.
+    // getUser() guarantees we hit the Supabase server to get the latest `full_name`.
+    supabaseClient.auth.getUser().then(({ data: { user: currentUser } }) => {
+      if (currentUser) {
         setUser({
-          uid: session.user.id,
-          email: session.user.email || "",
-          fullName: session.user.user_metadata?.full_name,
+          uid: currentUser.id,
+          email: currentUser.email || "",
+          fullName: currentUser.user_metadata?.full_name,
         });
       } else {
         setUser(null);
@@ -39,15 +41,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
 
     const { data: authListener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser({
-          uid: session.user.id,
-          email: session.user.email || "",
-          fullName: session.user.user_metadata?.full_name,
-        });
-      } else {
-        setUser(null);
-      }
+      // Whenever auth state changes, fetch the fresh user object to get the latest metadata
+      supabaseClient.auth.getUser().then(({ data: { user: updatedUser } }) => {
+        if (updatedUser) {
+          setUser({
+            uid: updatedUser.id,
+            email: updatedUser.email || "",
+            fullName: updatedUser.user_metadata?.full_name,
+          });
+        } else {
+          setUser(null);
+        }
+      });
     });
 
     return () => {

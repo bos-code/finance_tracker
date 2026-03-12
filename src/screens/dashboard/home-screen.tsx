@@ -13,10 +13,11 @@ import {
   ScrollView,
   Keyboard,
 } from "react-native";
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/hooks/use-auth";
 import { createTransaction } from "@/services/supabase/transaction-service";
 import { CustomKeypad } from "@/components/ui/custom-keypad";
+import { CustomCalendar } from "@/components/ui/custom-calendar";
 
 type TransactionType = "Expenditure" | "Revenue";
 
@@ -44,12 +45,8 @@ export function HomeScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showKeypad, setShowKeypad] = useState(false);
-
-  const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    const currentDate = selectedDate || date;
-    setShowDatePicker(Platform.OS === 'ios');
-    setDate(currentDate);
-  };
+  
+  const insets = useSafeAreaInsets();
 
   const handleKeypadPress = (key: string) => {
     let raw = amount.replace(/[^0-9.]/g, "");
@@ -170,7 +167,11 @@ export function HomeScreen() {
             <View className="flex-row items-center justify-between">
               <Text className="text-[16px] font-bold text-slate-900 w-24">Time</Text>
               <TouchableOpacity
-                onPress={() => setShowDatePicker(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowKeypad(false);
+                  setShowDatePicker(true);
+                }}
                 className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]"
               >
                 <MaterialCommunityIcons name="calendar-month-outline" size={24} color="#1d4ed8" />
@@ -180,17 +181,6 @@ export function HomeScreen() {
                 <MaterialCommunityIcons name="chevron-down" size={24} color="#1d4ed8" />
               </TouchableOpacity>
             </View>
-
-            {showDatePicker && (
-              <DateTimePicker
-                testID="dateTimePicker"
-                value={date}
-                mode="date"
-                is24Hour={true}
-                display="default"
-                onChange={onChangeDate}
-              />
-            )}
 
             {/* Amount */}
             <View className="flex-row items-center justify-between">
@@ -293,11 +283,35 @@ export function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Custom Calendar Modal */}
+      <Modal 
+        visible={showDatePicker} 
+        transparent 
+        animationType="fade"
+      >
+        <TouchableOpacity 
+          activeOpacity={1} 
+          onPress={() => setShowDatePicker(false)} 
+          className="flex-1 bg-black/40 justify-center px-4"
+        >
+          <TouchableOpacity activeOpacity={1}>
+            <CustomCalendar 
+              selectedDate={date}
+              onSelectDate={(newDate) => setDate(newDate)}
+              onClose={() => setShowDatePicker(false)}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Custom Keypad Slider */}
       {showKeypad && (
         <View 
-          className="absolute bottom-0 left-0 right-0 z-50"
-          style={{ paddingBottom: 85 }} // Offset to sit exactly above bottom tabs gracefully or cover fully
+          className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[#f0f3fa]"
+          style={{ 
+            paddingBottom: Math.max(insets.bottom, 85), 
+            shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 20 
+          }}
         >
           <CustomKeypad 
             onKeyPress={handleKeypadPress}

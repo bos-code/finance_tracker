@@ -40,7 +40,7 @@ export function ProfileScreen() {
           </View>
           <View className="flex-1 justify-center">
             <Text className="text-[18px] font-bold text-slate-900 leading-tight">
-              {user?.fullName || "Kittens saving"}
+              {user?.fullName || "Guest User"}
             </Text>
             <Text className="text-[13px] text-slate-500 mt-1">
               {user?.email || "No email"}

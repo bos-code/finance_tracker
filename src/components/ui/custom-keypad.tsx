@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
-import { View, Text, TouchableOpacity, Dimensions } from "react-native";
+import { View, Text, TouchableOpacity, Pressable, Platform } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 interface CustomKeypadProps {
   onKeyPress: (key: string) => void;
@@ -16,11 +17,47 @@ const KEYS = [
   [".", "0", "delete"],
 ];
 
+function KeyButton({ keyId, isDelete, onPress }: { keyId: string, isDelete: boolean, onPress: (k: string) => void }) {
+  const scale = useSharedValue(1);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const handlePressIn = () => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    scale.value = withSpring(0.9, { damping: 15 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1);
+    onPress(keyId);
+  };
+
+  return (
+    <Pressable
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      className="flex-1"
+    >
+      <Animated.View
+         className={`h-[56px] rounded-2xl items-center justify-center ${
+           isDelete ? "bg-transparent" : "bg-white"
+         }`}
+         style={[
+           style,
+           !isDelete ? { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, elevation: 1 } : undefined
+         ]}
+      >
+        {isDelete ? (
+          <MaterialCommunityIcons name="backspace-outline" size={26} color="#64748b" />
+        ) : (
+          <Text className="text-[26px] font-semibold text-[#0b1220]">{keyId}</Text>
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 export function CustomKeypad({ onKeyPress, onBackspace, onDone }: CustomKeypadProps) {
   const handlePress = (key: string) => {
-    // Subtle haptic response for premium feel
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     if (key === "delete") {
       onBackspace();
     } else {
@@ -46,26 +83,12 @@ export function CustomKeypad({ onKeyPress, onBackspace, onDone }: CustomKeypadPr
             {row.map((key) => {
               const isDelete = key === "delete";
               return (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => handlePress(key)}
-                  className={`flex-1 h-[56px] rounded-2xl items-center justify-center ${
-                    isDelete ? "bg-transparent" : "bg-white"
-                  }`}
-                  style={!isDelete ? {
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 1,
-                    elevation: 1,
-                  } : undefined}
-                >
-                  {isDelete ? (
-                    <MaterialCommunityIcons name="backspace-outline" size={26} color="#64748b" />
-                  ) : (
-                    <Text className="text-[24px] font-semibold text-[#0b1220]">{key}</Text>
-                  )}
-                </TouchableOpacity>
+                <KeyButton 
+                  key={key} 
+                  keyId={key} 
+                  isDelete={isDelete} 
+                  onPress={handlePress} 
+                />
               );
             })}
           </View>
