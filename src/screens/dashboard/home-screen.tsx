@@ -8,12 +8,14 @@ import {
   View,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Alert,
+  Modal,
+  ScrollView,
 } from "react-native";
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from "@/hooks/use-auth";
 import { createTransaction } from "@/services/supabase/transaction-service";
+import { CustomKeypad } from "@/components/ui/custom-keypad";
 
 type TransactionType = "Expenditure" | "Revenue";
 
@@ -40,6 +42,7 @@ export function HomeScreen() {
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showKeypad, setShowKeypad] = useState(false);
 
   const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
     const currentDate = selectedDate || date;
@@ -47,16 +50,40 @@ export function HomeScreen() {
     setDate(currentDate);
   };
 
-  const handleAmountChange = (text: string) => {
-    // Remove non-numeric characters for the raw value, but keep formatting
-    const numericValue = text.replace(/[^0-9]/g, "");
-    if (!numericValue) {
+  const handleKeypadPress = (key: string) => {
+    let raw = amount.replace(/[^0-9.]/g, "");
+    
+    // Prevent multiple decimals
+    if (key === "." && raw.includes(".")) return;
+    
+    raw += key;
+    
+    if (raw === "" || raw === ".") {
+      setAmount(raw);
+      return;
+    }
+    
+    const parts = raw.split(".");
+    const integerPart = parseInt(parts[0] || "0", 10).toLocaleString("en-US");
+    const newFormatted = parts.length > 1 ? `${integerPart}.${parts[1]}` : integerPart;
+    setAmount(newFormatted);
+  };
+
+  const handleKeypadBackspace = () => {
+    let raw = amount.replace(/[^0-9.]/g, "");
+    if (raw.length === 0) return;
+    
+    raw = raw.slice(0, -1);
+    
+    if (raw === "") {
       setAmount("");
       return;
     }
-    // Add commas
-    const formatted = parseInt(numericValue, 10).toLocaleString("en-US");
-    setAmount(formatted);
+    
+    const parts = raw.split(".");
+    const integerPart = parseInt(parts[0] || "0", 10).toLocaleString("en-US");
+    const newFormatted = parts.length > 1 ? `${integerPart}.${parts[1]}` : integerPart;
+    setAmount(newFormatted);
   };
 
   const handleSave = async () => {
@@ -170,14 +197,18 @@ export function HomeScreen() {
               <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
                 <TextInput
                   value={amount}
-                  onChangeText={handleAmountChange}
-                  placeholder="Enter the amount"
+                  onFocus={() => {
+                    setShowDatePicker(false);
+                    setShowKeypad(true);
+                  }}
+                  showSoftInputOnFocus={false}
+                  caretHidden={true}
+                  placeholder="0"
                   placeholderTextColor="#94a3b8"
-                  keyboardType="numeric"
-                  className="flex-1 font-semibold text-[15px] text-slate-900 mr-2 h-full"
+                  className="flex-1 font-semibold text-[15px] text-slate-900 mr-2 h-full text-right"
                   selectionColor="#1d4ed8"
                 />
-                <Text className="font-bold text-[18px] text-[#94a3b8]">
+                <Text className="font-bold text-[18px] text-[#94a3b8] ml-2">
                   {type === "Expenditure" ? "$" : "D"}
                 </Text>
               </View>
@@ -258,6 +289,20 @@ export function HomeScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Custom Keypad Slider */}
+      {showKeypad && (
+        <View 
+          className="absolute bottom-0 left-0 right-0 z-50"
+          style={{ paddingBottom: 85 }} // Offset to sit exactly above bottom tabs gracefully or cover fully
+        >
+          <CustomKeypad 
+            onKeyPress={handleKeypadPress}
+            onBackspace={handleKeypadBackspace}
+            onDone={() => setShowKeypad(false)}
+          />
+        </View>
+      )}
     </Screen>
   );
 }
