@@ -1,10 +1,10 @@
-import { BottomTabsNavigator } from "@/navigation/bottom-tabs-navigator";
+import { BottomTabs } from "@/navigation/bottom-tabs-navigator";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
 export default function TabsLayout() {
   return (
     <ProtectedRoute>
-      <BottomTabsNavigator />
+      <BottomTabs />
     </ProtectedRoute>
   );
 }
