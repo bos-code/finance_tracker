@@ -126,22 +126,26 @@ export function calcDailyTotals(transactions: Transaction[]): Record<string, Dai
 }
 
 /**
- * Returns category spending breakdown for expenditures in a given transaction list.
+ * Returns category spending breakdown for a given type in a transaction list.
+ * Defaults to "Expenditure" for backwards compatibility.
  */
-export function calcCategoryBreakdown(transactions: Transaction[]): CategoryBreakdown[] {
+export function calcCategoryBreakdown(
+  transactions: Transaction[],
+  type: TransactionType = "Expenditure"
+): CategoryBreakdown[] {
   const map: Record<string, number> = {};
-  let totalExpenditure = 0;
+  let total = 0;
 
   for (const tx of transactions) {
-    if (tx.type !== "Expenditure") continue;
+    if (tx.type !== type) continue;
     map[tx.category_id] = (map[tx.category_id] || 0) + tx.amount;
-    totalExpenditure += tx.amount;
+    total += tx.amount;
   }
 
-  return Object.entries(map).map(([category_id, total]) => ({
+  return Object.entries(map).map(([category_id, amount]) => ({
     category_id,
-    total,
-    percentage: totalExpenditure > 0 ? (total / totalExpenditure) * 100 : 0,
+    total: amount,
+    percentage: total > 0 ? (amount / total) * 100 : 0,
   })).sort((a, b) => b.total - a.total);
 }
 
