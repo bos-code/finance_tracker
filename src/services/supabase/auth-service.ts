@@ -13,10 +13,11 @@ export async function supabaseSignIn(email: string, password: string) {
   return data;
 }
 
-export async function supabaseSignUp(email: string, password: string) {
+export async function supabaseSignUp(email: string, password: string, fullName?: string) {
   const { data, error } = await supabaseClient.auth.signUp({
     email,
     password,
+    options: fullName ? { data: { full_name: fullName } } : undefined,
   });
 
   if (error) {

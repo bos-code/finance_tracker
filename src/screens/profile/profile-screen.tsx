@@ -1,6 +1,8 @@
 import { Screen } from "@/components/ui/screen";
 import { GRADIENT_PRESETS, SOLID_PRESETS, ThemeConfig, useTheme } from "@/context/theme-context";
+import { useCurrency, CURRENCY_OPTIONS } from "@/context/currency-context";
 import { useAuth } from "@/hooks/use-auth";
+
 import { ROUTES } from "@/navigation/route-names";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -138,11 +140,11 @@ function GradientSwatch({ colors, selected, onPress }: { colors: [string, string
 export function ProfileScreen() {
   const { user, signOut, updateName } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { currency, setCurrency } = useCurrency();
   const insets = useSafeAreaInsets();
 
   // Settings state
   const [activeModal, setActiveModal] = useState<"money" | "notification" | "language" | "theme" | "name" | null>(null);
-  const [currency, setCurrency] = useState("USD ($)");
   const [notifications, setNotifications] = useState(false);
   const [language, setLanguage] = useState("English");
 
@@ -221,11 +223,8 @@ export function ProfileScreen() {
     ]);
   };
 
-  const CURRENCIES = [
-    { label: "USD ($)", symbol: "$" }, { label: "EUR (€)", symbol: "€" },
-    { label: "GBP (£)", symbol: "£" }, { label: "JPY (¥)", symbol: "¥" },
-    { label: "KRW (₩)", symbol: "₩" }, { label: "VND (₫)", symbol: "₫" },
-  ];
+  // CURRENCY_OPTIONS imported from currency-context
+
 
   const LANGUAGES = [
     { id: "English", label: "English", flag: "🇬🇧" }, { id: "Vietnamese", label: "Vietnamese", flag: "🇻🇳" },
@@ -412,13 +411,13 @@ export function ProfileScreen() {
       {/* ── Currency ──────────────────────────────────────────── */}
       <BottomSheet visible={activeModal === "money"} title="Currency" onClose={close}>
         <View style={{ paddingTop: 8 }}>
-          {CURRENCIES.map((c, i, arr) => (
-            <TouchableOpacity key={c.label} onPress={() => { setCurrency(c.label); close(); }} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: i !== arr.length - 1 ? 1 : 0, borderBottomColor: "#f1f5f9" }}>
+          {CURRENCY_OPTIONS.map((c, i, arr) => (
+            <TouchableOpacity key={c.id} onPress={() => { setCurrency(c); close(); }} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: i !== arr.length - 1 ? 1 : 0, borderBottomColor: "#f1f5f9" }}>
               <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: "#f0f9ff", alignItems: "center", justifyContent: "center", marginRight: 14 }}>
                 <Text style={{ fontSize: 18, fontWeight: "700", color: "#0ea5e9" }}>{c.symbol}</Text>
               </View>
               <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#0f172a" }}>{c.label}</Text>
-              {currency === c.label && (
+              {currency.id === c.id && (
                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#22c55e", alignItems: "center", justifyContent: "center" }}>
                   <MaterialCommunityIcons name="check" size={15} color="#fff" />
                 </View>
@@ -427,6 +426,7 @@ export function ProfileScreen() {
           ))}
         </View>
       </BottomSheet>
+
 
       {/* ── Notifications ─────────────────────────────────────── */}
       <BottomSheet visible={activeModal === "notification"} title="Notifications" onClose={close}>

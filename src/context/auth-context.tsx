@@ -66,13 +66,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signUp = useCallback(async (fullName: string, email: string, password: string) => {
-    const data = await supabaseSignUp(email, password);
-    // Optionally update user metadata with full name
-    if (data?.user) {
-      await supabaseClient.auth.updateUser({
-        data: { full_name: fullName }
-      });
-    }
+    // Pass full_name inside signUp options so it's atomic — avoids a separate
+    // updateUser call that can fail if email-confirmation hasn't established a
+    // session yet.
+    await supabaseSignUp(email, password, fullName);
   }, []);
 
   const signOut = useCallback(async () => {

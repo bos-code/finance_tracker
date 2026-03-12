@@ -8,8 +8,15 @@ export type TransactionInsert = {
   amount: number;
   note: string;
   category_id: string;
-  transaction_date: string; // ISO String
+  /**
+   * Local calendar date in "YYYY-MM-DD" format.
+   * Do NOT pass `Date.toISOString()` here — that converts to UTC and will
+   * shift the date by a day for users in negative UTC offsets.
+   * Use `toLocalDateString(date)` from `@/utils/date` instead.
+   */
+  transaction_date: string;
 };
+
 
 export type Transaction = TransactionInsert & {
   id: string;
@@ -61,14 +68,18 @@ export async function createTransaction(data: TransactionInsert) {
 
 /**
  * Fetches all transactions for a user within a given month.
+ * Uses local "YYYY-MM-DD" date strings for range filtering — avoids UTC
+ * shift errors that occur when comparing against toISOString() timestamps.
  */
 export async function getTransactionsByMonth(
   userId: string,
   year: number,
   month: number // 1-12
 ): Promise<Transaction[]> {
-  const start = new Date(year, month - 1, 1).toISOString();
-  const end = new Date(year, month, 0, 23, 59, 59).toISOString();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const start = `${year}-${pad(month)}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${pad(month)}-${pad(lastDay)}`;
 
   const { data, error } = await supabaseClient
     .from("transactions")
