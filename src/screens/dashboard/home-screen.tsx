@@ -1,30 +1,184 @@
 import { Screen } from "@/components/ui/screen";
-import { formatCurrency } from "@/utils/formatters";
-import { Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useState } from "react";
+import {
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
 
-const cards = [
-  { id: "1", title: "Income", value: 19420, color: "bg-green-600" },
-  { id: "2", title: "Expenses", value: 12880, color: "bg-red-600" },
-  { id: "3", title: "Net", value: 6540, color: "bg-blue-700" },
+type TransactionType = "Expenditure" | "Revenue";
+
+const CATEGORIES = [
+  { id: "market", label: "Market", icon: "store", color: "#f43f5e" }, // rose-500
+  { id: "eat", label: "Eat and drink", icon: "silverware-fork-knife", color: "#f59e0b" }, // amber-500
+  { id: "shopping", label: "Shopping", icon: "cart-outline", color: "#3b82f6" }, // blue-500
+  { id: "gasoline", label: "Gasoline", icon: "gas-station", color: "#0ea5e9" }, // sky-500
+  { id: "house", label: "House", icon: "home-outline", color: "#a855f7" }, // purple-500
+  { id: "electricity", label: "Electricity", icon: "lightning-bolt", color: "#eab308" }, // yellow-500
+  { id: "phone", label: "Load phone", icon: "cellphone", color: "#22c55e" }, // green-500
+  { id: "school", label: "School", icon: "school-outline", color: "#6366f1" }, // indigo-500
+  { id: "credit", label: "Credit card", icon: "credit-card-outline", color: "#06b6d4" }, // cyan-500
 ];
 
 export function HomeScreen() {
-  return (
-    <Screen>
-      <Text className="text-2xl font-bold text-slate-900">Dashboard</Text>
-      <Text className="mt-1 text-sm text-slate-600">
-        Overview of your revenue and expenses.
-      </Text>
+  const [type, setType] = useState<TransactionType>("Expenditure");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [categoryId, setCategoryId] = useState("shopping");
 
-      <View className="mt-6 gap-4">
-        {cards.map((card) => (
-          <View key={card.id} className={`rounded-2xl p-5 ${card.color}`}>
-            <Text className="text-sm font-medium text-white/80">{card.title}</Text>
-            <Text className="mt-2 text-3xl font-bold text-white">
-              {formatCurrency(card.value)}
-            </Text>
+  const handleAmountChange = (text: string) => {
+    // Remove non-numeric characters for the raw value, but keep formatting
+    const numericValue = text.replace(/[^0-9]/g, "");
+    if (!numericValue) {
+      setAmount("");
+      return;
+    }
+    // Add commas
+    const formatted = parseInt(numericValue, 10).toLocaleString("en-US");
+    setAmount(formatted);
+  };
+
+  return (
+    <Screen className="px-0 bg-[#f4f6f9]">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView className="flex-1 px-4 pt-2 pb-[100px]" showsVerticalScrollIndicator={false}>
+          {/* Header Toggle */}
+          <View className="flex-row rounded-2xl bg-[#dce7ff] p-1 mt-2 mb-8">
+            <TouchableOpacity
+              onPress={() => setType("Expenditure")}
+              className={`flex-1 rounded-xl py-3 items-center justify-center ${
+                type === "Expenditure" ? "bg-[#1d4ed8]" : ""
+              }`}
+            >
+              <Text
+                className={`font-semibold text-[15px] ${
+                  type === "Expenditure" ? "text-white" : "text-[#1d4ed8]"
+                }`}
+              >
+                Expenditure
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setType("Revenue")}
+              className={`flex-1 rounded-xl py-3 items-center justify-center ${
+                type === "Revenue" ? "bg-[#1d4ed8]" : ""
+              }`}
+            >
+              <Text
+                className={`font-semibold text-[15px] ${
+                  type === "Revenue" ? "text-white" : "text-[#1d4ed8]"
+                }`}
+              >
+                Revenue
+              </Text>
+            </TouchableOpacity>
           </View>
-        ))}
+
+          {/* Form Fields container */}
+          <View className="gap-5">
+            {/* Time */}
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[16px] font-bold text-slate-900 w-24">Time</Text>
+              <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]">
+                <MaterialCommunityIcons name="chevron-left" size={24} color="#1d4ed8" />
+                <Text className="font-semibold text-[15px] text-slate-900">August 12, 2024</Text>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#1d4ed8" />
+              </View>
+            </View>
+
+            {/* Amount */}
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[16px] font-bold text-slate-900 w-24">Amount</Text>
+              <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
+                <TextInput
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  placeholder="Enter the amount"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="numeric"
+                  className="flex-1 font-semibold text-[15px] text-slate-900 mr-2 h-full"
+                  selectionColor="#1d4ed8"
+                />
+                <Text className="font-bold text-[18px] text-[#94a3b8]">
+                  {type === "Expenditure" ? "$" : "D"}
+                </Text>
+              </View>
+            </View>
+
+            {/* Note */}
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[16px] font-bold text-slate-900 w-24">Note</Text>
+              <View className="flex-1 flex-row items-center rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
+                <TextInput
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="Enter notes"
+                  placeholderTextColor="#94a3b8"
+                  className="flex-1 font-semibold text-[15px] text-slate-900 text-center h-full"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Categories */}
+          <View className="mt-8 mb-4 flex-row items-center justify-between">
+            <Text className="text-[16px] font-bold text-slate-900">Category</Text>
+            <TouchableOpacity>
+              <Text className="text-[15px] font-bold text-[#1d4ed8]">Edit</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View className="flex-row flex-wrap justify-between gap-y-3 pb-32">
+            {CATEGORIES.map((cat) => {
+              const isSelected = categoryId === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => setCategoryId(cat.id)}
+                  className={`w-[31%] h-24 items-center justify-center rounded-2xl bg-white border ${
+                    isSelected ? "border-[#1d4ed8] bg-[#f0f5ff]" : "border-gray-100"
+                  }`}
+                  style={!isSelected ? {
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.03,
+                    shadowRadius: 8,
+                    elevation: 1,
+                  } : undefined}
+                >
+                  <MaterialCommunityIcons name={cat.icon as any} size={28} color={cat.color} />
+                  <Text className="mt-2 text-[12px] font-semibold text-slate-900 text-center">
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Save Button (Fixed at bottom) */}
+      <View
+        className="absolute bottom-[90px] left-0 right-0 px-4 py-4 bg-white rounded-t-3xl"
+        style={{
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.05,
+          shadowRadius: 12,
+          elevation: 10,
+        }}
+      >
+        <TouchableOpacity className="w-full bg-[#1d4ed8] rounded-2xl h-14 items-center justify-center">
+          <Text className="text-white font-semibold text-[16px]">Save expenses</Text>
+        </TouchableOpacity>
       </View>
     </Screen>
   );

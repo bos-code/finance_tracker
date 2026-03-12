@@ -32,3 +32,12 @@ export async function supabaseSignOut() {
     throw error;
   }
 }
+
+export async function supabaseResetPassword(email: string) {
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    // We can define a redirectTo URL here if needed later for deep-linking
+  });
+  if (error) {
+    throw error;
+  }
+}

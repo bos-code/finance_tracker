@@ -1,12 +1,10 @@
-import { AppButton } from "@/components/common/app-button";
-import { AppInput } from "@/components/common/app-input";
-import { Screen } from "@/components/ui/screen";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
 import { isValidEmail } from "@/utils/validators";
 import { router } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Mode = "signIn" | "signUp";
 
@@ -42,7 +41,12 @@ export function AuthScreen() {
   const confirmPasswordRef = useRef<TextInput | null>(null);
 
   const headerText = useMemo(
-    () => (mode === "signIn" ? "Sign In" : "Create Account"),
+    () => (mode === "signIn" ? "Welcome Back" : "Create Account"),
+    [mode],
+  );
+  
+  const subHeaderText = useMemo(
+    () => (mode === "signIn" ? "Sign in to your account to continue" : "Start your financial journey with us"),
     [mode],
   );
 
@@ -87,38 +91,64 @@ export function AuthScreen() {
         await signUp(fullName, email, password);
       }
       router.replace(ROUTES.TABS_HOME);
+    } catch (error: any) {
+      Alert.alert(
+        mode === "signIn" ? "Sign In Failed" : "Sign Up Failed",
+        error?.message || "An unexpected error occurred. Please try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Screen>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: 'white' }}
+      edges={["top", "bottom"]}
+    >
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 24, paddingBottom: 48 }}>
-          <Text className="text-3xl font-bold text-slate-900">{headerText}</Text>
-          <Text className="mt-2 text-sm text-slate-600">
-            Continue to your finance dashboard.
-          </Text>
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 60, paddingBottom: 48 }}
+        >
+          {/* Header Section */}
+          <View className="mb-10 items-center">
+            <View className="h-16 w-16 bg-blue-50 rounded-2xl items-center justify-center mb-6">
+               <Text className="text-blue-600 text-3xl font-bold">F</Text>
+            </View>
+            <Text className="text-[28px] font-extrabold text-[#0b1220] tracking-tight">{headerText}</Text>
+            <Text className="mt-2 text-[15px] text-[#64748b] text-center max-w-[80%]">
+              {subHeaderText}
+            </Text>
+          </View>
 
-          <View className="mt-6 flex-row rounded-xl bg-slate-200 p-1">
+          {/* Premium Segmented Control */}
+          <View className="flex-row rounded-full bg-[#f8fafc] p-[4px] mb-8 border border-[#f1f5f9]">
             <Pressable
               onPress={() => {
                 setMode("signIn");
                 setErrors({});
               }}
-              className={`flex-1 rounded-lg px-4 py-3 ${
-                mode === "signIn" ? "bg-blue-700" : ""
-              }`}>
+              className={`flex-1 rounded-full py-3.5 items-center justify-center ${
+                mode === "signIn" ? "bg-white" : ""
+              }`}
+              style={mode === "signIn" ? {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 2,
+                elevation: 2,
+              } : undefined}
+            >
               <Text
-                className={`text-center font-semibold ${
-                  mode === "signIn" ? "text-white" : "text-slate-700"
-                }`}>
+                className={`text-center font-bold text-[15px] ${
+                  mode === "signIn" ? "text-[#0b1220]" : "text-[#94a3b8]"
+                }`}
+              >
                 Sign In
               </Text>
             </Pressable>
@@ -127,107 +157,169 @@ export function AuthScreen() {
                 setMode("signUp");
                 setErrors({});
               }}
-              className={`flex-1 rounded-lg px-4 py-3 ${
-                mode === "signUp" ? "bg-blue-700" : ""
-              }`}>
+              className={`flex-1 rounded-full py-3.5 items-center justify-center ${
+                mode === "signUp" ? "bg-white" : ""
+              }`}
+              style={mode === "signUp" ? {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 2,
+                elevation: 2,
+              } : undefined}
+            >
               <Text
-                className={`text-center font-semibold ${
-                  mode === "signUp" ? "text-white" : "text-slate-700"
-                }`}>
+                className={`text-center font-bold text-[15px] ${
+                  mode === "signUp" ? "text-[#0b1220]" : "text-[#94a3b8]"
+                }`}
+              >
                 Sign Up
               </Text>
             </Pressable>
           </View>
 
-          <View className="mt-8 gap-5">
-            {mode === "signUp" ? (
-              <AppInput
-                label="Full Name"
-                value={fullName}
+          {/* Form Fields */}
+          <View className="gap-5">
+            {mode === "signUp" && (
+              <View>
+                <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Full Name</Text>
+                <TextInput
+                  value={fullName}
+                  onChangeText={(text) => {
+                    setFullName(text);
+                    setErrors((previous) => ({ ...previous, fullName: undefined }));
+                  }}
+                  placeholder="John Doe"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  selectionColor="#2563eb"
+                  className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
+                    errors.fullName ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
+                  }`}
+                />
+                {errors.fullName && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.fullName}</Text>}
+              </View>
+            )}
+
+            <View>
+              <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Email Address</Text>
+              <TextInput
+                ref={emailRef}
+                value={email}
                 onChangeText={(text) => {
-                  setFullName(text);
-                  setErrors((previous) => ({ ...previous, fullName: undefined }));
+                  setEmail(text);
+                  setErrors((previous) => ({ ...previous, email: undefined }));
                 }}
-                placeholder="John Doe"
-                autoCapitalize="words"
+                placeholder="you@example.com"
+                placeholderTextColor="#94a3b8"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
                 returnKeyType="next"
-                onSubmitEditing={() => emailRef.current?.focus()}
-                error={errors.fullName}
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                selectionColor="#2563eb"
+                className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
+                  errors.email ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
+                }`}
               />
-            ) : null}
+              {errors.email && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.email}</Text>}
+            </View>
 
-            <AppInput
-              ref={emailRef}
-              label="Email Address"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setErrors((previous) => ({ ...previous, email: undefined }));
-              }}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              error={errors.email}
-            />
-
-            <AppInput
-              ref={passwordRef}
-              label="Password"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setErrors((previous) => ({ ...previous, password: undefined }));
-              }}
-              placeholder="Enter password"
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType={mode === "signUp" ? "next" : "done"}
-              onSubmitEditing={() => {
-                if (mode === "signUp") {
-                  confirmPasswordRef.current?.focus();
-                } else {
-                  void submit();
-                }
-              }}
-              error={errors.password}
-            />
-
-            {mode === "signUp" ? (
-              <AppInput
-                ref={confirmPasswordRef}
-                label="Confirm Password"
-                value={confirmPassword}
+            <View>
+              <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Password</Text>
+              <TextInput
+                ref={passwordRef}
+                value={password}
                 onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  setErrors((previous) => ({
-                    ...previous,
-                    confirmPassword: undefined,
-                  }));
+                  setPassword(text);
+                  setErrors((previous) => ({ ...previous, password: undefined }));
                 }}
-                placeholder="Re-enter password"
+                placeholder="••••••••"
+                placeholderTextColor="#94a3b8"
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={() => void submit()}
-                error={errors.confirmPassword}
+                returnKeyType={mode === "signUp" ? "next" : "done"}
+                onSubmitEditing={() => {
+                  if (mode === "signUp") {
+                    confirmPasswordRef.current?.focus();
+                  } else {
+                    void submit();
+                  }
+                }}
+                selectionColor="#2563eb"
+                className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
+                  errors.password ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
+                }`}
               />
-            ) : null}
+              {errors.password && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.password}</Text>}
+              
+              {mode === "signIn" && (
+                <Pressable 
+                  className="mt-4 self-end pr-1"
+                  onPress={() => router.push(ROUTES.FORGOT_PASSWORD as any)}
+                >
+                  <Text className="text-[#2563eb] font-bold text-[13px]">Forgot Password?</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {mode === "signUp" && (
+              <View>
+                <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Confirm Password</Text>
+                <TextInput
+                  ref={confirmPasswordRef}
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    setErrors((previous) => ({
+                      ...previous,
+                      confirmPassword: undefined,
+                    }));
+                  }}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void submit()}
+                  selectionColor="#2563eb"
+                  className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
+                    errors.confirmPassword ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
+                  }`}
+                />
+                {errors.confirmPassword && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.confirmPassword}</Text>}
+              </View>
+            )}
           </View>
 
-          <View className="mt-8">
-            <AppButton
-              title={mode === "signIn" ? "Continue to App" : "Create Account"}
+          {/* Primary Action Button */}
+          <View className="mt-10 mb-6">
+            <Pressable
               onPress={() => void submit()}
-              isLoading={isSubmitting}
-            />
+              disabled={isSubmitting}
+              className={`h-[56px] rounded-2xl items-center justify-center flex-row ${
+                isSubmitting ? "bg-blue-400" : "bg-blue-600"
+              }`}
+              style={{
+                shadowColor: "#2563eb",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.25,
+                shadowRadius: 16,
+                elevation: 8,
+              }}
+            >
+              <Text className="text-white font-bold text-[16px] tracking-wide">
+                {isSubmitting ? "Please wait..." : (mode === "signIn" ? "Sign In" : "Create Account")}
+              </Text>
+            </Pressable>
           </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
-    </Screen>
+    </SafeAreaView>
   );
 }
