@@ -19,21 +19,10 @@ import {
   calcDailyTotals,
   DailyTotal,
 } from "@/services/supabase/transaction-service";
+import { ALL_CATEGORIES } from "@/constants/categories";
 
 const DAYS_OF_WEEK = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const WEEK_START = 1; // Monday
-
-const CATEGORIES: Record<string, { label: string; icon: string; color: string }> = {
-  market: { label: "Market", icon: "store", color: "#f43f5e" },
-  eat: { label: "Eat and drink", icon: "silverware-fork-knife", color: "#f59e0b" },
-  shopping: { label: "Shopping", icon: "cart-outline", color: "#3b82f6" },
-  gasoline: { label: "Gasoline", icon: "gas-station", color: "#0ea5e9" },
-  house: { label: "House", icon: "home-outline", color: "#a855f7" },
-  electricity: { label: "Electricity", icon: "lightning-bolt", color: "#eab308" },
-  phone: { label: "Load phone", icon: "cellphone", color: "#22c55e" },
-  school: { label: "School", icon: "school-outline", color: "#6366f1" },
-  credit: { label: "Credit card", icon: "credit-card-outline", color: "#06b6d4" },
-};
 
 function formatVND(amount: number) {
   if (Math.abs(amount) >= 1_000_000) {
@@ -241,7 +230,7 @@ export function CalendarScreen() {
               </View>
             ) : (
               selectedDayTransactions.map((tx) => {
-                const cat = CATEGORIES[tx.category_id];
+                const cat = ALL_CATEGORIES[tx.category_id];
                 return (
                   <View key={tx.id} className="flex-row items-center px-4 py-3 border-b border-gray-50">
                     <View
