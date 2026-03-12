@@ -41,3 +41,11 @@ export async function supabaseResetPassword(email: string, redirectToUrl: string
     throw error;
   }
 }
+
+export async function supabaseUpdateName(fullName: string) {
+  const { error } = await supabaseClient.auth.updateUser({
+    data: { full_name: fullName },
+  });
+  if (error) throw error;
+}
+
