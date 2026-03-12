@@ -9,7 +9,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from "react-native";
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useAuth } from "@/hooks/use-auth";
+import { createTransaction } from "@/services/supabase/transaction-service";
 
 type TransactionType = "Expenditure" | "Revenue";
 
@@ -26,10 +30,22 @@ const CATEGORIES = [
 ];
 
 export function HomeScreen() {
+  const { user } = useAuth();
+  
   const [type, setType] = useState<TransactionType>("Expenditure");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState("shopping");
+  
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const onChangeDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDate(currentDate);
+  };
 
   const handleAmountChange = (text: string) => {
     // Remove non-numeric characters for the raw value, but keep formatting
@@ -41,6 +57,44 @@ export function HomeScreen() {
     // Add commas
     const formatted = parseInt(numericValue, 10).toLocaleString("en-US");
     setAmount(formatted);
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      Alert.alert("Error", "You must be signed in to save expenses.");
+      return;
+    }
+
+    const rawAmount = parseFloat(amount.replace(/[^0-9.]/g, ""));
+
+    if (!rawAmount || rawAmount <= 0) {
+      Alert.alert("Invalid Input", "Please enter a valid amount greater than 0.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await createTransaction({
+        user_id: user.uid,
+        type,
+        amount: rawAmount,
+        note,
+        category_id: categoryId,
+        transaction_date: date.toISOString(),
+      });
+
+      Alert.alert("Success", `Your ${type.toLowerCase()} has been saved securely.`);
+      
+      // Reset form on success
+      setAmount("");
+      setNote("");
+      setDate(new Date());
+
+    } catch (err: any) {
+      Alert.alert("Save Failed", err?.message || "There was an issue saving this transaction.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -87,12 +141,28 @@ export function HomeScreen() {
             {/* Time */}
             <View className="flex-row items-center justify-between">
               <Text className="text-[16px] font-bold text-slate-900 w-24">Time</Text>
-              <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]">
-                <MaterialCommunityIcons name="chevron-left" size={24} color="#1d4ed8" />
-                <Text className="font-semibold text-[15px] text-slate-900">August 12, 2024</Text>
-                <MaterialCommunityIcons name="chevron-right" size={24} color="#1d4ed8" />
-              </View>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]"
+              >
+                <MaterialCommunityIcons name="calendar-month-outline" size={24} color="#1d4ed8" />
+                <Text className="font-semibold text-[15px] text-slate-900">
+                  {date.toLocaleDateString("en-US", { year: 'numeric', month: 'long', day: 'numeric' })}
+                </Text>
+                <MaterialCommunityIcons name="chevron-down" size={24} color="#1d4ed8" />
+              </TouchableOpacity>
             </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={date}
+                mode="date"
+                is24Hour={true}
+                display="default"
+                onChange={onChangeDate}
+              />
+            )}
 
             {/* Amount */}
             <View className="flex-row items-center justify-between">
@@ -176,8 +246,16 @@ export function HomeScreen() {
           elevation: 10,
         }}
       >
-        <TouchableOpacity className="w-full bg-[#1d4ed8] rounded-2xl h-14 items-center justify-center">
-          <Text className="text-white font-semibold text-[16px]">Save expenses</Text>
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={isSubmitting}
+          className={`w-full rounded-2xl h-14 items-center justify-center ${
+            isSubmitting ? "bg-blue-400" : "bg-[#1d4ed8]"
+          }`}
+        >
+          <Text className="text-white font-semibold text-[16px]">
+            {isSubmitting ? "Saving..." : `Save ${type.toLowerCase()}`}
+          </Text>
         </TouchableOpacity>
       </View>
     </Screen>

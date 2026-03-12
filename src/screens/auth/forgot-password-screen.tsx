@@ -1,6 +1,7 @@
 import { ROUTES } from "@/navigation/route-names";
 import { supabaseResetPassword } from "@/services/supabase/auth-service";
 import { isValidEmail } from "@/utils/validators";
+import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -37,7 +38,10 @@ export function ForgotPasswordScreen() {
 
     try {
       setIsSubmitting(true);
-      await supabaseResetPassword(email);
+      
+      const resetUrl = Linking.createURL("/update-password");
+      
+      await supabaseResetPassword(email, resetUrl);
       setIsSuccess(true);
     } catch (err: any) {
       Alert.alert(

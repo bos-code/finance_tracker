@@ -33,9 +33,9 @@ export async function supabaseSignOut() {
   }
 }
 
-export async function supabaseResetPassword(email: string) {
+export async function supabaseResetPassword(email: string, redirectToUrl: string) {
   const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-    // We can define a redirectTo URL here if needed later for deep-linking
+    redirectTo: redirectToUrl
   });
   if (error) {
     throw error;
