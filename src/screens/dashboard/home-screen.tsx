@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Keyboard,
 } from "react-native";
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from "@/hooks/use-auth";
@@ -194,24 +195,26 @@ export function HomeScreen() {
             {/* Amount */}
             <View className="flex-row items-center justify-between">
               <Text className="text-[16px] font-bold text-slate-900 w-24">Amount</Text>
-              <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
-                <TextInput
-                  value={amount}
-                  onFocus={() => {
-                    setShowDatePicker(false);
-                    setShowKeypad(true);
-                  }}
-                  showSoftInputOnFocus={false}
-                  caretHidden={true}
-                  placeholder="0"
-                  placeholderTextColor="#94a3b8"
-                  className="flex-1 font-semibold text-[15px] text-slate-900 mr-2 h-full text-right"
-                  selectionColor="#1d4ed8"
-                />
+              <TouchableOpacity
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowDatePicker(false);
+                  setShowKeypad(true);
+                }}
+                activeOpacity={0.7}
+                className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]"
+              >
+                <Text 
+                  className={`flex-1 font-semibold text-[15px] mr-2 text-right ${
+                    amount ? "text-slate-900" : "text-[#94a3b8]"
+                  }`}
+                >
+                  {amount || "0"}
+                </Text>
                 <Text className="font-bold text-[18px] text-[#94a3b8] ml-2">
                   {type === "Expenditure" ? "$" : "D"}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Note */}
