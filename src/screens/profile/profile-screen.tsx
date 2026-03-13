@@ -1,6 +1,7 @@
 import { Screen } from "@/components/ui/screen";
 import { GRADIENT_PRESETS, SOLID_PRESETS, ThemeConfig, useTheme } from "@/context/theme-context";
 import { useCurrency, CURRENCY_OPTIONS } from "@/context/currency-context";
+import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
 
 import { ROUTES } from "@/navigation/route-names";
@@ -14,6 +15,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -53,7 +55,8 @@ function SettingRow({
   return (
     <TouchableOpacity
       onPressIn={() => { scale.value = withSpring(0.975, { damping: 14 }); }}
-      onPressOut={() => { scale.value = withSpring(1); onPress?.(); }}
+      onPressOut={() => { scale.value = withSpring(1); }}
+      onPress={onPress}
       activeOpacity={1}
     >
       <Animated.View style={[style, { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, backgroundColor: "#fff" }]}>
@@ -86,23 +89,50 @@ function Divider() {
 
 // ─── Bottom sheet wrapper ─────────────────────────────────────────────────────
 
-function BottomSheet({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+function BottomSheet({
+  visible,
+  title,
+  onClose,
+  children,
+  scroll = true,
+}: {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  scroll?: boolean;
+}) {
   const insets = useSafeAreaInsets();
+  const content = scroll ? (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 8 }}
+    >
+      {children}
+    </ScrollView>
+  ) : children;
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(10,18,40,0.4)" }} activeOpacity={1} onPress={onClose} />
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: Math.max(insets.bottom, 24), shadowColor: "#000", shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 30 }}>
-        <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 8 }}>
-          <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: "#e2e8f0" }} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom : 0}
+        style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+      >
+        <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: Math.max(insets.bottom, 24), shadowColor: "#000", shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 30 }}>
+          <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 8 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: "#e2e8f0" }} />
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+            <Text style={{ fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+              <MaterialCommunityIcons name="close" size={20} color="#94a3b8" />
+            </TouchableOpacity>
+          </View>
+          {content}
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
-          <Text style={{ fontSize: 17, fontWeight: "700", color: "#0f172a" }}>{title}</Text>
-          <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
-            <MaterialCommunityIcons name="close" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-        </View>
-        {children}
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -141,10 +171,11 @@ export function ProfileScreen() {
   const { user, signOut, updateName } = useAuth();
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency } = useCurrency();
+  const { enabled: appLockEnabled, setEnabled: setAppLockEnabled, setPin: setAppLockPin } = useAppLock();
   const insets = useSafeAreaInsets();
 
   // Settings state
-  const [activeModal, setActiveModal] = useState<"money" | "notification" | "language" | "theme" | "name" | null>(null);
+  const [activeModal, setActiveModal] = useState<"money" | "notification" | "language" | "theme" | "name" | "appLock" | null>(null);
   const [notifications, setNotifications] = useState(false);
   const [language, setLanguage] = useState("English");
 
@@ -158,9 +189,14 @@ export function ProfileScreen() {
   // Name edit
   const [nameInput, setNameInput] = useState(user?.fullName ?? "");
   const [nameSaving, setNameSaving] = useState(false);
+  const [appLockPin, setAppLockPinInput] = useState("");
+  const [appLockConfirm, setAppLockConfirm] = useState("");
+  const [appLockError, setAppLockError] = useState<string | null>(null);
+  const [appLockSaving, setAppLockSaving] = useState(false);
 
   const primary = theme.primary;
-  const initials = getInitials(user?.fullName);
+  const displayName = user?.fullName?.trim() || (user?.email ? user.email.split("@")[0] : "") || "Guest User";
+  const initials = getInitials(displayName);
 
   const open = useCallback((m: typeof activeModal) => {
     if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -170,6 +206,42 @@ export function ProfileScreen() {
   }, [theme, user]);
 
   const close = () => setActiveModal(null);
+
+  const openAppLock = () => {
+    setAppLockPinInput("");
+    setAppLockConfirm("");
+    setAppLockError(null);
+    setActiveModal("appLock");
+  };
+
+  const handleToggleAppLock = (next: boolean) => {
+    if (next) {
+      openAppLock();
+      return;
+    }
+    setAppLockEnabled(false);
+  };
+
+  const saveAppLockPin = async () => {
+    const pin = appLockPin.replace(/[^0-9]/g, "");
+    const confirm = appLockConfirm.replace(/[^0-9]/g, "");
+    if (pin.length !== 4) {
+      setAppLockError("Enter a 4-digit PIN.");
+      return;
+    }
+    if (pin !== confirm) {
+      setAppLockError("PINs do not match.");
+      return;
+    }
+    try {
+      setAppLockSaving(true);
+      await setAppLockPin(pin);
+      await setAppLockEnabled(true);
+      close();
+    } finally {
+      setAppLockSaving(false);
+    }
+  };
 
   // ── Avatar upload ────────────────────────────────────────────────
 
@@ -256,7 +328,7 @@ export function ProfileScreen() {
           <TouchableOpacity onPress={() => open("name")} style={{ alignItems: "center" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontSize: 20, fontWeight: "800", color: "#0f172a" }}>
-                {user?.fullName || "Guest User"}
+                {displayName}
               </Text>
               <MaterialCommunityIcons name="pencil-outline" size={16} color="#94a3b8" />
             </View>
@@ -280,6 +352,22 @@ export function ProfileScreen() {
             <SettingRow icon="cash-multiple" iconBg="#dcfce7" iconColor="#22c55e" label="Currency" value={currency.label} onPress={() => open("money")} />
             <Divider />
             <SettingRow icon="bell-ring-outline" iconBg="#fef3c7" iconColor="#f59e0b" label="Notifications" value={notifications ? "On" : "Off"} onPress={() => open("notification")} />
+            <Divider />
+            <SettingRow
+              icon="lock-outline"
+              iconBg="#e2e8f0"
+              iconColor="#475569"
+              label="App Lock"
+              rightElement={(
+                <Switch
+                  value={appLockEnabled}
+                  onValueChange={handleToggleAppLock}
+                  trackColor={{ false: "#e2e8f0", true: "#22c55e" }}
+                  thumbColor="#fff"
+                  ios_backgroundColor="#e2e8f0"
+                />
+              )}
+            />
             <Divider />
             <SettingRow icon="translate" iconBg="#e0e7ff" iconColor="#6366f1" label="Language" value={language} onPress={() => open("language")} />
           </SectionCard>
@@ -332,8 +420,51 @@ export function ProfileScreen() {
         </View>
       </BottomSheet>
 
+      {/* ── App Lock ──────────────────────────────────────────── */}
+      <BottomSheet visible={activeModal === "appLock"} title="App Lock" onClose={close} scroll={false}>
+        <View style={{ padding: 20, gap: 12 }}>
+          <Text style={{ fontSize: 13, color: "#64748b", fontWeight: "600" }}>
+            Create a 4-digit PIN to lock the app.
+          </Text>
+          <TextInput
+            value={appLockPin}
+            onChangeText={(text) => { setAppLockPinInput(text); setAppLockError(null); }}
+            placeholder="PIN"
+            placeholderTextColor="#94a3b8"
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={4}
+            style={{ height: 52, borderRadius: 16, backgroundColor: "#f8fafc", borderWidth: 1.5, borderColor: "#e2e8f0", paddingHorizontal: 16, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
+          />
+          <TextInput
+            value={appLockConfirm}
+            onChangeText={(text) => { setAppLockConfirm(text); setAppLockError(null); }}
+            placeholder="Confirm PIN"
+            placeholderTextColor="#94a3b8"
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={4}
+            style={{ height: 52, borderRadius: 16, backgroundColor: "#f8fafc", borderWidth: 1.5, borderColor: "#e2e8f0", paddingHorizontal: 16, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
+          />
+          {appLockError ? (
+            <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "600" }}>{appLockError}</Text>
+          ) : null}
+          <TouchableOpacity
+            onPress={saveAppLockPin}
+            disabled={appLockSaving}
+            style={{ backgroundColor: appLockSaving ? "#93c5fd" : primary, borderRadius: 16, height: 52, alignItems: "center", justifyContent: "center", marginTop: 4 }}
+          >
+            {appLockSaving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Enable App Lock</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
       {/* ── Theme picker ──────────────────────────────────────── */}
-      <BottomSheet visible={activeModal === "theme"} title="Theme & Colours" onClose={close}>
+      <BottomSheet visible={activeModal === "theme"} title="Theme & Colours" onClose={close} scroll={false}>
         <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
 
           {/* Tab toggle */}
