@@ -1,4 +1,5 @@
 import { AuthGate } from "@/components/auth/auth-gate";
+import { AppLockGate } from "@/components/auth/app-lock-gate";
 import React, { PropsWithChildren } from "react";
 
 /**
@@ -7,5 +8,9 @@ import React, { PropsWithChildren } from "react";
  * without changes, but all logic lives in AuthGate.
  */
 export function ProtectedRoute({ children }: PropsWithChildren) {
-  return <AuthGate protected>{children}</AuthGate>;
+  return (
+    <AuthGate protected>
+      <AppLockGate>{children}</AppLockGate>
+    </AuthGate>
+  );
 }
