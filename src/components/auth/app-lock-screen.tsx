@@ -1,6 +1,7 @@
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
-import React, { useState } from "react";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -8,16 +9,23 @@ import {
   Pressable,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function AppLockScreen() {
-  const { unlock, setEnabled } = useAppLock();
+  const { unlock, setEnabled, useBiometrics, isBiometricsSupported, biometricUnlock } = useAppLock();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (useBiometrics && isBiometricsSupported) {
+      biometricUnlock();
+    }
+  }, [useBiometrics, isBiometricsSupported, biometricUnlock]);
 
   const handleChange = async (value: string) => {
     const digits = value.replace(/[^0-9]/g, "").slice(0, 4);
@@ -81,6 +89,15 @@ export function AppLockScreen() {
             </Text>
           )}
         </View>
+
+        {useBiometrics && isBiometricsSupported && (
+          <TouchableOpacity
+            onPress={biometricUnlock}
+            style={{ marginTop: 24, alignSelf: "center", padding: 12 }}
+          >
+            <MaterialCommunityIcons name="fingerprint" size={48} color="#475569" />
+          </TouchableOpacity>
+        )}
 
         <Pressable onPress={handleSignOut} style={{ marginTop: 16 }}>
           <Text style={{ textAlign: "center", color: "#ef4444", fontWeight: "700", fontSize: 13 }}>

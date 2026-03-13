@@ -50,3 +50,13 @@ export async function supabaseUpdateName(fullName: string) {
   if (error) throw error;
 }
 
+export async function supabaseUpdateAppLockSettings(settings: { enabled?: boolean; pin?: string | null }) {
+  const { error } = await supabaseClient.auth.updateUser({
+    data: { 
+      app_lock_enabled: settings.enabled,
+      app_lock_pin: settings.pin
+    },
+  });
+  if (error) throw error;
+}
+

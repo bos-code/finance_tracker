@@ -49,6 +49,7 @@ function TotalRing({
   type: TransactionType;
 }) {
   const { formatAmount } = useCurrency();
+  const { theme } = useTheme();
   const isExp = type === "Expenditure";
   if (total === 0) {
     return (
@@ -81,6 +82,7 @@ function TotalRing({
 
 
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
+  const { theme } = useTheme();
   const max = Math.max(...data.map((d) => d.value), 1);
   const barWidth = CHART_WIDTH / data.length - 8;
 

@@ -171,7 +171,14 @@ export function ProfileScreen() {
   const { user, signOut, updateName } = useAuth();
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency } = useCurrency();
-  const { enabled: appLockEnabled, setEnabled: setAppLockEnabled, setPin: setAppLockPin } = useAppLock();
+  const {
+    enabled: appLockEnabled,
+    setEnabled: setAppLockEnabled,
+    setPin: setAppLockPin,
+    useBiometrics,
+    setUseBiometrics,
+    isBiometricsSupported
+  } = useAppLock();
   const insets = useSafeAreaInsets();
 
   // Settings state
@@ -362,6 +369,23 @@ export function ProfileScreen() {
                 <Switch
                   value={appLockEnabled}
                   onValueChange={handleToggleAppLock}
+                  trackColor={{ false: "#e2e8f0", true: "#22c55e" }}
+                  thumbColor="#fff"
+                  ios_backgroundColor="#e2e8f0"
+                />
+              )}
+            />
+            <Divider />
+            <SettingRow
+              icon="fingerprint"
+              iconBg="#f1f5f9"
+              iconColor="#475569"
+              label="Use Biometrics"
+              rightElement={(
+                <Switch
+                  value={useBiometrics}
+                  onValueChange={(v) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUseBiometrics(v); }}
+                  disabled={!appLockEnabled || !isBiometricsSupported}
                   trackColor={{ false: "#e2e8f0", true: "#22c55e" }}
                   thumbColor="#fff"
                   ios_backgroundColor="#e2e8f0"
