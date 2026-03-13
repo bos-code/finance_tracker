@@ -59,4 +59,9 @@ export async function supabaseUpdateAppLockSettings(settings: { enabled?: boolea
   });
   if (error) throw error;
 }
-
+export async function supabaseUpdatePassword(newPassword: string) {
+  const { error } = await supabaseClient.auth.updateUser({
+    password: newPassword,
+  });
+  if (error) throw error;
+}

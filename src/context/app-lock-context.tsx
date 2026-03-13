@@ -1,3 +1,5 @@
+import { supabaseUpdateAppLockSettings } from "@/services/supabase/auth-service";
+import { useAuth } from "@/hooks/use-auth";
 import * as LocalAuthentication from "expo-local-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PropsWithChildren } from "react";
@@ -25,6 +27,7 @@ const STORAGE_USE_BIOMETRICS = "@finance_tracker_app_lock_biometrics";
 export const AppLockContext = createContext<AppLockContextValue | undefined>(undefined);
 
 export function AppLockProvider({ children }: PropsWithChildren) {
+  const { user } = useAuth();
   const [enabled, setEnabledState] = useState(false);
   const [locked, setLocked] = useState(false);
   const [pin, setPinState] = useState<string | null>(null);
@@ -45,16 +48,36 @@ export function AppLockProvider({ children }: PropsWithChildren) {
 
       if (!mounted) return;
 
-      const isEnabled = enabledRaw === "true";
+      let isEnabled = enabledRaw === "true";
+      let currentPin = pinRaw;
+
+      // Sync with Supabase if user is logged in
+      if (user) {
+        const { app_lock_enabled, app_lock_pin } = (user as any).metadata || {};
+        // If Supabase has it but local doesn't, or Supabase is different, we sync (Supabase wins for state)
+        if (app_lock_enabled !== undefined && String(app_lock_enabled) !== enabledRaw) {
+          isEnabled = !!app_lock_enabled;
+          await AsyncStorage.setItem(STORAGE_ENABLED, isEnabled ? "true" : "false");
+        }
+        if (app_lock_pin !== undefined && app_lock_pin !== pinRaw) {
+          currentPin = app_lock_pin;
+          if (currentPin) {
+             await AsyncStorage.setItem(STORAGE_PIN, currentPin);
+          } else {
+             await AsyncStorage.removeItem(STORAGE_PIN);
+          }
+        }
+      }
+
       setEnabledState(isEnabled);
-      setPinState(pinRaw);
+      setPinState(currentPin);
       setUseBiometricsState(biometricsRaw === "true");
       setIsBiometricsSupported(hasHardware && isEnrolled);
       setLocked(isEnabled);
       setBootstrapped(true);
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!bootstrapped || !enabled) return;
@@ -69,6 +92,12 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   const setEnabled = useCallback(async (next: boolean) => {
     setEnabledState(next);
     await AsyncStorage.setItem(STORAGE_ENABLED, next ? "true" : "false");
+    
+    // Sync to Supabase
+    if (user) {
+      await supabaseUpdateAppLockSettings({ enabled: next });
+    }
+
     if (!next) {
       setLocked(false);
       setPinState(null);
@@ -76,16 +105,20 @@ export function AppLockProvider({ children }: PropsWithChildren) {
       await Promise.all([
         AsyncStorage.removeItem(STORAGE_PIN),
         AsyncStorage.removeItem(STORAGE_USE_BIOMETRICS),
+        user ? supabaseUpdateAppLockSettings({ pin: null }) : Promise.resolve(),
       ]);
     } else {
       setLocked(false);
     }
-  }, []);
+  }, [user]);
 
   const setPin = useCallback(async (nextPin: string) => {
     setPinState(nextPin);
     await AsyncStorage.setItem(STORAGE_PIN, nextPin);
-  }, []);
+    if (user) {
+      await supabaseUpdateAppLockSettings({ pin: nextPin });
+    }
+  }, [user]);
 
   const setUseBiometrics = useCallback(async (next: boolean) => {
     setUseBiometricsState(next);

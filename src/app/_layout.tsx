@@ -18,8 +18,8 @@ export default function RootLayout() {
       <ThemeProvider>
         <CurrencyProvider>
           <OfflineProvider>
-            <AppLockProvider>
-              <AuthProvider>
+            <AuthProvider>
+              <AppLockProvider>
                 <AppLockGate>
                   <AppStateProvider>
                     <View style={{ flex: 1 }}>
@@ -35,8 +35,8 @@ export default function RootLayout() {
                     </View>
                   </AppStateProvider>
                 </AppLockGate>
-              </AuthProvider>
-            </AppLockProvider>
+              </AppLockProvider>
+            </AuthProvider>
           </OfflineProvider>
         </CurrencyProvider>
       </ThemeProvider>

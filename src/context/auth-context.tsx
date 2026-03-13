@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
-import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseUpdateName } from "@/services/supabase/auth-service";
+import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseUpdateName, supabaseUpdatePassword } from "@/services/supabase/auth-service";
 import { supabaseClient } from "@/services/supabase/supabase-client";
 import { Session, User } from "@supabase/supabase-js";
 
@@ -17,6 +17,7 @@ type AuthContextValue = {
   signUp: (fullName: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateName: (fullName: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -81,6 +82,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setUser((prev) => prev ? { ...prev, fullName } : prev);
   }, []);
 
+  const updatePassword = useCallback(async (password: string) => {
+    await supabaseUpdatePassword(password);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -89,8 +94,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signUp,
       signOut,
       updateName,
+      updatePassword,
     }),
-    [isBootstrapping, signIn, signOut, signUp, updateName, user],
+    [isBootstrapping, signIn, signOut, signUp, updateName, updatePassword, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
