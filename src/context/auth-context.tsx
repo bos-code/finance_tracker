@@ -36,6 +36,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           email: currentUser.email || "",
           fullName: currentUser.user_metadata?.full_name,
         });
+        // Hydrate settings from metadata
+        const { useAppStore } = require("@/store/use-app-store");
+        useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
       } else {
         setUser(null);
       }
@@ -45,12 +48,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data: authListener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
       // Whenever auth state changes, fetch the fresh user object to get the latest metadata
       supabaseClient.auth.getUser().then(({ data: { user: updatedUser } }) => {
-        if (updatedUser) {
+        const userObj = updatedUser || session?.user;
+        if (userObj) {
           setUser({
-            uid: updatedUser.id,
-            email: updatedUser.email || "",
-            fullName: updatedUser.user_metadata?.full_name,
+            uid: userObj.id,
+            email: userObj.email || "",
+            fullName: userObj.user_metadata?.full_name,
           });
+          // Hydrate settings from metadata
+          const { useAppStore } = require("@/store/use-app-store");
+          useAppStore.getState().hydrateFromMetadata(userObj.user_metadata);
         } else {
           setUser(null);
         }

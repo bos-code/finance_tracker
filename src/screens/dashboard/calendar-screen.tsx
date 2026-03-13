@@ -22,6 +22,7 @@ import {
 import { ALL_CATEGORIES } from "@/constants/categories";
 import { useOffline } from "@/context/offline-context";
 import { useAppStore, formatAmount } from "@/store/use-app-store";
+import { useTransactions } from "@/hooks/use-transactions";
 
 
 const DAYS_OF_WEEK = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -48,28 +49,11 @@ export function CalendarScreen() {
   const currency = useAppStore((s) => s.currency);
   const primary = theme.primary;
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth() + 1;
 
-  const fetchTransactions = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const data = await getTransactionsByMonth(user.uid, year, month, isOnline);
-      setTransactions(data);
-    } catch (e) {
-      // silent fail, show empty state
-    } finally {
-      setLoading(false);
-    }
-  }, [user, year, month, isOnline]);
-
-
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  const { data: transactions = [], isLoading: loading } = useTransactions(year, month);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const summary = useMemo(() => calcMonthSummary(transactions), [transactions]);
   const dailyTotals = useMemo(() => calcDailyTotals(transactions), [transactions]);

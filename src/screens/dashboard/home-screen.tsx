@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/hooks/use-auth";
-import { createTransaction } from "@/services/supabase/transaction-service";
+import { useCreateTransaction } from "@/hooks/use-transactions";
 import { CustomKeypad } from "@/components/ui/custom-keypad";
 import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
@@ -61,7 +61,6 @@ export function HomeScreen() {
     type: "success",
     message: "",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── Switch type ──────────────────────────────────────────────────
   const switchType = useCallback((newType: TransactionType) => {
@@ -93,6 +92,8 @@ export function HomeScreen() {
   };
 
   // ── Save ─────────────────────────────────────────────────────────
+  const { mutateAsync: createTx, isPending: isSubmitting } = useCreateTransaction();
+
   const handleSave = async () => {
     if (!user) {
       setFeedback({ visible: true, type: "error", message: "Sign in to save transactions." });
@@ -104,19 +105,15 @@ export function HomeScreen() {
       return;
     }
     try {
-      setIsSubmitting(true);
       setShowKeypad(false);
-      await createTransaction(
-        {
-          user_id: user.uid,
-          type,
-          amount: rawAmount,
-          note,
-          category_id: categoryId,
-          transaction_date: toLocalDateString(date),
-        },
-        isOnline
-      );
+      await createTx({
+        user_id: user.uid,
+        type,
+        amount: rawAmount,
+        note,
+        category_id: categoryId,
+        transaction_date: toLocalDateString(date),
+      });
       // Refresh pending badge after offline save
       await refreshPendingCount();
       const msg = isOnline
@@ -128,8 +125,6 @@ export function HomeScreen() {
       setDate(new Date());
     } catch (err: any) {
       setFeedback({ visible: true, type: "error", message: err?.message || "Could not save transaction." });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

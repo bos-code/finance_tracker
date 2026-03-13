@@ -115,7 +115,7 @@ export async function createTransaction(
     createdAt: Date.now(),
   };
   await addPendingOp(op);
-  return localTx;
+  return { ...localTx, tempId: tid } as any; // Cast for TS compatibility with optimistic updates
 }
 
 /**
@@ -198,18 +198,25 @@ export async function updateTransaction(
 export async function getTransactionsByMonth(
   userId: string,
   year: number,
-  month: number, // 1-12
-  isOnline = true
+  month?: number, // 1-12, optional for whole year
+  isOnline: boolean = true
 ): Promise<Transaction[]> {
   if (!isOnline) {
-    const cached = await getCachedTransactions(userId, year, month);
-    return cached ?? [];
+    // If offline and month is specified, try to get cached data for that month
+    if (month) {
+      const cached = await getCachedTransactions(userId, year, month);
+      return cached ?? [];
+    }
+    // If offline and no month specified (whole year), we don't have a direct cache key for the whole year
+    // For now, we'll return an empty array or could implement a more complex cache retrieval for the year.
+    // For simplicity, returning empty array if no month is specified and offline.
+    return [];
   }
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  const start = `${year}-${pad(month)}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const end = `${year}-${pad(month)}-${pad(lastDay)}`;
+  const start = month ? `${year}-${pad(month)}-01` : `${year}-01-01`;
+  const lastDay = month ? new Date(year, month, 0).getDate() : 31;
+  const end = month ? `${year}-${pad(month)}-${pad(lastDay)}` : `${year}-12-31`;
 
   const { data, error } = await supabaseClient
     .from("transactions")
@@ -217,7 +224,7 @@ export async function getTransactionsByMonth(
     .eq("user_id", userId)
     .gte("transaction_date", start)
     .lte("transaction_date", end)
-    .order("transaction_date", { ascending: true });
+    .order("transaction_date", { ascending: false });
 
   if (error) {
     // Network error even though isOnline was true — fall back to cache

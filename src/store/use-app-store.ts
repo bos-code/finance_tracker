@@ -74,29 +74,86 @@ export function formatAmount(amount: number, currency: CurrencyOption): string {
 interface AppStoreState {
   // Theme
   theme: ThemeConfig;
-  setTheme: (theme: ThemeConfig) => void;
+  setTheme: (theme: ThemeConfig, userId?: string) => Promise<void>;
 
   // Currency
   currency: CurrencyOption;
-  setCurrency: (currency: CurrencyOption) => void;
+  setCurrency: (currency: CurrencyOption, userId?: string) => Promise<void>;
 
   // Dashboard / App State
   selectedAccountId: string | null;
   setSelectedAccountId: (id: string | null) => void;
+
+  // App Lock (Settings)
+  appLockEnabled: boolean;
+  appLockPin: string | null;
+  setAppLockEnabled: (enabled: boolean) => void;
+  setAppLockPin: (pin: string | null) => void;
+
+  // Hydration
+  hydrateFromMetadata: (metadata: any) => void;
 }
 
 export const useAppStore = create<AppStoreState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Defaults
       theme: DEFAULT_THEME,
       currency: DEFAULT_CURRENCY,
       selectedAccountId: null,
+      appLockEnabled: false,
+      appLockPin: null,
 
       // Actions
-      setTheme: (theme) => set({ theme }),
-      setCurrency: (currency) => set({ currency }),
+      setTheme: async (theme, userId) => {
+        set({ theme });
+        if (userId) {
+          const { supabaseUpdateUserSettings } = require("@/services/supabase/auth-service");
+          const preset = SOLID_PRESETS.find(p => p.color === theme.primary);
+          await supabaseUpdateUserSettings({ theme: preset?.id || theme.primary });
+        }
+      },
+      setCurrency: async (currency, userId) => {
+        set({ currency });
+        if (userId) {
+          const { supabaseUpdateUserSettings } = require("@/services/supabase/auth-service");
+          await supabaseUpdateUserSettings({ currency: currency.id });
+        }
+      },
       setSelectedAccountId: (id) => set({ selectedAccountId: id }),
+      setAppLockEnabled: (appLockEnabled) => set({ appLockEnabled }),
+      setAppLockPin: (appLockPin) => set({ appLockPin }),
+
+      hydrateFromMetadataSlot: (metadata: any) => {
+        if (!metadata) return;
+        const updates: Partial<AppStoreState> = {};
+        
+        if (metadata.theme) {
+          const preset = SOLID_PRESETS.find(p => p.id === metadata.theme);
+          if (preset) updates.theme = { ...get().theme, primary: preset.color };
+        }
+        
+        if (metadata.currency) {
+          const cur = CURRENCY_OPTIONS.find(c => c.id === metadata.currency);
+          if (cur) updates.currency = cur;
+        }
+
+        if (metadata.app_lock_enabled !== undefined) {
+          updates.appLockEnabled = !!metadata.app_lock_enabled;
+        }
+
+        if (metadata.app_lock_pin !== undefined) {
+          updates.appLockPin = metadata.app_lock_pin;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          set(updates);
+        }
+      },
+      // Actual hydration method
+      hydrateFromMetadata: (metadata: any) => {
+        (get() as any).hydrateFromMetadataSlot(metadata);
+      }
     }),
     {
       name: "finance-tracker-app-store",

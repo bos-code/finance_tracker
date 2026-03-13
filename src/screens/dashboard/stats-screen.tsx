@@ -14,7 +14,6 @@ import {
 import {
   Transaction,
   TransactionType,
-  getTransactionsByMonth,
   calcMonthSummary,
   calcCategoryBreakdown,
   CategoryBreakdown,
@@ -22,6 +21,7 @@ import {
 import { ALL_CATEGORIES } from "@/constants/categories";
 import { useOffline } from "@/context/offline-context";
 import { useAppStore, formatAmount } from "@/store/use-app-store";
+import { useTransactions } from "@/hooks/use-transactions";
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -117,35 +117,11 @@ export function StatsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>("Month");
   const [statsType, setStatsType] = useState<TransactionType>("Expenditure");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-
+  
   const year = currentDate.getFullYear();
-  const month = currentDate.getMonth() + 1;
+  const month = viewMode === "Month" ? currentDate.getMonth() + 1 : undefined;
 
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      if (viewMode === "Month") {
-        const data = await getTransactionsByMonth(user.uid, year, month, isOnline);
-        setTransactions(data);
-      } else {
-        const promises = Array.from({ length: 12 }, (_, i) =>
-          getTransactionsByMonth(user.uid, year, i + 1, isOnline)
-        );
-        const results = await Promise.all(promises);
-        setTransactions(results.flat());
-      }
-    } catch (e) {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, [user, year, month, viewMode, isOnline]);
-
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const { data: transactions = [], isLoading: loading } = useTransactions(year, month);
 
   const summary = useMemo(() => calcMonthSummary(transactions), [transactions]);
   const breakdown = useMemo(
@@ -173,10 +149,6 @@ export function StatsScreen() {
       return { label, value: base * multipliers[i] };
     });
   }, [summary, month, statsType]);
-
-  const periodLabel = viewMode === "Month"
-    ? currentDate.toLocaleString("default", { month: "long", year: "numeric" })
-    : String(year);
 
   const isExp = statsType === "Expenditure";
   const activeTotal = isExp ? summary.totalExpenditure : summary.totalRevenue;
