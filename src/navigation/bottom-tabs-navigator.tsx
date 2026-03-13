@@ -1,5 +1,5 @@
 import { icons } from "@/constants/icons";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
 import { Tabs } from "expo-router";
 import { Image, Text, View, type ImageSourcePropType } from "react-native";
 
@@ -47,7 +47,7 @@ function TabIcon({ focused, icon, title, primary }: TabIconProps) {
 }
 
 export function BottomTabs() {
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
   const primary = theme.primary;
 
   return (

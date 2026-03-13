@@ -1,17 +1,14 @@
-import "@/theme/global.css";
 import { AuthProvider } from "@/context/auth-context";
 import { AppLockProvider } from "@/context/app-lock-context";
 import { AppLockGate } from "@/components/auth/app-lock-gate";
-import { ThemeProvider } from "@/context/theme-context";
-import { CurrencyProvider } from "@/context/currency-context";
 import { OfflineProvider } from "@/context/offline-context";
 import { OfflineBanner } from "@/components/ui/offline-banner";
-import { AppStateProvider } from "@/state/app-state-context";
 import { Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { View } from "react-native";
+import "@/theme/global.css";
 
 const queryClient = new QueryClient();
 
@@ -19,14 +16,11 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-      <ThemeProvider>
-        <CurrencyProvider>
-          <OfflineProvider>
-            <AuthProvider>
-              <AppLockProvider>
-                <AppLockGate>
-                  <AppStateProvider>
-                    <View style={{ flex: 1 }}>
+        <OfflineProvider>
+          <AuthProvider>
+            <AppLockProvider>
+              <AppLockGate>
+                <View style={{ flex: 1 }}>
                       <Stack
                         initialRouteName="onboarding"
                         screenOptions={{ headerShown: false }}>
@@ -37,14 +31,11 @@ export default function RootLayout() {
                       {/* Global offline status banner, rendered above all screens */}
                       <OfflineBanner />
                     </View>
-                  </AppStateProvider>
                 </AppLockGate>
               </AppLockProvider>
             </AuthProvider>
           </OfflineProvider>
-        </CurrencyProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
-  </QueryClientProvider>
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 }

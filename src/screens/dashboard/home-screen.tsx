@@ -20,18 +20,17 @@ import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
 import { CategoryEditor } from "@/components/ui/category-editor";
 import { EXPENDITURE_CATEGORIES, REVENUE_CATEGORIES, type Category } from "@/constants/categories";
-import { useCurrency } from "@/context/currency-context";
+import { useAppStore, formatAmount } from "@/store/use-app-store";
 import { useOffline } from "@/context/offline-context";
-import { useTheme } from "@/context/theme-context";
 import { toLocalDateString } from "@/utils/date";
 
 type TransactionType = "Expenditure" | "Revenue";
 
 export function HomeScreen() {
   const { user } = useAuth();
-  const { currency } = useCurrency();
+  const theme = useAppStore((s) => s.theme);
+  const currency = useAppStore((s) => s.currency);
   const { isOnline, pendingCount, refreshPendingCount } = useOffline();
-  const { theme } = useTheme();
   const primary = theme.primary;
   const insets = useSafeAreaInsets();
 

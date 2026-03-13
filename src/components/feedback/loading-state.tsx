@@ -1,4 +1,5 @@
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
+import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 
 type LoadingStateProps = {
@@ -6,7 +7,7 @@ type LoadingStateProps = {
 };
 
 export function LoadingState({ label = "Loading data" }: LoadingStateProps) {
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
   return (
     <View className="items-center justify-center py-10">
       <ActivityIndicator size="small" color={theme.primary} />

@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
 import { Redirect } from "expo-router";
 import React, { PropsWithChildren } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -31,8 +31,8 @@ interface AuthGateProps extends PropsWithChildren {
 }
 
 export function AuthGate({ children, protected: isProtected, redirect }: AuthGateProps) {
+  const theme = useAppStore((s) => s.theme);
   const { user, isBootstrapping } = useAuth();
-  const { theme } = useTheme();
 
   if (isBootstrapping) {
     return (

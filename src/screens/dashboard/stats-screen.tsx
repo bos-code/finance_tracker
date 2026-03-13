@@ -20,9 +20,8 @@ import {
   CategoryBreakdown,
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
-import { useCurrency } from "@/context/currency-context";
 import { useOffline } from "@/context/offline-context";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore, formatAmount } from "@/store/use-app-store";
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -48,8 +47,8 @@ function TotalRing({
   total: number;
   type: TransactionType;
 }) {
-  const { formatAmount } = useCurrency();
-  const { theme } = useTheme();
+  const currency = useAppStore((s) => s.currency);
+  const theme = useAppStore((s) => s.theme);
   const isExp = type === "Expenditure";
   if (total === 0) {
     return (
@@ -72,7 +71,7 @@ function TotalRing({
             {isExp ? "Total exp" : "Total rev"}
           </Text>
           <Text className="text-[14px] font-bold text-slate-900 text-center">
-            {isExp ? "-" : "+"}{formatAmount(total)}
+            {isExp ? "-" : "+"}{formatAmount(total, currency)}
           </Text>
         </View>
       </View>
@@ -82,7 +81,7 @@ function TotalRing({
 
 
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
   const max = Math.max(...data.map((d) => d.value), 1);
   const barWidth = CHART_WIDTH / data.length - 8;
 
@@ -112,7 +111,8 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
 export function StatsScreen() {
   const { user } = useAuth();
   const { isOnline } = useOffline();
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
+  const currency = useAppStore((s) => s.currency);
   const primary = theme.primary;
   const [viewMode, setViewMode] = useState<ViewMode>("Month");
   const [statsType, setStatsType] = useState<TransactionType>("Expenditure");
@@ -331,7 +331,7 @@ export function StatsScreen() {
                         {cat?.label ?? item.category_id}
                       </Text>
                       <Text className={`text-[14px] font-bold ${amountColor}`}>
-                        {amountPrefix}{item.total.toLocaleString("en-US")} VND
+                        {amountPrefix}{formatAmount(item.total, currency)}
                       </Text>
                     </View>
                   );

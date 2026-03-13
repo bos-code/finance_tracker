@@ -1,10 +1,8 @@
 import { Screen } from "@/components/ui/screen";
 import { useAppLock } from "@/context/app-lock-context";
-import { CURRENCY_OPTIONS, useCurrency } from "@/context/currency-context";
-import { GRADIENT_PRESETS, SOLID_PRESETS, ThemeConfig, useTheme } from "@/context/theme-context";
 import { useAuth } from "@/hooks/use-auth";
-
 import { ROUTES } from "@/navigation/route-names";
+import { CURRENCY_OPTIONS, GRADIENT_PRESETS, SOLID_PRESETS, useAppStore, type ThemeConfig } from "@/store/use-app-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -169,8 +167,10 @@ function GradientSwatch({ colors, selected, onPress }: { colors: [string, string
 
 export function ProfileScreen() {
   const { user, signOut, updateName } = useAuth();
-  const { theme, setTheme } = useTheme();
-  const { currency, setCurrency } = useCurrency();
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const currency = useAppStore((s) => s.currency);
+  const setCurrency = useAppStore((s) => s.setCurrency);
   const {
     enabled: appLockEnabled,
     setEnabled: setAppLockEnabled,

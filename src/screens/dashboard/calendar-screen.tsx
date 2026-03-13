@@ -21,8 +21,7 @@ import {
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
 import { useOffline } from "@/context/offline-context";
-import { useTheme } from "@/context/theme-context";
-import { useCurrency } from "@/context/currency-context";
+import { useAppStore, formatAmount } from "@/store/use-app-store";
 
 
 const DAYS_OF_WEEK = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -45,8 +44,8 @@ function formatFullVND(amount: number) {
 export function CalendarScreen() {
   const { user } = useAuth();
   const { isOnline } = useOffline();
-  const { theme } = useTheme();
-  const { formatAmount } = useCurrency();
+  const theme = useAppStore((s) => s.theme);
+  const currency = useAppStore((s) => s.currency);
   const primary = theme.primary;
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -253,7 +252,7 @@ export function CalendarScreen() {
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-[14px] font-bold text-slate-900">
+                      <Text className="text-[13px] font-bold text-slate-900">
                         {cat?.label ?? tx.category_id}
                       </Text>
                       {tx.note ? (
@@ -264,7 +263,7 @@ export function CalendarScreen() {
                       className={`text-[14px] font-bold ${tx.type === "Revenue" ? "text-green-500" : "text-red-500"}`}
                     >
                       {tx.type === "Revenue" ? "+" : "-"}
-                      {tx.amount.toLocaleString("en-US")} VND
+                      {formatAmount(tx.amount, currency)}
                     </Text>
                   </View>
                 );

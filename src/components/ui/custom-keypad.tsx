@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
 import React from "react";
 import { View, Text, TouchableOpacity, Pressable, Platform } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -57,13 +57,14 @@ function KeyButton({ keyId, isDelete, onPress }: { keyId: string, isDelete: bool
   );
 }
 
-export function CustomKeypad({ onKeyPress, onBackspace, onDone }: CustomKeypadProps) {
-  const { theme } = useTheme();
+export function CustomKeypad({ value, onChange, onDone }: CustomKeypadProps) {
+  const theme = useAppStore((s) => s.theme);
+  const primary = theme.primary;
   const handlePress = (key: string) => {
     if (key === "delete") {
-      onBackspace();
+      onChange(value.slice(0, -1));
     } else {
-      onKeyPress(key);
+      onChange(value + key);
     }
   };
 

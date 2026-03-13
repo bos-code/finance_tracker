@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
 import React, { useMemo, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import Animated, {
@@ -45,7 +45,7 @@ function DayButton({
     );
   }
 
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
 
   return (
     <Pressable
@@ -112,6 +112,7 @@ export function CustomCalendar({ selectedDate, onSelectDate, onClose }: CustomCa
     return days;
   }, [currentMonth]);
 
+  const theme = useAppStore((s) => s.theme);
   const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
 
   return (

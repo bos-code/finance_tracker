@@ -1,5 +1,5 @@
 import { useOffline } from "@/context/offline-context";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  */
 export function OfflineBanner() {
   const { isOnline, isSyncing, pendingCount, justSynced } = useOffline();
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
   const insets = useSafeAreaInsets();
 
   const visible = !isOnline || isSyncing || justSynced;

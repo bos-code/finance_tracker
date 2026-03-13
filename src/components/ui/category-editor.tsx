@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useTheme } from "@/context/theme-context";
+import { useAppStore } from "@/store/use-app-store";
 import React, { useState } from "react";
 import {
   Modal,
@@ -156,7 +156,8 @@ export function CategoryEditor({
   onClose,
 }: CategoryEditorProps) {
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const theme = useAppStore((s) => s.theme);
+  const primary = theme.primary;
   const [local, setLocal] = useState<Category[]>(categories);
   const [selectedId, setSelectedId] = useState<string>(categories[0]?.id ?? "");
 
