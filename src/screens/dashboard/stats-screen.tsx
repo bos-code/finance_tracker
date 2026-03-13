@@ -21,6 +21,8 @@ import {
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
 import { useCurrency } from "@/context/currency-context";
+import { useOffline } from "@/context/offline-context";
+import { useTheme } from "@/context/theme-context";
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -107,6 +109,9 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
 
 export function StatsScreen() {
   const { user } = useAuth();
+  const { isOnline } = useOffline();
+  const { theme } = useTheme();
+  const primary = theme.primary;
   const [viewMode, setViewMode] = useState<ViewMode>("Month");
   const [statsType, setStatsType] = useState<TransactionType>("Expenditure");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -121,11 +126,11 @@ export function StatsScreen() {
     setLoading(true);
     try {
       if (viewMode === "Month") {
-        const data = await getTransactionsByMonth(user.uid, year, month);
+        const data = await getTransactionsByMonth(user.uid, year, month, isOnline);
         setTransactions(data);
       } else {
         const promises = Array.from({ length: 12 }, (_, i) =>
-          getTransactionsByMonth(user.uid, year, i + 1)
+          getTransactionsByMonth(user.uid, year, i + 1, isOnline)
         );
         const results = await Promise.all(promises);
         setTransactions(results.flat());
@@ -135,7 +140,8 @@ export function StatsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, year, month, viewMode]);
+  }, [user, year, month, viewMode, isOnline]);
+
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -178,14 +184,14 @@ export function StatsScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* ── Month / Year toggle ───────────────────────────────── */}
         <View className="bg-white px-4 pt-4 pb-4">
-          <View className="flex-row rounded-full bg-[#dce7ff] p-[3px] mb-4">
+          <View style={{ flexDirection: "row", borderRadius: 99, backgroundColor: primary + "20", padding: 3, marginBottom: 16 }}>
             {(["Month", "Year"] as ViewMode[]).map((mode) => (
               <TouchableOpacity
                 key={mode}
                 onPress={() => setViewMode(mode)}
-                className={`flex-1 rounded-full py-2.5 items-center ${viewMode === mode ? "bg-[#1d4ed8]" : ""}`}
+                style={{ flex: 1, borderRadius: 99, paddingVertical: 10, alignItems: "center", backgroundColor: viewMode === mode ? primary : "transparent" }}
               >
-                <Text className={`font-bold text-[14px] ${viewMode === mode ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: viewMode === mode ? "#fff" : primary }}>
                   {mode}
                 </Text>
               </TouchableOpacity>
@@ -195,11 +201,11 @@ export function StatsScreen() {
           {/* ── Period nav ─────────────────────────────────────── */}
           <View className="flex-row items-center justify-between mb-4">
             <TouchableOpacity onPress={() => changeDate(-1)} className="p-1">
-              <MaterialCommunityIcons name="chevron-left" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-left" size={26} color={primary} />
             </TouchableOpacity>
             <Text className="text-[16px] font-bold text-slate-900">{periodLabel}</Text>
             <TouchableOpacity onPress={() => changeDate(1)} className="p-1">
-              <MaterialCommunityIcons name="chevron-right" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-right" size={26} color={primary} />
             </TouchableOpacity>
           </View>
 
@@ -226,7 +232,7 @@ export function StatsScreen() {
           </View>
         </View>
 
-        {loading && <ActivityIndicator className="mt-8" color="#1d4ed8" />}
+        {loading && <ActivityIndicator className="mt-8" color={primary} />}
 
         {!loading && (
           <>
@@ -234,17 +240,17 @@ export function StatsScreen() {
             <View className="mx-4 mt-4 flex-row gap-3">
               <TouchableOpacity
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStatsType("Expenditure"); }}
-                className={`flex-1 py-2.5 rounded-xl items-center ${isExp ? "bg-[#1d4ed8]" : "bg-[#dce7ff]"}`}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center", backgroundColor: isExp ? primary : primary + "20" }}
               >
-                <Text className={`font-bold text-[13px] ${isExp ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "700", fontSize: 13, color: isExp ? "#fff" : primary }}>
                   Total expenditure
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStatsType("Revenue"); }}
-                className={`flex-1 py-2.5 rounded-xl items-center ${!isExp ? "bg-[#1d4ed8]" : "bg-[#dce7ff]"}`}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center", backgroundColor: !isExp ? primary : primary + "20" }}
               >
-                <Text className={`font-bold text-[13px] ${!isExp ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "700", fontSize: 13, color: !isExp ? "#fff" : primary }}>
                   Total revenue
                 </Text>
               </TouchableOpacity>

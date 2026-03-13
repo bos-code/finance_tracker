@@ -20,6 +20,10 @@ import {
   DailyTotal,
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
+import { useOffline } from "@/context/offline-context";
+import { useTheme } from "@/context/theme-context";
+import { useCurrency } from "@/context/currency-context";
+
 
 const DAYS_OF_WEEK = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const WEEK_START = 1; // Monday
@@ -40,6 +44,10 @@ function formatFullVND(amount: number) {
 
 export function CalendarScreen() {
   const { user } = useAuth();
+  const { isOnline } = useOffline();
+  const { theme } = useTheme();
+  const { formatAmount } = useCurrency();
+  const primary = theme.primary;
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,14 +60,15 @@ export function CalendarScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await getTransactionsByMonth(user.uid, year, month);
+      const data = await getTransactionsByMonth(user.uid, year, month, isOnline);
       setTransactions(data);
     } catch (e) {
       // silent fail, show empty state
     } finally {
       setLoading(false);
     }
-  }, [user, year, month]);
+  }, [user, year, month, isOnline]);
+
 
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
