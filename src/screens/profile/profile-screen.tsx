@@ -277,7 +277,7 @@ export function ProfileScreen() {
 
           <Text style={{ fontSize: 12, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.8, marginBottom: 4, marginLeft: 4 }}>PREFERENCES</Text>
           <SectionCard>
-            <SettingRow icon="cash-multiple" iconBg="#dcfce7" iconColor="#22c55e" label="Currency" value={currency} onPress={() => open("money")} />
+            <SettingRow icon="cash-multiple" iconBg="#dcfce7" iconColor="#22c55e" label="Currency" value={currency.label} onPress={() => open("money")} />
             <Divider />
             <SettingRow icon="bell-ring-outline" iconBg="#fef3c7" iconColor="#f59e0b" label="Notifications" value={notifications ? "On" : "Off"} onPress={() => open("notification")} />
             <Divider />
