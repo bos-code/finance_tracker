@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useTheme } from "@/context/theme-context";
 import React, { useState } from "react";
 import {
   Modal,
@@ -155,6 +156,7 @@ export function CategoryEditor({
   onClose,
 }: CategoryEditorProps) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
   const [local, setLocal] = useState<Category[]>(categories);
   const [selectedId, setSelectedId] = useState<string>(categories[0]?.id ?? "");
 
@@ -355,7 +357,7 @@ export function CategoryEditor({
             <TouchableOpacity
               onPress={handleSave}
               style={{
-                backgroundColor: "#1d4ed8",
+                backgroundColor: theme.primary,
                 borderRadius: 18,
                 height: 54,
                 alignItems: "center",

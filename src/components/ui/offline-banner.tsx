@@ -1,4 +1,5 @@
 import { useOffline } from "@/context/offline-context";
+import { useTheme } from "@/context/theme-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
@@ -22,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
  */
 export function OfflineBanner() {
   const { isOnline, isSyncing, pendingCount, justSynced } = useOffline();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
   const visible = !isOnline || isSyncing || justSynced;
@@ -47,7 +49,7 @@ export function OfflineBanner() {
   // Determine what to show
   const { bg, icon, iconColor, message } = (() => {
     if (justSynced) return { bg: "#16a34a", icon: "check-circle-outline", iconColor: "#fff", message: "Synced successfully" };
-    if (isSyncing) return { bg: "#1d4ed8", icon: "sync", iconColor: "#fff", message: `Syncing ${pendingCount} change${pendingCount !== 1 ? "s" : ""}…` };
+    if (isSyncing) return { bg: theme.primary, icon: "sync", iconColor: "#fff", message: `Syncing ${pendingCount} change${pendingCount !== 1 ? "s" : ""}…` };
     return {
       bg: "#b45309",
       icon: "wifi-off",

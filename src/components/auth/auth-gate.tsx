@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/context/theme-context";
 import { Redirect } from "expo-router";
 import React, { PropsWithChildren } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -31,11 +32,12 @@ interface AuthGateProps extends PropsWithChildren {
 
 export function AuthGate({ children, protected: isProtected, redirect }: AuthGateProps) {
   const { user, isBootstrapping } = useAuth();
+  const { theme } = useTheme();
 
   if (isBootstrapping) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" }}>
-        <ActivityIndicator size="large" color="#1d4ed8" />
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }

@@ -29,7 +29,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 48;
 
 const DONUT_COLORS = [
-  "#1d4ed8", "#f43f5e", "#f59e0b", "#0ea5e9",
+  "#f43f5e", "#f59e0b", "#0ea5e9",
   "#a855f7", "#22c55e", "#eab308", "#06b6d4",
 ];
 
@@ -64,7 +64,7 @@ function TotalRing({
     <View className="items-center">
       <View
         className="w-[180px] h-[180px] rounded-full items-center justify-center"
-        style={{ backgroundColor: isExp ? DONUT_COLORS[0] : "#22c55e" }}
+        style={{ backgroundColor: isExp ? theme.primary : "#22c55e" }}
       >
         <View className="w-[116px] h-[116px] rounded-full bg-[#f4f6f9] items-center justify-center">
           <Text className="text-[11px] font-semibold text-slate-500 text-center">
@@ -96,7 +96,7 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
                 height,
                 width: barWidth,
                 borderRadius: 6,
-                backgroundColor: isLast ? "#ef4444" : "#dce7ff",
+                backgroundColor: isLast ? "#ef4444" : theme.primary + "20",
               }}
             />
             <Text className="text-[10px] text-slate-400 mt-1">{item.label}</Text>

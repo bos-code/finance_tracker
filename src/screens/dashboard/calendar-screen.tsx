@@ -127,11 +127,11 @@ export function CalendarScreen() {
           {/* Month Nav */}
           <View className="flex-row items-center justify-between mb-4">
             <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-              <MaterialCommunityIcons name="chevron-left" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-left" size={26} color={primary} />
             </TouchableOpacity>
             <Text className="text-[18px] font-bold text-slate-900">{monthLabel}</Text>
             <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
-              <MaterialCommunityIcons name="chevron-right" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-right" size={26} color={primary} />
             </TouchableOpacity>
           </View>
 
@@ -167,7 +167,7 @@ export function CalendarScreen() {
 
         {/* Calendar Grid */}
         {loading ? (
-          <ActivityIndicator className="mt-8" color="#1d4ed8" />
+          <ActivityIndicator className="mt-8" color={primary} />
         ) : (
           <View className="bg-white flex-row flex-wrap px-1 pb-2">
             {calendarDays.map((item, index) => {
@@ -192,9 +192,9 @@ export function CalendarScreen() {
                     setSelectedDay(isSelected ? null : dateKey);
                   }}
                   style={{ width: "14.28%" }}
-                  className={`h-16 items-center pt-1 ${isSelected ? "bg-blue-50" : ""}`}
+                  className="h-16 items-center pt-1"
                 >
-                  <View className={`w-8 h-8 rounded-full items-center justify-center ${isToday ? "bg-[#1d4ed8]" : ""}`}>
+                  <View style={{ backgroundColor: isToday ? primary : "transparent" }} className="w-8 h-8 rounded-full items-center justify-center">
                     <Text className={`text-[13px] font-bold ${isToday ? "text-white" : "text-slate-700"}`}>
                       {item.day}
                     </Text>
@@ -225,7 +225,7 @@ export function CalendarScreen() {
             {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
               <View className="flex-row items-center gap-2">
-                <MaterialCommunityIcons name="plus-circle-outline" size={20} color="#1d4ed8" />
+                <MaterialCommunityIcons name="plus-circle-outline" size={20} color={primary} />
                 <Text className="text-[13px] font-bold text-slate-700">{selectedDayLabel}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedDay(null)}>

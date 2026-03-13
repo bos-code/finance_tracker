@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useTheme } from "@/context/theme-context";
 import React from "react";
 import { View, Text, TouchableOpacity, Pressable, Platform } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
@@ -57,6 +58,7 @@ function KeyButton({ keyId, isDelete, onPress }: { keyId: string, isDelete: bool
 }
 
 export function CustomKeypad({ onKeyPress, onBackspace, onDone }: CustomKeypadProps) {
+  const { theme } = useTheme();
   const handlePress = (key: string) => {
     if (key === "delete") {
       onBackspace();
@@ -73,7 +75,7 @@ export function CustomKeypad({ onKeyPress, onBackspace, onDone }: CustomKeypadPr
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           onDone();
         }}>
-          <Text className="text-[#1d4ed8] font-bold text-[16px]">Done</Text>
+          <Text style={{ color: theme.primary }} className="font-bold text-[16px]">Done</Text>
         </TouchableOpacity>
       </View>
 
