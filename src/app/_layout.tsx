@@ -8,13 +8,17 @@ import { OfflineProvider } from "@/context/offline-context";
 import { OfflineBanner } from "@/components/ui/offline-banner";
 import { AppStateProvider } from "@/state/app-state-context";
 import { Stack } from "expo-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { View } from "react-native";
 
+const queryClient = new QueryClient();
+
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider>
       <ThemeProvider>
         <CurrencyProvider>
           <OfflineProvider>
@@ -41,5 +45,6 @@ export default function RootLayout() {
         </CurrencyProvider>
       </ThemeProvider>
     </SafeAreaProvider>
+  </QueryClientProvider>
   );
 }

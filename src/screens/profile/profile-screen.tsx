@@ -1,7 +1,7 @@
 import { Screen } from "@/components/ui/screen";
-import { GRADIENT_PRESETS, SOLID_PRESETS, ThemeConfig, useTheme } from "@/context/theme-context";
-import { useCurrency, CURRENCY_OPTIONS } from "@/context/currency-context";
 import { useAppLock } from "@/context/app-lock-context";
+import { CURRENCY_OPTIONS, useCurrency } from "@/context/currency-context";
+import { GRADIENT_PRESETS, SOLID_PRESETS, ThemeConfig, useTheme } from "@/context/theme-context";
 import { useAuth } from "@/hooks/use-auth";
 
 import { ROUTES } from "@/navigation/route-names";
@@ -400,7 +400,7 @@ export function ProfileScreen() {
           <SectionCard>
             <SettingRow icon="palette-outline" iconBg={primary + "18"} iconColor={primary} label="Theme & Colours" onPress={() => open("theme")} />
             <Divider />
-            <SettingRow icon="shield-lock-outline" iconBg="#ede9fe" iconColor="#8b5cf6" label="Change password" onPress={() => router.push(ROUTES.AUTH as any)} />
+            <SettingRow icon="shield-lock-outline" iconBg="#ede9fe" iconColor="#8b5cf6" label="Change password" onPress={() => router.push(ROUTES.UPDATE_PASSWORD as any)} />
             <Divider />
             <SettingRow icon="export-variant" iconBg="#f0fdf4" iconColor="#16a34a" label="Export data" onPress={() => {}} />
             <Divider />
