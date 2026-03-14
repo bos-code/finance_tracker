@@ -14,20 +14,21 @@ import {
 import {
   Transaction,
   TransactionType,
-  getTransactionsByMonth,
   calcMonthSummary,
   calcCategoryBreakdown,
   CategoryBreakdown,
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
-import { useCurrency } from "@/context/currency-context";
+import { useOffline } from "@/context/offline-context";
+import { useAppStore, formatAmount } from "@/store/use-app-store";
+import { useTransactions } from "@/hooks/use-transactions";
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 48;
 
 const DONUT_COLORS = [
-  "#1d4ed8", "#f43f5e", "#f59e0b", "#0ea5e9",
+  "#f43f5e", "#f59e0b", "#0ea5e9",
   "#a855f7", "#22c55e", "#eab308", "#06b6d4",
 ];
 
@@ -46,7 +47,8 @@ function TotalRing({
   total: number;
   type: TransactionType;
 }) {
-  const { formatAmount } = useCurrency();
+  const currency = useAppStore((s) => s.currency);
+  const theme = useAppStore((s) => s.theme);
   const isExp = type === "Expenditure";
   if (total === 0) {
     return (
@@ -62,14 +64,14 @@ function TotalRing({
     <View className="items-center">
       <View
         className="w-[180px] h-[180px] rounded-full items-center justify-center"
-        style={{ backgroundColor: isExp ? DONUT_COLORS[0] : "#22c55e" }}
+        style={{ backgroundColor: isExp ? theme.primary : "#22c55e" }}
       >
         <View className="w-[116px] h-[116px] rounded-full bg-[#f4f6f9] items-center justify-center">
           <Text className="text-[11px] font-semibold text-slate-500 text-center">
             {isExp ? "Total exp" : "Total rev"}
           </Text>
           <Text className="text-[14px] font-bold text-slate-900 text-center">
-            {isExp ? "-" : "+"}{formatAmount(total)}
+            {isExp ? "-" : "+"}{formatAmount(total, currency)}
           </Text>
         </View>
       </View>
@@ -79,6 +81,7 @@ function TotalRing({
 
 
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
+  const theme = useAppStore((s) => s.theme);
   const max = Math.max(...data.map((d) => d.value), 1);
   const barWidth = CHART_WIDTH / data.length - 8;
 
@@ -94,7 +97,7 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
                 height,
                 width: barWidth,
                 borderRadius: 6,
-                backgroundColor: isLast ? "#ef4444" : "#dce7ff",
+                backgroundColor: isLast ? "#ef4444" : theme.primary + "20",
               }}
             />
             <Text className="text-[10px] text-slate-400 mt-1">{item.label}</Text>
@@ -107,37 +110,18 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
 
 export function StatsScreen() {
   const { user } = useAuth();
+  const { isOnline } = useOffline();
+  const theme = useAppStore((s) => s.theme);
+  const currency = useAppStore((s) => s.currency);
+  const primary = theme.primary;
   const [viewMode, setViewMode] = useState<ViewMode>("Month");
   const [statsType, setStatsType] = useState<TransactionType>("Expenditure");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-
+  
   const year = currentDate.getFullYear();
-  const month = currentDate.getMonth() + 1;
+  const month = viewMode === "Month" ? currentDate.getMonth() + 1 : undefined;
 
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      if (viewMode === "Month") {
-        const data = await getTransactionsByMonth(user.uid, year, month);
-        setTransactions(data);
-      } else {
-        const promises = Array.from({ length: 12 }, (_, i) =>
-          getTransactionsByMonth(user.uid, year, i + 1)
-        );
-        const results = await Promise.all(promises);
-        setTransactions(results.flat());
-      }
-    } catch (e) {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, [user, year, month, viewMode]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const { data: transactions = [], isLoading: loading } = useTransactions(year, month);
 
   const summary = useMemo(() => calcMonthSummary(transactions), [transactions]);
   const breakdown = useMemo(
@@ -166,10 +150,6 @@ export function StatsScreen() {
     });
   }, [summary, month, statsType]);
 
-  const periodLabel = viewMode === "Month"
-    ? currentDate.toLocaleString("default", { month: "long", year: "numeric" })
-    : String(year);
-
   const isExp = statsType === "Expenditure";
   const activeTotal = isExp ? summary.totalExpenditure : summary.totalRevenue;
 
@@ -178,14 +158,14 @@ export function StatsScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* ── Month / Year toggle ───────────────────────────────── */}
         <View className="bg-white px-4 pt-4 pb-4">
-          <View className="flex-row rounded-full bg-[#dce7ff] p-[3px] mb-4">
+          <View style={{ flexDirection: "row", borderRadius: 99, backgroundColor: primary + "20", padding: 3, marginBottom: 16 }}>
             {(["Month", "Year"] as ViewMode[]).map((mode) => (
               <TouchableOpacity
                 key={mode}
                 onPress={() => setViewMode(mode)}
-                className={`flex-1 rounded-full py-2.5 items-center ${viewMode === mode ? "bg-[#1d4ed8]" : ""}`}
+                style={{ flex: 1, borderRadius: 99, paddingVertical: 10, alignItems: "center", backgroundColor: viewMode === mode ? primary : "transparent" }}
               >
-                <Text className={`font-bold text-[14px] ${viewMode === mode ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "700", fontSize: 14, color: viewMode === mode ? "#fff" : primary }}>
                   {mode}
                 </Text>
               </TouchableOpacity>
@@ -195,11 +175,11 @@ export function StatsScreen() {
           {/* ── Period nav ─────────────────────────────────────── */}
           <View className="flex-row items-center justify-between mb-4">
             <TouchableOpacity onPress={() => changeDate(-1)} className="p-1">
-              <MaterialCommunityIcons name="chevron-left" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-left" size={26} color={primary} />
             </TouchableOpacity>
             <Text className="text-[16px] font-bold text-slate-900">{periodLabel}</Text>
             <TouchableOpacity onPress={() => changeDate(1)} className="p-1">
-              <MaterialCommunityIcons name="chevron-right" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-right" size={26} color={primary} />
             </TouchableOpacity>
           </View>
 
@@ -226,7 +206,7 @@ export function StatsScreen() {
           </View>
         </View>
 
-        {loading && <ActivityIndicator className="mt-8" color="#1d4ed8" />}
+        {loading && <ActivityIndicator className="mt-8" color={primary} />}
 
         {!loading && (
           <>
@@ -234,17 +214,17 @@ export function StatsScreen() {
             <View className="mx-4 mt-4 flex-row gap-3">
               <TouchableOpacity
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStatsType("Expenditure"); }}
-                className={`flex-1 py-2.5 rounded-xl items-center ${isExp ? "bg-[#1d4ed8]" : "bg-[#dce7ff]"}`}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center", backgroundColor: isExp ? primary : primary + "20" }}
               >
-                <Text className={`font-bold text-[13px] ${isExp ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "700", fontSize: 13, color: isExp ? "#fff" : primary }}>
                   Total expenditure
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStatsType("Revenue"); }}
-                className={`flex-1 py-2.5 rounded-xl items-center ${!isExp ? "bg-[#1d4ed8]" : "bg-[#dce7ff]"}`}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center", backgroundColor: !isExp ? primary : primary + "20" }}
               >
-                <Text className={`font-bold text-[13px] ${!isExp ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "700", fontSize: 13, color: !isExp ? "#fff" : primary }}>
                   Total revenue
                 </Text>
               </TouchableOpacity>
@@ -323,7 +303,7 @@ export function StatsScreen() {
                         {cat?.label ?? item.category_id}
                       </Text>
                       <Text className={`text-[14px] font-bold ${amountColor}`}>
-                        {amountPrefix}{item.total.toLocaleString("en-US")} VND
+                        {amountPrefix}{formatAmount(item.total, currency)}
                       </Text>
                     </View>
                   );

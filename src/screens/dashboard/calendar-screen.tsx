@@ -20,6 +20,10 @@ import {
   DailyTotal,
 } from "@/services/supabase/transaction-service";
 import { ALL_CATEGORIES } from "@/constants/categories";
+import { useOffline } from "@/context/offline-context";
+import { useAppStore, formatAmount } from "@/store/use-app-store";
+import { useTransactions } from "@/hooks/use-transactions";
+
 
 const DAYS_OF_WEEK = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const WEEK_START = 1; // Monday
@@ -40,28 +44,16 @@ function formatFullVND(amount: number) {
 
 export function CalendarScreen() {
   const { user } = useAuth();
+  const { isOnline } = useOffline();
+  const theme = useAppStore((s) => s.theme);
+  const currency = useAppStore((s) => s.currency);
+  const primary = theme.primary;
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth() + 1;
 
-  const fetchTransactions = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const data = await getTransactionsByMonth(user.uid, year, month);
-      setTransactions(data);
-    } catch (e) {
-      // silent fail, show empty state
-    } finally {
-      setLoading(false);
-    }
-  }, [user, year, month]);
-
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  const { data: transactions = [], isLoading: loading } = useTransactions(year, month);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const summary = useMemo(() => calcMonthSummary(transactions), [transactions]);
   const dailyTotals = useMemo(() => calcDailyTotals(transactions), [transactions]);
@@ -118,11 +110,11 @@ export function CalendarScreen() {
           {/* Month Nav */}
           <View className="flex-row items-center justify-between mb-4">
             <TouchableOpacity onPress={() => changeMonth(-1)} className="p-2">
-              <MaterialCommunityIcons name="chevron-left" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-left" size={26} color={primary} />
             </TouchableOpacity>
             <Text className="text-[18px] font-bold text-slate-900">{monthLabel}</Text>
             <TouchableOpacity onPress={() => changeMonth(1)} className="p-2">
-              <MaterialCommunityIcons name="chevron-right" size={26} color="#1d4ed8" />
+              <MaterialCommunityIcons name="chevron-right" size={26} color={primary} />
             </TouchableOpacity>
           </View>
 
@@ -158,7 +150,7 @@ export function CalendarScreen() {
 
         {/* Calendar Grid */}
         {loading ? (
-          <ActivityIndicator className="mt-8" color="#1d4ed8" />
+          <ActivityIndicator className="mt-8" color={primary} />
         ) : (
           <View className="bg-white flex-row flex-wrap px-1 pb-2">
             {calendarDays.map((item, index) => {
@@ -183,9 +175,9 @@ export function CalendarScreen() {
                     setSelectedDay(isSelected ? null : dateKey);
                   }}
                   style={{ width: "14.28%" }}
-                  className={`h-16 items-center pt-1 ${isSelected ? "bg-blue-50" : ""}`}
+                  className="h-16 items-center pt-1"
                 >
-                  <View className={`w-8 h-8 rounded-full items-center justify-center ${isToday ? "bg-[#1d4ed8]" : ""}`}>
+                  <View style={{ backgroundColor: isToday ? primary : "transparent" }} className="w-8 h-8 rounded-full items-center justify-center">
                     <Text className={`text-[13px] font-bold ${isToday ? "text-white" : "text-slate-700"}`}>
                       {item.day}
                     </Text>
@@ -216,7 +208,7 @@ export function CalendarScreen() {
             {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
               <View className="flex-row items-center gap-2">
-                <MaterialCommunityIcons name="plus-circle-outline" size={20} color="#1d4ed8" />
+                <MaterialCommunityIcons name="plus-circle-outline" size={20} color={primary} />
                 <Text className="text-[13px] font-bold text-slate-700">{selectedDayLabel}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedDay(null)}>
@@ -244,7 +236,7 @@ export function CalendarScreen() {
                       />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-[14px] font-bold text-slate-900">
+                      <Text className="text-[13px] font-bold text-slate-900">
                         {cat?.label ?? tx.category_id}
                       </Text>
                       {tx.note ? (
@@ -255,7 +247,7 @@ export function CalendarScreen() {
                       className={`text-[14px] font-bold ${tx.type === "Revenue" ? "text-green-500" : "text-red-500"}`}
                     >
                       {tx.type === "Revenue" ? "+" : "-"}
-                      {tx.amount.toLocaleString("en-US")} VND
+                      {formatAmount(tx.amount, currency)}
                     </Text>
                   </View>
                 );

@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export function UpdatePasswordScreen() {
-  const { signOut } = useAuth();
+  const { signOut, updatePassword } = useAuth();
   
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -42,11 +42,7 @@ export function UpdatePasswordScreen() {
     try {
       setIsSubmitting(true);
       
-      const { error: updateError } = await supabaseClient.auth.updateUser({ password });
-      
-      if (updateError) {
-        throw updateError;
-      }
+      await updatePassword(password);
       
       Alert.alert("Success", "Your password has been securely updated.", [
         {

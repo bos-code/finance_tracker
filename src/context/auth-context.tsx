@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
-import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseUpdateName } from "@/services/supabase/auth-service";
+import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseUpdateName, supabaseUpdatePassword } from "@/services/supabase/auth-service";
 import { supabaseClient } from "@/services/supabase/supabase-client";
 import { Session, User } from "@supabase/supabase-js";
 
@@ -17,6 +17,7 @@ type AuthContextValue = {
   signUp: (fullName: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateName: (fullName: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -35,6 +36,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           email: currentUser.email || "",
           fullName: currentUser.user_metadata?.full_name,
         });
+        // Hydrate settings from metadata
+        const { useAppStore } = require("@/store/use-app-store");
+        useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
       } else {
         setUser(null);
       }
@@ -44,12 +48,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data: authListener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
       // Whenever auth state changes, fetch the fresh user object to get the latest metadata
       supabaseClient.auth.getUser().then(({ data: { user: updatedUser } }) => {
-        if (updatedUser) {
+        const userObj = updatedUser || session?.user;
+        if (userObj) {
           setUser({
-            uid: updatedUser.id,
-            email: updatedUser.email || "",
-            fullName: updatedUser.user_metadata?.full_name,
+            uid: userObj.id,
+            email: userObj.email || "",
+            fullName: userObj.user_metadata?.full_name,
           });
+          // Hydrate settings from metadata
+          const { useAppStore } = require("@/store/use-app-store");
+          useAppStore.getState().hydrateFromMetadata(userObj.user_metadata);
         } else {
           setUser(null);
         }
@@ -81,6 +89,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setUser((prev) => prev ? { ...prev, fullName } : prev);
   }, []);
 
+  const updatePassword = useCallback(async (password: string) => {
+    await supabaseUpdatePassword(password);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -89,8 +101,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signUp,
       signOut,
       updateName,
+      updatePassword,
     }),
-    [isBootstrapping, signIn, signOut, signUp, updateName, user],
+    [isBootstrapping, signIn, signOut, signUp, updateName, updatePassword, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

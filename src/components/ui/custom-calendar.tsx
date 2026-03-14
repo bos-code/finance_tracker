@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useAppStore } from "@/store/use-app-store";
 import React, { useMemo, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import Animated, {
@@ -44,6 +45,8 @@ function DayButton({
     );
   }
 
+  const theme = useAppStore((s) => s.theme);
+
   return (
     <Pressable
       onPressIn={() => {
@@ -57,10 +60,8 @@ function DayButton({
       className="m-0.5"
     >
       <Animated.View
-        className={`h-10 w-10 items-center justify-center rounded-full ${
-          isSelected ? "bg-[#1d4ed8]" : "bg-transparent"
-        }`}
-        style={style}
+        style={[style, { backgroundColor: isSelected ? theme.primary : "transparent" }]}
+        className="h-10 w-10 items-center justify-center rounded-full"
       >
         <Text
           className={`text-[15px] font-bold ${
@@ -111,6 +112,7 @@ export function CustomCalendar({ selectedDate, onSelectDate, onClose }: CustomCa
     return days;
   }, [currentMonth]);
 
+  const theme = useAppStore((s) => s.theme);
   const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
 
   return (
@@ -118,11 +120,11 @@ export function CustomCalendar({ selectedDate, onSelectDate, onClose }: CustomCa
       {/* Header */}
       <View className="flex-row items-center justify-between mb-6">
         <Pressable onPress={() => changeMonth(-1)} className="p-2 bg-slate-50 rounded-full active:bg-slate-100">
-          <MaterialCommunityIcons name="chevron-left" size={24} color="#1d4ed8" />
+          <MaterialCommunityIcons name="chevron-left" size={24} color={theme.primary} />
         </Pressable>
         <Text className="text-[18px] font-bold text-slate-900">{monthName}</Text>
         <Pressable onPress={() => changeMonth(1)} className="p-2 bg-slate-50 rounded-full active:bg-slate-100">
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#1d4ed8" />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={theme.primary} />
         </Pressable>
       </View>
 

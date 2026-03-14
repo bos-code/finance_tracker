@@ -50,3 +50,20 @@ export async function supabaseUpdateName(fullName: string) {
   if (error) throw error;
 }
 
+export async function supabaseUpdateUserSettings(settings: { 
+  theme?: string; 
+  currency?: string; 
+  app_lock_enabled?: boolean; 
+  app_lock_pin?: string | null;
+}) {
+  const { error } = await supabaseClient.auth.updateUser({
+    data: settings,
+  });
+  if (error) throw error;
+}
+export async function supabaseUpdatePassword(newPassword: string) {
+  const { error } = await supabaseClient.auth.updateUser({
+    password: newPassword,
+  });
+  if (error) throw error;
+}

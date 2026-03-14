@@ -14,20 +14,24 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/hooks/use-auth";
-import { createTransaction } from "@/services/supabase/transaction-service";
+import { useCreateTransaction } from "@/hooks/use-transactions";
 import { CustomKeypad } from "@/components/ui/custom-keypad";
 import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
 import { CategoryEditor } from "@/components/ui/category-editor";
 import { EXPENDITURE_CATEGORIES, REVENUE_CATEGORIES, type Category } from "@/constants/categories";
-import { useCurrency } from "@/context/currency-context";
+import { useAppStore, formatAmount } from "@/store/use-app-store";
+import { useOffline } from "@/context/offline-context";
 import { toLocalDateString } from "@/utils/date";
 
 type TransactionType = "Expenditure" | "Revenue";
 
 export function HomeScreen() {
   const { user } = useAuth();
-  const { currency } = useCurrency();
+  const theme = useAppStore((s) => s.theme);
+  const currency = useAppStore((s) => s.currency);
+  const { isOnline, pendingCount, refreshPendingCount } = useOffline();
+  const primary = theme.primary;
   const insets = useSafeAreaInsets();
 
   // ── Transaction type ─────────────────────────────────────────────
@@ -57,7 +61,6 @@ export function HomeScreen() {
     type: "success",
     message: "",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── Switch type ──────────────────────────────────────────────────
   const switchType = useCallback((newType: TransactionType) => {
@@ -89,6 +92,8 @@ export function HomeScreen() {
   };
 
   // ── Save ─────────────────────────────────────────────────────────
+  const { mutateAsync: createTx, isPending: isSubmitting } = useCreateTransaction();
+
   const handleSave = async () => {
     if (!user) {
       setFeedback({ visible: true, type: "error", message: "Sign in to save transactions." });
@@ -100,27 +105,29 @@ export function HomeScreen() {
       return;
     }
     try {
-      setIsSubmitting(true);
       setShowKeypad(false);
-      await createTransaction({
+      await createTx({
         user_id: user.uid,
         type,
         amount: rawAmount,
         note,
         category_id: categoryId,
-        transaction_date: toLocalDateString(date), // local YYYY-MM-DD, not UTC
+        transaction_date: toLocalDateString(date),
       });
-
-      setFeedback({ visible: true, type: "success", message: `${type} saved successfully.` });
+      // Refresh pending badge after offline save
+      await refreshPendingCount();
+      const msg = isOnline
+        ? `${type} saved successfully.`
+        : `${type} saved locally — will sync when online.`;
+      setFeedback({ visible: true, type: "success", message: msg });
       setAmount("");
       setNote("");
       setDate(new Date());
     } catch (err: any) {
       setFeedback({ visible: true, type: "error", message: err?.message || "Could not save transaction." });
-    } finally {
-      setIsSubmitting(false);
     }
   };
+
 
   // ── Currency symbol ──────────────────────────────────────────────
   const symbol = type === "Expenditure" ? "$" : "D";
@@ -134,14 +141,14 @@ export function HomeScreen() {
         <ScrollView className="flex-1 px-4 pt-2 pb-[100px]" showsVerticalScrollIndicator={false}>
 
           {/* ── Type toggle ──────────────────────────────────────── */}
-          <View className="flex-row rounded-2xl bg-[#dce7ff] p-1 mt-2 mb-8">
+          <View style={{ flexDirection: "row", borderRadius: 16, backgroundColor: primary + "20", padding: 4, marginTop: 8, marginBottom: 32 }}>
             {(["Expenditure", "Revenue"] as TransactionType[]).map((t) => (
               <TouchableOpacity
                 key={t}
                 onPress={() => switchType(t)}
-                className={`flex-1 rounded-xl py-3 items-center justify-center ${type === t ? "bg-[#1d4ed8]" : ""}`}
+                style={{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center", justifyContent: "center", backgroundColor: type === t ? primary : "transparent" }}
               >
-                <Text className={`font-semibold text-[15px] ${type === t ? "text-white" : "text-[#1d4ed8]"}`}>
+                <Text style={{ fontWeight: "600", fontSize: 15, color: type === t ? "#fff" : primary }}>
                   {t}
                 </Text>
               </TouchableOpacity>
@@ -158,11 +165,11 @@ export function HomeScreen() {
                 onPress={() => { Keyboard.dismiss(); setShowKeypad(false); setShowDatePicker(true); }}
                 className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]"
               >
-                <MaterialCommunityIcons name="calendar-month-outline" size={24} color="#1d4ed8" />
+                <MaterialCommunityIcons name="calendar-month-outline" size={24} color={primary} />
                 <Text className="font-semibold text-[15px] text-slate-900">
                   {date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
                 </Text>
-                <MaterialCommunityIcons name="chevron-down" size={24} color="#1d4ed8" />
+                <MaterialCommunityIcons name="chevron-down" size={24} color={primary} />
               </TouchableOpacity>
             </View>
 
@@ -201,7 +208,7 @@ export function HomeScreen() {
           <View className="mt-8 mb-4 flex-row items-center justify-between">
             <Text className="text-[16px] font-bold text-slate-900">Category</Text>
             <TouchableOpacity onPress={() => setShowEditor(true)}>
-              <Text className="text-[15px] font-bold text-[#1d4ed8]">Edit</Text>
+              <Text style={{ fontSize: 15, fontWeight: "700", color: primary }}>Edit</Text>
             </TouchableOpacity>
           </View>
 
@@ -212,16 +219,10 @@ export function HomeScreen() {
                 <TouchableOpacity
                   key={cat.id}
                   onPress={() => setCategoryId(cat.id)}
-                  className={`w-[31%] h-24 items-center justify-center rounded-2xl bg-white border ${
-                    isSelected ? "border-[#1d4ed8] bg-[#f0f5ff]" : "border-gray-100"
-                  }`}
-                  style={!isSelected ? {
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.03,
-                    shadowRadius: 8,
-                    elevation: 1,
-                  } : undefined}
+                  style={[
+                    { width: "31%", height: 96, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: isSelected ? primary + "12" : "#fff", borderWidth: 1.5, borderColor: isSelected ? primary : "#f1f5f9" },
+                    !isSelected ? { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 } : undefined,
+                  ]}
                 >
                   <MaterialCommunityIcons name={cat.icon as any} size={28} color={cat.color} />
                   <Text className="mt-2 text-[12px] font-semibold text-slate-900 text-center">
@@ -248,7 +249,7 @@ export function HomeScreen() {
         <TouchableOpacity
           onPress={handleSave}
           disabled={isSubmitting}
-          className={`w-full rounded-2xl h-14 items-center justify-center ${isSubmitting ? "bg-blue-400" : "bg-[#1d4ed8]"}`}
+          style={{ width: "100%", borderRadius: 16, height: 56, alignItems: "center", justifyContent: "center", backgroundColor: isSubmitting ? primary + "80" : primary }}
         >
           <Text className="text-white font-semibold text-[16px]">
             {isSubmitting ? "Saving…" : `Save ${type.toLowerCase()}`}
