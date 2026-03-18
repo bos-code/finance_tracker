@@ -77,7 +77,7 @@ export function ForgotPasswordScreen() {
             </Pressable>
             <Text className="text-[28px] font-extrabold text-[#0b1220] tracking-tight">Reset Password</Text>
             <Text className="mt-2 text-[15px] text-[#64748b] max-w-[90%] leading-relaxed">
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we&apos;ll send you a link to reset your password.
             </Text>
           </View>
 
@@ -85,7 +85,7 @@ export function ForgotPasswordScreen() {
             <View className="bg-green-50 rounded-2xl p-6 border border-green-200 mt-4">
               <Text className="text-green-800 font-bold text-lg mb-2">Check your inbox</Text>
               <Text className="text-green-700 text-[15px] leading-relaxed">
-                If an account exists for {email}, we've sent instructions on how to reset your password.
+                If an account exists for {email}, we&apos;ve sent instructions on how to reset your password.
               </Text>
               <Pressable
                 onPress={() => router.replace(ROUTES.AUTH as any)}

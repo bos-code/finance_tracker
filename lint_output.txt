@@ -1,0 +1,70 @@
+
+> finance-tracker@1.0.0 lint
+> expo lint
+
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_KEY SUPABASE_DB_PASSWORD
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\components\auth\app-lock-screen.tsx
+   3:10  warning  'MaterialCommunityIcons' is defined but never used  @typescript-eslint/no-unused-vars
+  11:3   warning  'TextInput' is defined but never used               @typescript-eslint/no-unused-vars
+  12:3   warning  'TouchableOpacity' is defined but never used        @typescript-eslint/no-unused-vars
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\components\ui\category-editor.tsx
+  160:9  warning  'primary' is assigned a value but never used                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+  175:6  warning  React Hook React.useEffect has missing dependencies: 'categories' and 'translateY'. Either include them or remove the dependency array. If 'setLocal' needs the current value of 'categories', you can also switch to useReducer instead of useState and read 'categories' in the reducer  react-hooks/exhaustive-deps
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\components\ui\custom-calendar.tsx
+  10:3   warning  'withTiming' is defined but never used                                                                                          @typescript-eslint/no-unused-vars
+  48:17  error    React Hook "useAppStore" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\components\ui\offline-banner.tsx
+   5:16  warning  'View' is defined but never used                                                                                               @typescript-eslint/no-unused-vars
+  11:3   warning  'runOnJS' is defined but never used                                                                                            @typescript-eslint/no-unused-vars
+  42:6   warning  React Hook useEffect has missing dependencies: 'opacity' and 'translateY'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\components\ui\save-feedback.tsx
+   31:9  warning  'checkStroke' is assigned a value but never used                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  107:6  warning  React Hook useEffect has missing dependencies: 'backdropOpacity', 'cardOpacity', 'cardScale', 'dismiss', 'iconRotate', 'iconScale', 'isSuccess', 'rippleOpacity', 'rippleScale', 'textOpacity', and 'textTranslateY'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\context\auth-context.tsx
+   5:10  warning  'Session' is defined but never used      @typescript-eslint/no-unused-vars
+   5:19  warning  'User' is defined but never used         @typescript-eslint/no-unused-vars
+  40:33  warning  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  59:35  warning  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\screens\auth\update-password-screen.tsx
+  3:10  warning  'supabaseClient' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\screens\dashboard\calendar-screen.tsx
+   5:29  warning  'useEffect' is defined but never used               @typescript-eslint/no-unused-vars
+   5:40  warning  'useCallback' is defined but never used             @typescript-eslint/no-unused-vars
+  11:3   warning  'Modal' is defined but never used                   @typescript-eslint/no-unused-vars
+  13:3   warning  'Platform' is defined but never used                @typescript-eslint/no-unused-vars
+  16:3   warning  'Transaction' is defined but never used             @typescript-eslint/no-unused-vars
+  17:3   warning  'getTransactionsByMonth' is defined but never used  @typescript-eslint/no-unused-vars
+  29:7   warning  'WEEK_START' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  46:11  warning  'user' is assigned a value but never used           @typescript-eslint/no-unused-vars
+  47:11  warning  'isOnline' is assigned a value but never used       @typescript-eslint/no-unused-vars
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\screens\dashboard\home-screen.tsx
+   24:23  warning  'formatAmount' is defined but never used                    @typescript-eslint/no-unused-vars
+   34:21  warning  'pendingCount' is assigned a value but never used           @typescript-eslint/no-unused-vars
+   81:9   warning  'handleKeypadPress' is assigned a value but never used      @typescript-eslint/no-unused-vars
+   91:9   warning  'handleKeypadBackspace' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  140:9   warning  'symbol' is assigned a value but never used                 @typescript-eslint/no-unused-vars
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\screens\dashboard\stats-screen.tsx
+    5:29  warning  'useEffect' is defined but never used          @typescript-eslint/no-unused-vars
+    5:40  warning  'useCallback' is defined but never used        @typescript-eslint/no-unused-vars
+   15:3   warning  'Transaction' is defined but never used        @typescript-eslint/no-unused-vars
+   19:3   warning  'CategoryBreakdown' is defined but never used  @typescript-eslint/no-unused-vars
+  112:11  warning  'user' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  113:11  warning  'isOnline' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\JohnDera\Desktop\finance_tracker\src\store\use-app-store.ts
+  111:50  warning  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  119:50  warning  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+✖ 39 problems (1 error, 38 warnings)
+

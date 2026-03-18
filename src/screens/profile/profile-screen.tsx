@@ -3,6 +3,7 @@ import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
 import { CURRENCY_OPTIONS, GRADIENT_PRESETS, SOLID_PRESETS, useAppStore, type ThemeConfig } from "@/store/use-app-store";
+import { UnifiedNumpad } from "@/components/ui/unified-numpad";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -155,7 +156,7 @@ function GradientSwatch({ colors, selected, onPress }: { colors: [string, string
         <View style={{ flex: 1, backgroundColor: colors[1] }} />
       </View>
       {selected && (
-        <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
           <MaterialCommunityIcons name="check" size={22} color="#fff" />
         </View>
       )}
@@ -182,7 +183,8 @@ export function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   // Settings state
-  const [activeModal, setActiveModal] = useState<"money" | "notification" | "language" | "theme" | "name" | "appLock" | null>(null);
+  type ModalType = "money" | "notification" | "language" | "theme" | "name" | "appLock" | "none";
+  const [activeModal, setActiveModal] = useState<ModalType>("none");
   const [notifications, setNotifications] = useState(false);
   const [language, setLanguage] = useState("English");
 
@@ -209,14 +211,12 @@ export function ProfileScreen() {
     if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (m === "theme") setDraftTheme(theme);
     if (m === "name") setNameInput(user?.fullName ?? "");
-    setActiveModal(m);
+    setActiveModal(m as ModalType);
   }, [theme, user]);
 
-  const close = () => setActiveModal(null);
+  const close = () => setActiveModal("none");
 
   const openAppLock = () => {
-    setAppLockPinInput("");
-    setAppLockConfirm("");
     setAppLockError(null);
     setActiveModal("appLock");
   };
@@ -312,7 +312,11 @@ export function ProfileScreen() {
 
   return (
     <Screen className="px-0 bg-[#f4f6f9]">
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        className="flex-1" 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: activeModal === "appLock" ? 450 : 120 }}
+      >
 
         {/* ── Hero header ───────────────────────────────────────── */}
         <View style={{ backgroundColor: "#fff", paddingTop: Math.max(insets.top + 8, 24), paddingBottom: 28, paddingHorizontal: 24, alignItems: "center", borderBottomLeftRadius: 32, borderBottomRightRadius: 32, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 5 }}>
@@ -450,33 +454,59 @@ export function ProfileScreen() {
           <Text style={{ fontSize: 13, color: "#64748b", fontWeight: "600" }}>
             Create a 4-digit PIN to lock the app.
           </Text>
-          <TextInput
-            value={appLockPin}
-            onChangeText={(text) => { setAppLockPinInput(text); setAppLockError(null); }}
-            placeholder="PIN"
-            placeholderTextColor="#94a3b8"
-            keyboardType="number-pad"
-            secureTextEntry
+          <View style={{ backgroundColor: "#f8fafc", borderRadius: 20, padding: 20, borderWidth: 1.5, borderColor: "#e2e8f0", gap: 16 }}>
+             <View style={{ alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", letterSpacing: 1.2 }}>PIN</Text>
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  {[0,1,2,3].map(i => (
+                    <View key={i} style={{ width: 44, height: 52, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1.5, borderColor: appLockPin[i] ? primary : "#cbd5e1", alignItems: "center", justifyContent: "center" }}>
+                      {appLockPin[i] && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#0f172a" }} />}
+                    </View>
+                  ))}
+                </View>
+             </View>
+
+             <View style={{ alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", letterSpacing: 1.2 }}>CONFIRM PIN</Text>
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  {[0,1,2,3].map(i => (
+                    <View key={i} style={{ width: 44, height: 52, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1.5, borderColor: appLockConfirm[i] ? primary : "#cbd5e1", alignItems: "center", justifyContent: "center" }}>
+                      {appLockConfirm[i] && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#0f172a" }} />}
+                    </View>
+                  ))}
+                </View>
+             </View>
+          </View>
+
+          {appLockError ? (
+            <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "600", textAlign: "center" }}>{appLockError}</Text>
+          ) : null}
+
+          <UnifiedNumpad 
+            value={appLockPin.length < 4 ? appLockPin : appLockConfirm}
+            onChange={(val) => {
+              setAppLockError(null);
+              if (appLockPin.length < 4) {
+                setAppLockPinInput(val);
+              } else {
+                // If we're at the confirmation stage but delete everything, go back to stage 1
+                if (val === "" && appLockConfirm === "") {
+                  setAppLockPinInput(prev => prev.slice(0, -1));
+                } else {
+                  setAppLockConfirm(val);
+                }
+              }
+            }}
+            mode="pin"
             maxLength={4}
-            style={{ height: 52, borderRadius: 16, backgroundColor: "#f8fafc", borderWidth: 1.5, borderColor: "#e2e8f0", paddingHorizontal: 16, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
-          />
-          <TextInput
-            value={appLockConfirm}
-            onChangeText={(text) => { setAppLockConfirm(text); setAppLockError(null); }}
-            placeholder="Confirm PIN"
-            placeholderTextColor="#94a3b8"
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={4}
-            style={{ height: 52, borderRadius: 16, backgroundColor: "#f8fafc", borderWidth: 1.5, borderColor: "#e2e8f0", paddingHorizontal: 16, fontSize: 15, fontWeight: "600", color: "#0f172a" }}
           />
           {appLockError ? (
             <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "600" }}>{appLockError}</Text>
           ) : null}
           <TouchableOpacity
             onPress={saveAppLockPin}
-            disabled={appLockSaving}
-            style={{ backgroundColor: appLockSaving ? "#93c5fd" : primary, borderRadius: 16, height: 52, alignItems: "center", justifyContent: "center", marginTop: 4 }}
+            disabled={appLockSaving || appLockConfirm.length < 4}
+            style={{ backgroundColor: appLockSaving || appLockConfirm.length < 4 ? "#93c5fd" : primary, borderRadius: 16, height: 52, alignItems: "center", justifyContent: "center", marginTop: 4 }}
           >
             {appLockSaving ? (
               <ActivityIndicator color="#fff" />

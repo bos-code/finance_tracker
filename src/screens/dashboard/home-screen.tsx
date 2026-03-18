@@ -12,10 +12,11 @@ import {
   ScrollView,
   Keyboard,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/hooks/use-auth";
 import { useCreateTransaction } from "@/hooks/use-transactions";
-import { CustomKeypad } from "@/components/ui/custom-keypad";
+import { UnifiedNumpad } from "@/components/ui/unified-numpad";
 import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
 import { CategoryEditor } from "@/components/ui/category-editor";
@@ -50,10 +51,16 @@ export function HomeScreen() {
   const [categoryId, setCategoryId] = useState(expCategories[0].id);
   const [date, setDate] = useState(new Date());
 
-  // ── UI toggles ───────────────────────────────────────────────────
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showKeypad, setShowKeypad] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
+  // ── UI drawers ──────────────────────────────────────────────────
+  type DrawerType = "none" | "amount" | "date" | "note" | "category";
+  const [activeDrawer, setActiveDrawer] = useState<DrawerType>("none");
+
+  const closeDrawer = useCallback(() => setActiveDrawer("none"), []);
+  const openDrawer = useCallback((d: DrawerType) => {
+    Keyboard.dismiss();
+    setActiveDrawer(d);
+    if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
 
   // ── Save feedback ────────────────────────────────────────────────
   const [feedback, setFeedback] = useState<{ visible: boolean; type: "success" | "error"; message: string }>({
@@ -105,7 +112,7 @@ export function HomeScreen() {
       return;
     }
     try {
-      setShowKeypad(false);
+      closeDrawer();
       await createTx({
         user_id: user.uid,
         type,
@@ -138,7 +145,13 @@ export function HomeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
-        <ScrollView className="flex-1 px-4 pt-2 pb-[100px]" showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          className="flex-1 px-4 pt-2" 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ 
+            paddingBottom: activeDrawer === "amount" || activeDrawer === "note" ? 420 : 160 
+          }}
+        >
 
           {/* ── Type toggle ──────────────────────────────────────── */}
           <View style={{ flexDirection: "row", borderRadius: 16, backgroundColor: primary + "20", padding: 4, marginTop: 8, marginBottom: 32 }}>
@@ -162,7 +175,7 @@ export function HomeScreen() {
             <View className="flex-row items-center justify-between">
               <Text className="text-[16px] font-bold text-slate-900 w-24">Time</Text>
               <TouchableOpacity
-                onPress={() => { Keyboard.dismiss(); setShowKeypad(false); setShowDatePicker(true); }}
+                onPress={() => openDrawer("date")}
                 className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]"
               >
                 <MaterialCommunityIcons name="calendar-month-outline" size={24} color={primary} />
@@ -177,7 +190,7 @@ export function HomeScreen() {
             <View className="flex-row items-center justify-between">
               <Text className="text-[16px] font-bold text-slate-900 w-24">Amount</Text>
               <TouchableOpacity
-                onPress={() => { Keyboard.dismiss(); setShowDatePicker(false); setShowKeypad(true); }}
+                onPress={() => openDrawer("amount")}
                 activeOpacity={0.7}
                 className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]"
               >
@@ -189,111 +202,189 @@ export function HomeScreen() {
             </View>
 
             {/* Note */}
-            <View className="flex-row items-center justify-between">
+            <TouchableOpacity
+              onPress={() => openDrawer("note")}
+              activeOpacity={0.7}
+              className="flex-row items-center justify-between"
+            >
               <Text className="text-[16px] font-bold text-slate-900 w-24">Note</Text>
-              <View className="flex-1 flex-row items-center rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
-                <TextInput
-                  value={note}
-                  onChangeText={setNote}
-                  onFocus={() => setShowKeypad(false)}
-                  placeholder="Enter notes"
-                  placeholderTextColor="#94a3b8"
-                  className="flex-1 font-semibold text-[15px] text-slate-900 text-center h-full"
-                />
+              <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
+                <Text className={`flex-1 font-semibold text-[15px] text-center ${note ? "text-slate-900" : "text-[#94a3b8]"}`}>
+                  {note || "Enter notes"}
+                </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* ── Categories ───────────────────────────────────────── */}
           <View className="mt-8 mb-4 flex-row items-center justify-between">
             <Text className="text-[16px] font-bold text-slate-900">Category</Text>
-            <TouchableOpacity onPress={() => setShowEditor(true)}>
+            <TouchableOpacity onPress={() => openDrawer("category")}>
               <Text style={{ fontSize: 15, fontWeight: "700", color: primary }}>Edit</Text>
             </TouchableOpacity>
           </View>
 
-          <View className="flex-row flex-wrap justify-between gap-y-3 pb-32">
-            {activeCategories.map((cat) => {
-              const isSelected = categoryId === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategoryId(cat.id)}
-                  style={[
-                    { width: "31%", height: 96, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: isSelected ? primary + "12" : "#fff", borderWidth: 1.5, borderColor: isSelected ? primary : "#f1f5f9" },
-                    !isSelected ? { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 } : undefined,
-                  ]}
-                >
-                  <MaterialCommunityIcons name={cat.icon as any} size={28} color={cat.color} />
-                  <Text className="mt-2 text-[12px] font-semibold text-slate-900 text-center">
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* ── Save button ────────────────────────────────────────── */}
+          <View className="mt-4 mb-10">
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={isSubmitting}
+              style={{ 
+                width: "100%", 
+                borderRadius: 20, 
+                height: 60, 
+                alignItems: "center", 
+                justifyContent: "center", 
+                backgroundColor: isSubmitting ? primary + "80" : primary,
+                shadowColor: primary,
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.3,
+                shadowRadius: 15,
+                elevation: 12,
+              }}
+            >
+              <Text className="text-white font-bold text-[17px] tracking-wide">
+                {isSubmitting ? "Processing…" : `Save ${type} Transaction`}
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Save button (fixed) ───────────────────────────────────── */}
-      <View
-        className="absolute bottom-[90px] left-0 right-0 px-4 py-4 bg-white rounded-t-3xl"
-        style={{
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.05,
-          shadowRadius: 12,
-          elevation: 10,
-        }}
-      >
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={isSubmitting}
-          style={{ width: "100%", borderRadius: 16, height: 56, alignItems: "center", justifyContent: "center", backgroundColor: isSubmitting ? primary + "80" : primary }}
-        >
-          <Text className="text-white font-semibold text-[16px]">
-            {isSubmitting ? "Saving…" : `Save ${type.toLowerCase()}`}
-          </Text>
-        </TouchableOpacity>
-      </View>
 
       {/* ── Calendar modal ────────────────────────────────────────── */}
-      <Modal visible={showDatePicker} transparent animationType="fade">
+      <Modal visible={activeDrawer === "date"} transparent animationType="fade">
         <TouchableOpacity
           activeOpacity={1}
-          onPress={() => setShowDatePicker(false)}
+          onPress={closeDrawer}
           className="flex-1 bg-black/40 justify-center px-4"
         >
           <TouchableOpacity activeOpacity={1}>
             <CustomCalendar
               selectedDate={date}
               onSelectDate={(newDate) => setDate(newDate)}
-              onClose={() => setShowDatePicker(false)}
+              onClose={closeDrawer}
             />
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
       {/* ── Custom keypad ─────────────────────────────────────────── */}
-      {showKeypad && (
+      {activeDrawer === "amount" && (
         <View
           className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-[#f0f3fa]"
           style={{
-            paddingBottom: Math.max(insets.bottom, 85),
+            paddingBottom: Math.max(insets.bottom, 20),
             shadowColor: "#000",
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.1,
             shadowRadius: 10,
             elevation: 20,
+            zIndex: 1000,
           }}
         >
-          <CustomKeypad
-            onKeyPress={handleKeypadPress}
-            onBackspace={handleKeypadBackspace}
-            onDone={() => setShowKeypad(false)}
+          <UnifiedNumpad
+            value={amount}
+            onChange={(val) => {
+              // Re-apply localization formatting
+              let raw = val.replace(/[^0-9.]/g, "");
+              if (raw === "" || raw === ".") { setAmount(raw); return; }
+              const parts = raw.split(".");
+              const int = parseInt(parts[0] || "0", 10).toLocaleString("en-US");
+              setAmount(parts.length > 1 ? `${int}.${parts[1]}` : int);
+            }}
+            mode="amount"
+            onDone={closeDrawer}
           />
         </View>
       )}
+
+      {/* ── Note Input Modal (Pop up) ───────────────────────────── */}
+      <Modal visible={activeDrawer === "note"} transparent animationType="slide" statusBarTranslucent>
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: "rgba(10,18,40,0.4)" }} 
+          activeOpacity={1} 
+          onPress={closeDrawer} 
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+        >
+          <View 
+            className="rounded-t-[32px] bg-white"
+            style={{ 
+              paddingBottom: Math.max(insets.bottom, 24),
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 40 
+            }}
+          >
+            <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 8 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 99, backgroundColor: "#e2e8f0" }} />
+            </View>
+            
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>Add Note</Text>
+              <TouchableOpacity onPress={closeDrawer} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={22} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 20 }}>
+              <View 
+                style={{ 
+                  backgroundColor: "#f8fafc", 
+                  borderRadius: 20, 
+                  borderWidth: 1.5, 
+                  borderColor: "#f1f5f9",
+                  padding: 16,
+                  minHeight: 140
+                }}
+              >
+                <TextInput
+                  autoFocus
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="What was this for? (e.g. Groceries at Whole Foods)"
+                  placeholderTextColor="#94a3b8"
+                  multiline
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: "#0f172a",
+                    textAlignVertical: "top",
+                    flex: 1
+                  }}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  closeDrawer();
+                }}
+                style={{
+                  backgroundColor: primary,
+                  borderRadius: 18,
+                  height: 56,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: 20,
+                  shadowColor: primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  elevation: 5
+                }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Confirm Note</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* ── Save feedback ─────────────────────────────────────────── */}
       <SaveFeedback
@@ -305,10 +396,10 @@ export function HomeScreen() {
 
       {/* ── Category editor ───────────────────────────────────────── */}
       <CategoryEditor
-        visible={showEditor}
+        visible={activeDrawer === "category"}
         categories={activeCategories}
         onSave={(updated) => setActiveCategories(updated)}
-        onClose={() => setShowEditor(false)}
+        onClose={closeDrawer}
       />
     </Screen>
   );
