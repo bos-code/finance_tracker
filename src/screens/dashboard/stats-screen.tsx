@@ -132,7 +132,8 @@ export function StatsScreen() {
   const changeDate = (offset: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (viewMode === "Month") {
-      setCurrentDate(new Date(year, month - 1 + offset, 1));
+      const m = month ?? (currentDate.getMonth() + 1);
+      setCurrentDate(new Date(year, m - 1 + offset, 1));
     } else {
       setCurrentDate(new Date(year + offset, 0, 1));
     }
@@ -141,14 +142,19 @@ export function StatsScreen() {
   const barData = useMemo(() => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const mBase = month ?? (currentDate.getMonth() + 1);
     return Array.from({ length: 4 }, (_, i) => {
-      const m = month - 3 + i;
+      const m = mBase - 3 + i;
       const label = months[((m - 1) % 12 + 12) % 12];
       const base = statsType === "Expenditure" ? summary.totalExpenditure : summary.totalRevenue;
       const multipliers = [0.6, 0.75, 0.85, 1.0];
       return { label, value: base * multipliers[i] };
     });
-  }, [summary, month, statsType]);
+  }, [summary, month, statsType, currentDate]);
+
+  const periodLabel = viewMode === "Month"
+    ? currentDate.toLocaleString("default", { month: "long", year: "numeric" })
+    : String(year);
 
   const isExp = statsType === "Expenditure";
   const activeTotal = isExp ? summary.totalExpenditure : summary.totalRevenue;

@@ -37,6 +37,8 @@ function DayButton({
     };
   });
 
+  const theme = useAppStore((s) => s.theme);
+
   if (!isCurrentMonth) {
     return (
       <View className="h-10 w-10 items-center justify-center">
@@ -44,8 +46,6 @@ function DayButton({
       </View>
     );
   }
-
-  const theme = useAppStore((s) => s.theme);
 
   return (
     <Pressable

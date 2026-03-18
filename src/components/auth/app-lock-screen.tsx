@@ -13,10 +13,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { UnifiedNumpad } from "@/components/ui/unified-numpad";
+import { useAppStore } from "@/store/use-app-store";
 
 export function AppLockScreen() {
   const { unlock, setEnabled, useBiometrics, isBiometricsSupported, biometricUnlock } = useAppLock();
   const { signOut } = useAuth();
+  const theme = useAppStore(s => s.theme);
+  const primary = theme.primary;
   const insets = useSafeAreaInsets();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -71,33 +75,39 @@ export function AppLockScreen() {
           Enter your 4-digit PIN to continue
         </Text>
 
-        <View style={{ marginTop: 24 }}>
-          <TextInput
-            value={pin}
-            onChangeText={handleChange}
-            placeholder="••••"
-            placeholderTextColor="#cbd5e1"
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={4}
-            textAlign="center"
-            className="h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[20px] text-[#0b1220] font-semibold border border-[#f1f5f9]"
-          />
+        <View style={{ marginTop: 32, alignItems: "center" }}>
+          <View style={{ flexDirection: "row" }}>
+            {[0, 1, 2, 3].map((i) => (
+              <View
+                key={i}
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  backgroundColor: pin[i] ? primary : "#e2e8f0",
+                  transform: [{ scale: pin[i] ? 1.2 : 1 }],
+                  marginHorizontal: 10,
+                }}
+              />
+            ))}
+          </View>
           {error && (
-            <Text style={{ marginTop: 8, textAlign: "center", color: "#ef4444", fontSize: 12, fontWeight: "600" }}>
+            <Text style={{ marginTop: 24, textAlign: "center", color: "#ef4444", fontSize: 13, fontWeight: "600" }}>
               {error}
             </Text>
           )}
         </View>
 
-        {useBiometrics && isBiometricsSupported && (
-          <TouchableOpacity
-            onPress={biometricUnlock}
-            style={{ marginTop: 24, alignSelf: "center", padding: 12 }}
-          >
-            <MaterialCommunityIcons name="fingerprint" size={48} color="#475569" />
-          </TouchableOpacity>
-        )}
+        <View style={{ flex: 1 }} />
+
+        <UnifiedNumpad
+          value={pin}
+          onChange={handleChange}
+          mode="pin"
+          maxLength={4}
+          showBiometric={useBiometrics && isBiometricsSupported}
+          onBiometricPress={biometricUnlock}
+        />
 
         <Pressable onPress={handleSignOut} style={{ marginTop: 16 }}>
           <Text style={{ textAlign: "center", color: "#ef4444", fontWeight: "700", fontSize: 13 }}>

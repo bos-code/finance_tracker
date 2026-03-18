@@ -228,12 +228,17 @@ export async function getTransactionsByMonth(
 
   if (error) {
     // Network error even though isOnline was true — fall back to cache
-    const cached = await getCachedTransactions(userId, year, month);
-    return cached ?? [];
+    if (month) {
+      const cached = await getCachedTransactions(userId, year, month);
+      return cached ?? [];
+    }
+    return [];
   }
 
   const txs = (data ?? []) as Transaction[];
-  await setCachedTransactions(userId, year, month, txs);
+  if (month) {
+    await setCachedTransactions(userId, year, month, txs);
+  }
   return txs;
 }
 
