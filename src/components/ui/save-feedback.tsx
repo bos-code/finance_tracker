@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect } from "react";
-import { View, Text, Modal, Platform } from "react-native";
+import { View, Text, Modal, Platform, Pressable } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,7 +9,6 @@ import Animated, {
   withTiming,
   withSequence,
   withDelay,
-  runOnJS,
   Easing,
 } from "react-native-reanimated";
 
@@ -18,11 +17,22 @@ type FeedbackType = "success" | "error";
 interface SaveFeedbackProps {
   visible: boolean;
   type: FeedbackType;
+  title?: string;
   message?: string;
+  primaryActionLabel?: string;
+  onPrimaryAction?: () => void;
   onDone: () => void;
 }
 
-export function SaveFeedback({ visible, type, message, onDone }: SaveFeedbackProps) {
+export function SaveFeedback({
+  visible,
+  type,
+  title,
+  message,
+  primaryActionLabel,
+  onPrimaryAction,
+  onDone,
+}: SaveFeedbackProps) {
   const backdropOpacity = useSharedValue(0);
   const cardScale = useSharedValue(0.5);
   const cardOpacity = useSharedValue(0);
@@ -38,9 +48,13 @@ export function SaveFeedback({ visible, type, message, onDone }: SaveFeedbackPro
   const primaryColor = isSuccess ? "#22c55e" : "#ef4444";
   const bgColor = isSuccess ? "#f0fdf4" : "#fef2f2";
   const ringColor = isSuccess ? "#bbf7d0" : "#fecaca";
+  const hasPrimaryAction = isSuccess && !!primaryActionLabel && !!onPrimaryAction;
 
   function dismiss() {
-    onDone();
+    backdropOpacity.value = withTiming(0, { duration: 250 });
+    cardScale.value = withTiming(0.85, { duration: 250 });
+    cardOpacity.value = withTiming(0, { duration: 250 });
+    setTimeout(onDone, 270);
   }
 
   useEffect(() => {
@@ -95,16 +109,20 @@ export function SaveFeedback({ visible, type, message, onDone }: SaveFeedbackPro
     textOpacity.value = withDelay(250, withTiming(1, { duration: 250 }));
     textTranslateY.value = withDelay(250, withSpring(0, { damping: 16 }));
 
+    if (hasPrimaryAction) {
+      return;
+    }
+
     // --- AUTO EXIT after 1.5s ---
     const timer = setTimeout(() => {
       backdropOpacity.value = withTiming(0, { duration: 250 });
       cardScale.value = withTiming(0.85, { duration: 250 });
       cardOpacity.value = withTiming(0, { duration: 250 });
-      setTimeout(() => runOnJS(dismiss)(), 270);
+      setTimeout(onDone, 270);
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [visible]);
+  }, [visible, hasPrimaryAction, isSuccess]);
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
@@ -131,7 +149,13 @@ export function SaveFeedback({ visible, type, message, onDone }: SaveFeedbackPro
   if (!visible) return null;
 
   return (
-    <Modal transparent statusBarTranslucent animationType="none" visible={visible}>
+    <Modal
+      transparent
+      statusBarTranslucent
+      animationType="none"
+      visible={visible}
+      onRequestClose={dismiss}
+    >
       {/* Blurred backdrop */}
       <Animated.View
         style={[backdropStyle, { flex: 1, backgroundColor: "rgba(10,18,40,0.45)", alignItems: "center", justifyContent: "center" }]}
@@ -204,7 +228,7 @@ export function SaveFeedback({ visible, type, message, onDone }: SaveFeedbackPro
                 textAlign: "center",
               }}
             >
-              {isSuccess ? "Saved!" : "Failed"}
+              {title || (isSuccess ? "Saved!" : "Failed")}
             </Text>
             {message ? (
               <Text
@@ -230,6 +254,45 @@ export function SaveFeedback({ visible, type, message, onDone }: SaveFeedbackPro
                 opacity: 0.35,
               }}
             />
+
+            {hasPrimaryAction ? (
+              <View style={{ width: "100%", marginTop: 18, gap: 10 }}>
+                <Pressable
+                  onPress={() => onPrimaryAction?.()}
+                  style={{
+                    minHeight: 48,
+                    borderRadius: 14,
+                    backgroundColor: primaryColor,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 18,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>
+                    {primaryActionLabel}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={dismiss}
+                  style={{
+                    minHeight: 48,
+                    borderRadius: 14,
+                    backgroundColor: "#f1f5f9",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 1,
+                    borderColor: "#e2e8f0",
+                    paddingHorizontal: 18,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <Text style={{ color: "#0f172a", fontWeight: "800", fontSize: 14 }}>
+                    Done
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Animated.View>
         </Animated.View>
       </Animated.View>

@@ -54,3 +54,10 @@ src/
 - Hooks: `use*` prefix (`useAuth`, `useAsync`)
 - Service methods: action-first (`signInRequest`, `firebaseSignOut`)
 - Route constants: uppercase keys (`ROUTES.TABS_HOME`)
+
+## Supabase Setup
+
+This app expects a transactions table in Supabase.
+
+- Default table name: `transactions`
+- Override via `EXPO_PUBLIC_TRANSACTIONS_TABLE` (supports `transactions` or `public.transactions`)
