@@ -25,6 +25,34 @@ type FormErrors = {
   confirmPassword?: string;
 };
 
+function getErrorMessage(error: unknown): string | undefined {
+  if (!error) return undefined;
+  if (typeof error === "string") return error;
+  if (typeof error === "object") {
+    const anyError = error as any;
+    return (
+      anyError?.message ??
+      anyError?.error_description ??
+      anyError?.error?.message ??
+      anyError?.error?.error_description
+    );
+  }
+  return undefined;
+}
+
+function isInvalidCredentialsError(error: unknown) {
+  const message = (getErrorMessage(error) || "").toLowerCase();
+  const code =
+    typeof error === "object" && error
+      ? String((error as any)?.code ?? "").toLowerCase()
+      : "";
+  return (
+    code.includes("invalid_credentials") ||
+    message.includes("invalid login credentials") ||
+    message.includes("invalid credentials")
+  );
+}
+
 export function AuthScreen() {
   const { signIn, signUp } = useAuth();
 
@@ -34,6 +62,7 @@ export function AuthScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const insets = useSafeAreaInsets();
 
@@ -79,6 +108,7 @@ export function AuthScreen() {
 
   const submit = async () => {
     Keyboard.dismiss();
+    setSubmitError(null);
 
     if (!validate()) {
       return;
@@ -92,10 +122,21 @@ export function AuthScreen() {
         await signUp(fullName, email, password);
       }
       router.replace(ROUTES.TABS_HOME);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      if (mode === "signIn" && isInvalidCredentialsError(error)) {
+        setSubmitError("Invalid email and/or password.");
+        return;
+      }
+
+      const message = getErrorMessage(error);
+      if (message) {
+        setSubmitError(message);
+        return;
+      }
+
       Alert.alert(
         mode === "signIn" ? "Sign In Failed" : "Sign Up Failed",
-        error?.message || "An unexpected error occurred. Please try again."
+        "An unexpected error occurred. Please try again.",
       );
     } finally {
       setIsSubmitting(false);
@@ -135,6 +176,7 @@ export function AuthScreen() {
               onPress={() => {
                 setMode("signIn");
                 setErrors({});
+                setSubmitError(null);
               }}
               className={`flex-1 rounded-full py-3.5 items-center justify-center ${
                 mode === "signIn" ? "bg-white" : ""
@@ -159,6 +201,7 @@ export function AuthScreen() {
               onPress={() => {
                 setMode("signUp");
                 setErrors({});
+                setSubmitError(null);
               }}
               className={`flex-1 rounded-full py-3.5 items-center justify-center ${
                 mode === "signUp" ? "bg-white" : ""
@@ -181,6 +224,12 @@ export function AuthScreen() {
             </Pressable>
           </View>
 
+          {!!submitError && (
+            <View className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+              <Text className="text-[13px] font-semibold text-red-700">{submitError}</Text>
+            </View>
+          )}
+
           {/* Form Fields */}
           <View className="gap-5">
             {mode === "signUp" && (
@@ -191,6 +240,7 @@ export function AuthScreen() {
                   onChangeText={(text) => {
                     setFullName(text);
                     setErrors((previous) => ({ ...previous, fullName: undefined }));
+                    setSubmitError(null);
                   }}
                   placeholder="John Doe"
                   placeholderTextColor="#94a3b8"
@@ -214,6 +264,7 @@ export function AuthScreen() {
                 onChangeText={(text) => {
                   setEmail(text);
                   setErrors((previous) => ({ ...previous, email: undefined }));
+                  setSubmitError(null);
                 }}
                 placeholder="you@example.com"
                 placeholderTextColor="#94a3b8"
@@ -238,6 +289,7 @@ export function AuthScreen() {
                 onChangeText={(text) => {
                   setPassword(text);
                   setErrors((previous) => ({ ...previous, password: undefined }));
+                  setSubmitError(null);
                 }}
                 placeholder="••••••••"
                 placeholderTextColor="#94a3b8"
@@ -274,18 +326,19 @@ export function AuthScreen() {
                 <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Confirm Password</Text>
                 <TextInput
                   ref={confirmPasswordRef}
-                  value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    setErrors((previous) => ({
-                      ...previous,
-                      confirmPassword: undefined,
-                    }));
-                  }}
-                  placeholder="••••••••"
-                  placeholderTextColor="#94a3b8"
-                  secureTextEntry
-                  autoCapitalize="none"
+                value={confirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  setErrors((previous) => ({
+                    ...previous,
+                    confirmPassword: undefined,
+                  }));
+                  setSubmitError(null);
+                }}
+                placeholder="••••••••"
+                placeholderTextColor="#94a3b8"
+                secureTextEntry
+                autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="done"
                   onSubmitEditing={() => void submit()}

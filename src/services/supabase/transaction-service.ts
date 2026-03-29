@@ -11,6 +11,34 @@ import type { PendingCreate, PendingDelete, PendingUpdate } from "@/services/off
 
 export type TransactionType = "Expenditure" | "Revenue";
 
+const TRANSACTIONS_TABLE = process.env.EXPO_PUBLIC_TRANSACTIONS_TABLE || "transactions";
+
+function transactionsTable() {
+  // Allow `EXPO_PUBLIC_TRANSACTIONS_TABLE` to be either:
+  // - "transactions" (default schema)
+  // - "public.transactions" (explicit schema)
+  const raw = TRANSACTIONS_TABLE.trim();
+  const [maybeSchema, maybeTable] = raw.split(".");
+  if (maybeSchema && maybeTable) {
+    return supabaseClient.schema(maybeSchema).from(maybeTable);
+  }
+  return supabaseClient.from(raw);
+}
+
+function isMissingTransactionsTableError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const anyError = error as any;
+  const message = String(anyError?.message ?? "").toLowerCase();
+  const code = String(anyError?.code ?? "").toLowerCase();
+  return (
+    code === "42p01" || // postgres: undefined_table
+    code === "pgrst205" || // postgrest: schema cache miss / table not found
+    message.includes("could not find the table") ||
+    message.includes("schema cache") ||
+    message.includes("does not exist")
+  );
+}
+
 export type TransactionInsert = {
   user_id: string;
   type: TransactionType;
@@ -76,8 +104,7 @@ export async function createTransaction(
   isOnline = true
 ): Promise<Transaction> {
   if (isOnline) {
-    const { data: result, error } = await supabaseClient
-      .from("transactions")
+    const { data: result, error } = await transactionsTable()
       .insert([{
         user_id: data.user_id,
         type: data.type,
@@ -85,10 +112,16 @@ export async function createTransaction(
         note: data.note,
         category_id: data.category_id,
         transaction_date: data.transaction_date,
-      }])
+    }])
       .select();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Degrade gracefully if Supabase schema isn't set up yet.
+      if (isMissingTransactionsTableError(error)) {
+        return createTransaction(data, false);
+      }
+      throw error;
+    }
 
     const saved = result?.[0] as Transaction;
     // Warm the cache with the real record
@@ -129,11 +162,10 @@ export async function deleteTransaction(
   const isOnline = opts?.isOnline ?? true;
 
   if (isOnline) {
-    const { error } = await supabaseClient
-      .from("transactions")
+    const { error } = await transactionsTable()
       .delete()
       .eq("id", id);
-    if (error) throw new Error(error.message);
+    if (error) throw error;
   } else {
     const op: PendingDelete = {
       id: `del_${id}`,
@@ -163,12 +195,11 @@ export async function updateTransaction(
   isOnline = true
 ): Promise<Transaction> {
   if (isOnline) {
-    const { data: result, error } = await supabaseClient
-      .from("transactions")
+    const { data: result, error } = await transactionsTable()
       .update(data)
       .eq("id", id)
       .select();
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     return result?.[0] as Transaction;
   }
 
@@ -218,8 +249,7 @@ export async function getTransactionsByMonth(
   const lastDay = month ? new Date(year, month, 0).getDate() : 31;
   const end = month ? `${year}-${pad(month)}-${pad(lastDay)}` : `${year}-12-31`;
 
-  const { data, error } = await supabaseClient
-    .from("transactions")
+  const { data, error } = await transactionsTable()
     .select("*")
     .eq("user_id", userId)
     .gte("transaction_date", start)
