@@ -62,6 +62,7 @@ export function HomeScreen() {
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState(expCategories[0].id);
   const [date, setDate] = useState(new Date());
+  const selectedCategory = activeCategories.find((c) => c.id === categoryId);
 
   // ── UI drawers ──────────────────────────────────────────────────
   type DrawerType = "none" | "amount" | "date" | "note" | "category";
@@ -358,6 +359,87 @@ export function HomeScreen() {
           </View>
 
           {/* ── Save button ────────────────────────────────────────── */}
+          {activeCategories.length === 0 ? (
+            <View className="rounded-3xl border border-dashed border-gray-300 bg-white px-4 py-5">
+              <Text className="text-center text-[14px] font-medium text-slate-500">
+                No categories available for this transaction type.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View className="mb-4 flex-row items-center rounded-3xl border border-gray-200 bg-white px-4 py-4">
+                <View
+                  className="mr-3 h-12 w-12 items-center justify-center rounded-2xl"
+                  style={{
+                    backgroundColor:
+                      (selectedCategory?.color ?? primary) + "20",
+                  }}>
+                  <MaterialCommunityIcons
+                    name={(selectedCategory?.icon as any) ?? "shape-outline"}
+                    size={24}
+                    color={selectedCategory?.color ?? primary}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[12px] font-bold uppercase tracking-[1px] text-slate-400">
+                    Selected category
+                  </Text>
+                  <Text className="mt-1 text-[16px] font-bold text-slate-900">
+                    {selectedCategory?.label ?? "Select a category"}
+                  </Text>
+                </View>
+              </View>
+
+              <View className="mb-2 flex-row flex-wrap justify-between">
+                {activeCategories.map((category) => {
+                  const isSelected = category.id === categoryId;
+                  return (
+                    <TouchableOpacity
+                      key={category.id}
+                      activeOpacity={0.85}
+                      onPress={() => setCategoryId(category.id)}
+                      className="mb-3 rounded-2xl border px-3 py-3"
+                      style={{
+                        width: "48%",
+                        backgroundColor: isSelected
+                          ? category.color + "14"
+                          : "#ffffff",
+                        borderColor: isSelected
+                          ? category.color + "66"
+                          : "#e5e7eb",
+                      }}>
+                      <View className="flex-row items-center">
+                        <View
+                          className="mr-3 h-10 w-10 items-center justify-center rounded-2xl"
+                          style={{ backgroundColor: category.color + "20" }}>
+                          <MaterialCommunityIcons
+                            name={category.icon as any}
+                            size={20}
+                            color={category.color}
+                          />
+                        </View>
+                        <View className="flex-1">
+                          <Text
+                            numberOfLines={1}
+                            className="text-[14px] font-bold text-slate-900">
+                            {category.label}
+                          </Text>
+                          <Text
+                            className="mt-1 text-[12px] font-semibold"
+                            style={{
+                              color: isSelected ? category.color : "#94a3b8",
+                            }}>
+                            {isSelected ? "Selected" : "Tap to choose"}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
           <View className="mt-4 mb-10">
             <TouchableOpacity
               onPress={handleSave}
