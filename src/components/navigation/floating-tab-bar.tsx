@@ -52,6 +52,15 @@ const SPRING_CONFIG = {
   mass: 0.8,
 };
 
+/**
+ * Converts a 6-digit hex color string to an `rgba(r, g, b, a)` string using the given opacity.
+ *
+ * If `hexColor` (after removing a leading `#`) is not exactly 6 hex digits, the original `hexColor` is returned unchanged.
+ *
+ * @param hexColor - Hex color string such as "#RRGGBB" or "RRGGBB"
+ * @param alpha - Opacity between 0 and 1
+ * @returns An `rgba(r, g, b, alpha)` string when conversion succeeds, otherwise the original `hexColor`
+ */
 function withAlpha(hexColor: string, alpha: number) {
   const hex = hexColor.replace("#", "");
 
@@ -67,11 +76,30 @@ function withAlpha(hexColor: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/**
+ * Resolve the display label for a route.
+ *
+ * @param routeName - The route identifier (e.g., "home/index")
+ * @param title - An optional title provided by route options; ignored if empty or only whitespace
+ * @returns The label to display: `title` if it contains non-whitespace characters, otherwise the route's configured fallback label if available, or the `routeName` with a trailing `"/index"` removed
+ */
 function resolveLabel(routeName: string, title?: string) {
   if (title?.trim()) return title;
   return TAB_META[routeName]?.fallbackLabel ?? routeName.replace("/index", "");
 }
 
+/**
+ * Renders a single tab bar item with an animated lift, an icon that switches when focused, and a label.
+ *
+ * @param focused - Whether this tab is currently focused; controls animation and styling.
+ * @param label - Text label displayed under the icon.
+ * @param icon - Name of the icon to show when not focused.
+ * @param activeIcon - Name of the icon to show when focused.
+ * @param onLongPress - Handler invoked on long press.
+ * @param onPress - Handler invoked on press.
+ * @param primary - Primary theme color used for the focused background, border, and shadow.
+ * @returns The rendered tab bar item element.
+ */
 function TabBarItem({
   focused,
   label,
@@ -157,6 +185,14 @@ function TabBarItem({
   );
 }
 
+/**
+ * Render a blurred, floating bottom tab bar with a moving active "pill" indicator and animated per-route tab items.
+ *
+ * @param descriptors - Route descriptors used to obtain options and metadata for each tab
+ * @param navigation - Navigation object used to emit tab events and navigate between routes
+ * @param state - Navigation state containing the list of routes and the currently focused index
+ * @returns A React element that displays the floating tab bar UI
+ */
 export function FloatingTabBar({
   descriptors,
   navigation,

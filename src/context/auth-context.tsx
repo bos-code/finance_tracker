@@ -29,6 +29,13 @@ type AuthContextValue = {
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/**
+ * Provides AuthContext to descendants and manages the application's authentication state using Supabase.
+ *
+ * This component keeps the current authenticated user and a bootstrapping flag in sync with Supabase, hydrates the app store from user metadata, performs legacy app-lock cleanup when needed, listens for auth state changes, and exposes auth actions (`signIn`, `signUp`, `signOut`, `updateName`, `updatePassword`) to consumers.
+ *
+ * @returns A React context provider element that supplies auth state and authentication/account actions to its children.
+ */
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);

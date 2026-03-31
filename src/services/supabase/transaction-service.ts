@@ -13,6 +13,14 @@ export type TransactionType = "Expenditure" | "Revenue";
 
 const TRANSACTIONS_TABLE = process.env.EXPO_PUBLIC_TRANSACTIONS_TABLE || "transactions";
 
+/**
+ * Resolve and return the Supabase table reference for the configured transactions table.
+ *
+ * If the configured table name includes a schema in the form `schema.table`, the returned
+ * reference is scoped to that schema; otherwise the raw table name is used.
+ *
+ * @returns The Supabase table reference for the configured transactions table.
+ */
 function transactionsTable() {
   // Allow `EXPO_PUBLIC_TRANSACTIONS_TABLE` to be either:
   // - "transactions" (default schema)
@@ -25,6 +33,12 @@ function transactionsTable() {
   return supabaseClient.from(raw);
 }
 
+/**
+ * Detects whether an error indicates the transactions table or schema is missing.
+ *
+ * @param error - The thrown value or error object to inspect.
+ * @returns `true` if the error represents a missing table/schema (for example a Postgres undefined_table or PostgREST schema-cache miss), `false` otherwise.
+ */
 function isMissingTransactionsTableError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const anyError = error as any;
@@ -92,13 +106,13 @@ function parseDateParts(dateStr: string): [number, number] {
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 /**
- * Creates a new financial transaction.
+ * Create a new financial transaction, using Supabase when online or performing an optimistic local create and queuing a pending operation when offline.
  *
- * Online  → writes directly to Supabase, then patches the local cache.
- * Offline → generates a temp ID, inserts the record into the local cache
- *           immediately (so UI updates right away), and queues a "create"
- *           op for when connectivity is restored.
- */
+ * When `isOnline` is true the transaction is inserted into the configured Supabase transactions table and the local month cache is updated with the saved row. When `isOnline` is false an optimistic transaction with a temporary id is added to the local month cache and a "create" pending operation is queued for later synchronization.
+ *
+ * @param data - Fields for the new transaction (transaction_date must be a local "YYYY-MM-DD" string)
+ * @param isOnline - If false, performs an offline optimistic create and enqueues the operation; defaults to true
+ * @returns The created `Transaction`; when offline the returned object contains a client-generated `id`, `created_at`, and `tempId` for optimistic UI updates.
 export async function createTransaction(
   data: TransactionInsert,
   isOnline = true
@@ -152,8 +166,13 @@ export async function createTransaction(
 }
 
 /**
- * Deletes a transaction by ID.
- * Offline → queues a "delete" op + removes from local cache immediately.
+ * Delete a transaction remotely when online or queue a pending delete and update the local cache immediately when offline.
+ *
+ * @param id - The transaction's identifier to delete
+ * @param opts - Optional controls and cache hints
+ * @param opts.userId - When provided with `date`, identifies the user whose cached month should be patched
+ * @param opts.date - Local transaction date in `YYYY-MM-DD` format used to determine the cached month to update
+ * @param opts.isOnline - If `false`, the delete is queued as a pending operation instead of sent to the remote table
  */
 export async function deleteTransaction(
   id: string,
@@ -186,8 +205,16 @@ export async function deleteTransaction(
 }
 
 /**
- * Updates an existing transaction.
- * Offline → queues an "update" op.
+ * Update an existing transaction record.
+ *
+ * When online, performs the update against the transactions table and returns the saved row.
+ * When offline, queues a pending "update" operation and returns a stub transaction combining `id` with `data`.
+ *
+ * @param id - The transaction identifier to update
+ * @param data - Partial transaction fields to apply
+ * @param isOnline - If `true`, attempt an online update; if `false`, queue the change for later
+ * @returns The updated `Transaction` from the database, or a stub `{ id, ...data }` when queued offline
+ * @throws The Supabase/postgrest error object if the online update fails
  */
 export async function updateTransaction(
   id: string,
@@ -218,13 +245,14 @@ export async function updateTransaction(
 // ─── Reads ────────────────────────────────────────────────────────────────────
 
 /**
- * Fetches all transactions for a user within a given month.
+ * Fetches transactions for a user for the specified month or for the whole year.
  *
- * Online  → fetches from Supabase and updates the local cache.
- * Offline → returns the local cache (may be stale from a previous fetch).
+ * When online, queries the transactions table and, if a month is specified, updates the local cache for that month.
+ * When offline, returns cached month data if `month` is provided, otherwise returns an empty array.
  *
- * Uses local "YYYY-MM-DD" date strings for range filtering — avoids UTC
- * shift errors that occur when comparing against toISOString() timestamps.
+ * @param month - Month number (1-12). Omit to fetch the entire year.
+ * @param isOnline - If `false`, returns cached data where available instead of querying the network.
+ * @returns An array of transactions covering the requested month or year (may be empty).
  */
 export async function getTransactionsByMonth(
   userId: string,

@@ -24,6 +24,19 @@ interface SaveFeedbackProps {
   onDone: () => void;
 }
 
+/**
+ * Shows a centered animated modal indicating save success or error with optional actions.
+ *
+ * Displays a themed icon, title (defaults to "Saved!" or "Failed"), optional message, and a decorative ripple; plays iOS haptics on entry. If `type` is "success" and both `primaryActionLabel` and `onPrimaryAction` are provided, a primary action button and a "Done" button are shown and the modal does not auto-dismiss. Otherwise the modal auto-dismisses after ~1.5 seconds. Both manual and automatic dismissals run the exit animation and invoke `onDone` after the animation completes.
+ *
+ * @param visible - Whether the modal is visible.
+ * @param type - "success" or "error" to select icon, colors, and entry haptic type.
+ * @param title - Optional title text; falls back to "Saved!" for success or "Failed" for error.
+ * @param message - Optional secondary message text displayed under the title.
+ * @param primaryActionLabel - Optional label for the primary action button (required together with `onPrimaryAction` to show the button).
+ * @param onPrimaryAction - Optional callback invoked when the primary action button is pressed.
+ * @param onDone - Callback invoked after the modal finishes its exit animation.
+ */
 export function SaveFeedback({
   visible,
   type,

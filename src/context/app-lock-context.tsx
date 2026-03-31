@@ -27,10 +27,22 @@ type AppLockContextValue = {
 
 const LEGACY_STORAGE_USE_BIOMETRICS = "@finance_tracker_app_lock_biometrics";
 
+/**
+ * Checks whether a PIN consists of exactly four numeric digits.
+ *
+ * @param pin - The PIN to validate; `null` or `undefined` are treated as invalid.
+ * @returns `true` if `pin` contains exactly four digits (0–9), `false` otherwise.
+ */
 function isValidPin(pin: string | null | undefined) {
   return /^\d{4}$/.test(pin ?? "");
 }
 
+/**
+ * Get a user-facing label describing the available biometric authentication type(s).
+ *
+ * @param types - Array of `LocalAuthentication.AuthenticationType` values reported by the device
+ * @returns The label to show to users: `Face ID` on iOS or `Face unlock` on other platforms for facial recognition; `Fingerprint` for fingerprint; `Iris` for iris; `Biometrics` when multiple types are present or no specific type matches
+ */
 function getBiometricLabel(types: LocalAuthentication.AuthenticationType[]) {
   if (types.length > 1) {
     return "Biometrics";
@@ -53,6 +65,15 @@ function getBiometricLabel(types: LocalAuthentication.AuthenticationType[]) {
 
 export const AppLockContext = createContext<AppLockContextValue | undefined>(undefined);
 
+/**
+ * Provides App Lock context and manages PIN and biometric lock state for descendant components.
+ *
+ * Manages persistence, per-user ownership, biometric capability discovery and migration, auto-locking
+ * based on app foreground/background state, and exposes actions to enable/disable the lock,
+ * update the PIN, toggle biometric use, and perform PIN- or biometric-based unlocks.
+ *
+ * @returns The AppLockContext provider element that supplies lock state and actions to children
+ */
 export function AppLockProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const hasHydrated = useAppStore((s) => s.hasHydrated);
@@ -308,6 +329,12 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   return <AppLockContext.Provider value={value}>{children}</AppLockContext.Provider>;
 }
 
+/**
+ * Accesses the App Lock context value.
+ *
+ * @returns The current AppLockContextValue provided by an enclosing AppLockProvider.
+ * @throws Error if called outside an AppLockProvider (`"useAppLock must be used inside AppLockProvider"`).
+ */
 export function useAppLock() {
   const ctx = useContext(AppLockContext);
 

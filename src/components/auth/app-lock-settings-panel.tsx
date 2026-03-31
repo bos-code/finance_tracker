@@ -13,6 +13,13 @@ import {
   View,
 } from "react-native";
 
+/**
+ * Renders a rounded badge showing the provided label, using colors selected for the given tone.
+ *
+ * @param label - The text to display inside the badge
+ * @param tone - Visual tone of the badge; "neutral", "success", or "warning"
+ * @returns A rounded pill badge element with background and text color determined by `tone`
+ */
 function SecurityBadge({
   label,
   tone = "neutral",
@@ -34,6 +41,18 @@ function SecurityBadge({
   );
 }
 
+/**
+ * Renders a bordered row with an icon, title and description, and an optional right-side badge.
+ *
+ * @param icon - Name of the MaterialCommunityIcons glyph to display in the leading square
+ * @param iconBg - Background color used for the icon container
+ * @param iconColor - Color used for the icon glyph
+ * @param title - Primary text shown beside the icon
+ * @param description - Secondary text shown below the title
+ * @param badge - React node rendered at the right side of the row (e.g., status badge or action)
+ * @param children - Optional content rendered below the header row
+ * @returns A React element representing the styled security row
+ */
 function SecurityRow({
   icon,
   iconBg,
@@ -72,6 +91,16 @@ function SecurityRow({
   );
 }
 
+/**
+ * Render a compact stage card with a label, a status icon, and four dot indicators derived from `value`.
+ *
+ * @param label - Text shown at the top-left of the card
+ * @param active - When true, the card is styled as the currently active stage
+ * @param complete - When true, the card displays a completed state (check icon and success color)
+ * @param value - String whose first four character positions determine whether each dot indicator is filled
+ * @param primary - Primary color used for active/fill styling
+ * @returns A JSX element representing the stage card
+ */
 function PinStageCard({
   label,
   active,
@@ -126,6 +155,17 @@ function PinStageCard({
   );
 }
 
+/**
+ * Panel UI for configuring the app's local PIN and biometric app-lock settings.
+ *
+ * Manages local draft state for PIN and biometric preference, validates and saves changes
+ * (enable/disable lock, update PIN, toggle biometrics), and displays status, errors, and
+ * progress UI for creating or updating the PIN.
+ *
+ * @param isOpen - Whether the panel is currently visible; opening the panel resets drafts and errors.
+ * @param onClose - Callback invoked to request closing the panel after successful actions or cancellation.
+ * @returns The App Lock settings panel element that renders PIN/biometric controls, save/disable actions, and error feedback.
+ */
 export function AppLockSettingsPanel({
   isOpen,
   onClose,

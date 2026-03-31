@@ -25,6 +25,13 @@ const SPACING = {
   buttonRadius: 14,
 } as const;
 
+/**
+ * Renders the app's onboarding screen with icon, brand badge, title, and a primary action.
+ *
+ * Tapping the primary "First spending" button navigates to the app root ("/").
+ *
+ * @returns A React element representing the onboarding screen UI
+ */
 export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>

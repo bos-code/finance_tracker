@@ -164,7 +164,13 @@ function GradientSwatch({ colors, selected, onPress }: { colors: [string, string
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+/**
+ * Render the profile and settings screen with account details, preference rows, and multiple editable bottom-sheet modals (name, theme, currency, notifications, language, app security).
+ *
+ * Renders user avatar and display name (with avatar upload), settings sections for Preferences and Account, and conditional bottom sheets for editing name, theme, currency, notifications, language, and app lock settings.
+ *
+ * @returns The rendered JSX element for the profile/settings screen
+ */
 
 export function ProfileScreen() {
   const { user, signOut, updateName } = useAuth();

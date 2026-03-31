@@ -25,6 +25,12 @@ type FormErrors = {
   confirmPassword?: string;
 };
 
+/**
+ * Extracts a human-readable message from an unknown error value.
+ *
+ * @param error - An error value of any shape (string or object) from which to derive a message.
+ * @returns The extracted message if present (`message`, `error_description`, `error.message`, or `error.error_description`), otherwise `undefined`.
+ */
 function getErrorMessage(error: unknown): string | undefined {
   if (!error) return undefined;
   if (typeof error === "string") return error;
@@ -40,6 +46,12 @@ function getErrorMessage(error: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Detects whether an unknown error indicates invalid authentication credentials.
+ *
+ * @param error - Any thrown value or error-like object; its `message` or `code` (if present) will be inspected.
+ * @returns `true` if the error's code or message contains indicators of invalid credentials (for example `invalid_credentials`, `invalid login credentials`, or `invalid credentials`), `false` otherwise.
+ */
 function isInvalidCredentialsError(error: unknown) {
   const message = (getErrorMessage(error) || "").toLowerCase();
   const code =
@@ -53,6 +65,14 @@ function isInvalidCredentialsError(error: unknown) {
   );
 }
 
+/**
+ * Renders an authentication screen that supports both sign-in and sign-up flows.
+ *
+ * Displays a segmented control to switch modes, validates form fields, shows field-level
+ * and submission errors, and submits credentials to authenticate or create an account.
+ *
+ * @returns The rendered authentication screen JSX element
+ */
 export function AuthScreen() {
   const { signIn, signUp } = useAuth();
 

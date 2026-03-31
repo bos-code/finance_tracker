@@ -50,6 +50,14 @@ export async function supabaseUpdateName(fullName: string) {
   if (error) throw error;
 }
 
+/**
+ * Update the authenticated user's profile settings stored in Supabase user metadata.
+ *
+ * @param settings - Partial user settings to save; supported keys:
+ *   - `theme`: UI theme identifier (e.g., "light" or "dark")
+ *   - `currency`: ISO currency code or currency identifier used for display
+ * @throws The Supabase error returned when the user update fails
+ */
 export async function supabaseUpdateUserSettings(settings: { 
   theme?: string; 
   currency?: string; 
@@ -60,6 +68,11 @@ export async function supabaseUpdateUserSettings(settings: {
   if (error) throw error;
 }
 
+/**
+ * Clears legacy app-lock settings on the current user's Supabase profile by setting `app_lock_enabled` and `app_lock_pin` to `null`.
+ *
+ * @throws The error returned by Supabase if the profile update fails.
+ */
 export async function supabaseClearLegacyAppLockSettings() {
   const { error } = await supabaseClient.auth.updateUser({
     data: {
@@ -71,6 +84,12 @@ export async function supabaseClearLegacyAppLockSettings() {
   if (error) throw error;
 }
 
+/**
+ * Update the authenticated user's password.
+ *
+ * @param newPassword - The new password to set for the current user
+ * @throws The error returned by Supabase if the password update fails
+ */
 export async function supabaseUpdatePassword(newPassword: string) {
   const { error } = await supabaseClient.auth.updateUser({
     password: newPassword,

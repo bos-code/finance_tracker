@@ -39,6 +39,12 @@ const PIN_KEYS = [
   ["biometric", "0", "backspace"],
 ];
 
+/**
+ * Produces a short, user-facing biometric name from a vendor/device label.
+ *
+ * @param label - Optional biometric label (e.g., "Face ID", "Touch ID", "Fingerprint Sensor")
+ * @returns `Face` if `label` contains "face", `Touch` if it contains "finger", `Iris` if it contains "iris", otherwise `Bio`
+ */
 function getBiometricShortLabel(label?: string) {
   const normalized = label?.toLowerCase() ?? "";
 
@@ -49,6 +55,18 @@ function getBiometricShortLabel(label?: string) {
   return "Bio";
 }
 
+/**
+ * Renders a single numpad key with press animations and contextual content for digits, decimal, backspace, and biometric actions.
+ *
+ * @param val - Key identifier: digits ("0"–"9"), "." for decimal, "backspace", "biometric", or "" for an empty placeholder.
+ * @param onPress - Callback invoked with `val` when the key is pressed.
+ * @param mode - Visual and behavioral mode: `"amount"` uses standard square keys, `"pin"` uses circular PIN-style keys.
+ * @param primaryColor - Theme primary color used for biometric key tinting and borders.
+ * @param biometricLabel - Optional full biometric label used to derive a short display label (e.g., "Face", "Touch", "Iris", or "Bio").
+ * @param biometricIconName - Optional icon name to display for the biometric key; falls back to a fingerprint icon.
+ * @param pinKeySize - Computed key diameter applied when `mode` is `"pin"`.
+ * @returns A React element representing the rendered key.
+ */
 function KeyButton({
   val,
   onPress,
@@ -168,6 +186,25 @@ function KeyButton({
   );
 }
 
+/**
+ * Renders a numeric keypad for amount or PIN entry with optional biometric, header, and drawer variants.
+ *
+ * @param value - The current input string shown/edited by the keypad.
+ * @param onChange - Callback invoked with the new input string when the user enters or removes characters.
+ * @param onDone - Optional callback invoked when the user presses the "Done" action.
+ * @param mode - Determines key behavior and layout: `"amount"` allows a decimal point; `"pin"` accepts only digits and enables PIN-specific layout.
+ * @param maxLength - Optional maximum number of digits allowed (applies to numeric characters only).
+ * @param showBiometric - When `true` and `mode` is `"pin"`, displays the biometric key; otherwise that key is rendered as an empty placeholder.
+ * @param onBiometricPress - Optional handler invoked when the biometric key is pressed.
+ * @param biometricLabel - Optional descriptive label for biometric UI; used to derive a short on-key label (e.g., "Face", "Touch").
+ * @param biometricIconName - Optional icon name to use for the biometric key.
+ * @param title - Optional title text shown above the PIN keypad.
+ * @param subtitle - Optional subtitle text shown below the title in PIN mode.
+ * @param pinPresentation - Visual variant for PIN mode: `"inline"` (default) or `"drawer"` (renders a drawer-style container and handle).
+ * @param footer - Optional custom footer node rendered below the keypad (used primarily with PIN/drawer presentation).
+ * @param bottomInset - Optional bottom spacing used to inset the footer or to render a spacer when no footer is provided (pixels).
+ * @returns The rendered numpad React element.
+ */
 export function UnifiedNumpad({
   value,
   onChange,

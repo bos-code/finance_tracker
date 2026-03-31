@@ -37,10 +37,11 @@ const DONUT_COLORS = [
 type ViewMode = "Month" | "Year";
 
 /**
- * TotalRing — displays a single-color ring with the total amount in the centre.
- * Renamed from "DonutChart" to be honest about what it renders: it is NOT a
- * segmented donut. Category proportions are shown in the stacked bar below.
- * A true segmented ring would require react-native-svg (not yet installed).
+ * Renders a single-color circular total ring with a centered label and the signed total.
+ *
+ * @param total - The numeric total to display; when `0` a contextual "No expenditure data" or "No revenue data" message is shown.
+ * @param type - Transaction type that determines label text, sign (`-` for "Expenditure", `+` for "Revenue"), and ring color.
+ * @returns A JSX element displaying the total ring or the zero-data placeholder.
  */
 function TotalRing({ total, type }: { total: number; type: TransactionType }) {
   const currency = useAppStore((s) => s.currency);
@@ -75,6 +76,12 @@ function TotalRing({ total, type }: { total: number; type: TransactionType }) {
   );
 }
 
+/**
+ * Render a compact vertical bar chart from labeled numeric data.
+ *
+ * @param data - Array of data points where each item has a `label` (string) and `value` (number)
+ * @returns A view containing vertical bars scaled relative to the largest `value`, with each bar labeled beneath it
+ */
 function BarChart({ data }: { data: { label: string; value: number }[] }) {
   const theme = useAppStore((s) => s.theme);
   const max = Math.max(...data.map((d) => d.value), 1);
@@ -105,6 +112,11 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
   );
 }
 
+/**
+ * Screen component that displays transaction statistics for a selected period and type, including totals, a total ring, category breakdown, and an optional monthly bar chart.
+ *
+ * @returns A React element rendering the statistics screen UI.
+ */
 export function StatsScreen() {
   const { user } = useAuth();
   const { isOnline } = useOffline();

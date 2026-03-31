@@ -78,6 +78,11 @@ const GOAL_COLOR_OPTIONS = [
 
 const QUICK_CONTRIBUTIONS = [25, 50, 100, 250, 500] as const;
 
+/**
+ * Create a fresh GoalFormState populated with sensible defaults for a new goal form.
+ *
+ * @returns A GoalFormState initialized with an empty `title`, `goalType` set to `"saving"`, empty `targetAmount` and `savedAmount`, `targetDate` set to the current date, `hasTargetDate` set to `false`, empty `notes`, and the first entries from `GOAL_ICON_OPTIONS` and `GOAL_COLOR_OPTIONS` as `iconName` and `color`.
+ */
 function defaultGoalForm(): GoalFormState {
   return {
     title: "",
@@ -92,6 +97,16 @@ function defaultGoalForm(): GoalFormState {
   };
 }
 
+/**
+ * Build a GoalFormState pre-filled from an existing Goal for use in the goal form UI.
+ *
+ * @param goal - The source Goal to derive form values from
+ * @returns A GoalFormState populated from `goal`. Notable mappings:
+ * - `targetDate` is parsed from `goal.target_date` or set to `new Date()` when absent.
+ * - `hasTargetDate` is `true` when `goal.target_date` is present.
+ * - `targetAmount` and `savedAmount` are string representations of the corresponding numeric fields; `savedAmount` is an empty string when `goal.saved_amount` is falsy.
+ * - `notes` defaults to an empty string when missing.
+ */
 function goalFormFromGoal(goal: Goal): GoalFormState {
   return {
     title: goal.title,
@@ -108,12 +123,25 @@ function goalFormFromGoal(goal: Goal): GoalFormState {
   };
 }
 
+/**
+ * Converts a user-entered currency string into a numeric value by removing all characters except digits and the decimal point.
+ *
+ * @param value - The raw input string (may contain currency symbols, commas, spaces, etc.)
+ * @returns The parsed floating-point number, or `0` if the input is empty or cannot be parsed
+ */
 function parseCurrencyInput(value: string) {
   const normalized = value.replace(/[^0-9.]/g, "");
   if (!normalized) return 0;
   return Number.parseFloat(normalized) || 0;
 }
 
+/**
+ * Format a numeric goal amount with a currency symbol (or currency code) using en-US number formatting.
+ *
+ * @param amount - The numeric amount to format.
+ * @param currencyCode - ISO-like currency code used to look up a symbol in `CURRENCY_OPTIONS`; if no symbol is found, the code followed by a space is used as the prefix.
+ * @returns A string consisting of the currency symbol or "`<CODE> `" prefix followed by the amount formatted with en-US separators — integers show no decimal places, non-integers show two decimal places.
+ */
 function formatGoalAmount(amount: number, currencyCode: string) {
   const option = CURRENCY_OPTIONS.find((item) => item.code === currencyCode);
   const prefix = option?.symbol ?? `${currencyCode} `;
@@ -123,15 +151,33 @@ function formatGoalAmount(amount: number, currencyCode: string) {
   })}`;
 }
 
+/**
+ * Calculates progress toward a goal as a fraction between 0 and 1.
+ *
+ * @param goal - Goal whose `saved_amount` and `target_amount` are used to compute progress
+ * @returns `0` if `target_amount` is less than or equal to zero; otherwise a number between `0` and `1` representing `saved_amount / target_amount`, clamped to that range
+ */
 function getGoalProgress(goal: Goal) {
   if (goal.target_amount <= 0) return 0;
   return Math.max(0, Math.min(goal.saved_amount / goal.target_amount, 1));
 }
 
+/**
+ * Returns a human-readable label for a goal type.
+ *
+ * @param goalType - The goal's type (e.g., `"saving"` or `"item"`)
+ * @returns `"Savings target"` for `"saving"`, `"Item purchase"` otherwise
+ */
 function getGoalTypeLabel(goalType: GoalType) {
   return goalType === "saving" ? "Savings target" : "Item purchase";
 }
 
+/**
+ * Return a user-facing subtitle describing the goal's purpose.
+ *
+ * @param goal - The goal whose type determines the subtitle
+ * @returns A short subtitle: "Track a purchase and build toward owning it." for `goal_type === "item"`, otherwise "Build up savings with steady contributions."
+ */
 function getGoalSubtitle(goal: Goal) {
   if (goal.goal_type === "item") {
     return "Track a purchase and build toward owning it.";
@@ -140,6 +186,12 @@ function getGoalSubtitle(goal: Goal) {
   return "Build up savings with steady contributions.";
 }
 
+/**
+ * Format a target date string for display as `MMM d, yyyy`, or indicate that no date is set.
+ *
+ * @param date - A local date string or `null` when no target date exists
+ * @returns `"No target date"` when `date` is falsy, otherwise the formatted date (e.g., `Mar 3, 2026`)
+ */
 function formatGoalDate(date: string | null) {
   if (!date) return "No target date";
 
@@ -150,6 +202,15 @@ function formatGoalDate(date: string | null) {
   });
 }
 
+/**
+ * Bottom-sheet modal that presents scrollable content anchored to the bottom of the screen with safe-area and keyboard handling.
+ *
+ * @param visible - Whether the sheet is visible.
+ * @param title - Header title displayed at the top of the sheet.
+ * @param onClose - Callback invoked when the sheet is dismissed (back press, overlay tap, or close button).
+ * @param children - Content rendered inside the sheet's scrollable area.
+ * @returns The modal view rendering a bottom sheet UI.
+ */
 function SheetModal({
   visible,
   title,
@@ -243,6 +304,19 @@ function SheetModal({
   );
 }
 
+/**
+ * Renders a compact summary card showing an icon, a label, and a prominent value.
+ *
+ * The card displays a colored icon container, a small label line, and a bold value line with a subtle border highlight.
+ *
+ * @param icon - Name of the MaterialCommunityIcons glyph to show inside the icon container
+ * @param iconColor - Foreground color for the icon
+ * @param iconBackground - Background color for the icon container
+ * @param label - Small descriptive label displayed above the value
+ * @param value - Prominent value text shown on the card
+ * @param accent - Accent color used to tint the card border
+ * @returns A React element representing the styled summary card
+ */
 function SummaryCard({
   icon,
   iconColor,
@@ -293,6 +367,15 @@ function SummaryCard({
   );
 }
 
+/**
+ * Renders a pressable filter chip used to select a goals list filter.
+ *
+ * @param label - Text shown inside the chip
+ * @param active - Whether the chip is currently selected; controls colors and border
+ * @param onPress - Callback invoked when the chip is pressed
+ * @param activeColor - Background and border color when `active` is `true`
+ * @returns The touchable chip element
+ */
 function FilterChip({
   label,
   active,
@@ -330,6 +413,16 @@ function FilterChip({
   );
 }
 
+/**
+ * Render a card that displays a single goal's details, progress, and action buttons.
+ *
+ * @param props.goal - The goal data to display.
+ * @param props.onAddFunds - Callback invoked when the "Add funds" button is pressed.
+ * @param props.onEdit - Callback invoked when the "Edit" button is pressed.
+ * @param props.onToggleStatus - Callback invoked when the "Complete"/"Reopen" button is pressed.
+ * @param props.onDelete - Callback invoked when the "Delete" button is pressed.
+ * @returns A React element representing the goal card.
+ */
 function GoalCard(props: {
   goal: Goal;
   onAddFunds: () => void;
@@ -598,6 +691,14 @@ function GoalCard(props: {
   );
 }
 
+/**
+ * Screen that lists and manages user goals with creation, editing, contributions, completion/reopen, deletion, and filter controls.
+ *
+ * Renders summaries (open goals, total saved, nearest target), a filterable goal list, and modals for creating/editing goals, adding contributions, and selecting target dates.
+ * Integrates with authentication and data hooks to load goals and perform create/update/delete mutations, validates form and contribution input, and surfaces success/error feedback.
+ *
+ * @returns The React element for the Goals screen.
+ */
 export function GoalsScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();

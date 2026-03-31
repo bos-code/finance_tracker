@@ -8,6 +8,13 @@ export const goalKeys = {
   list: (userId: string) => [...goalKeys.all, userId] as const,
 };
 
+/**
+ * Provides a React Query hook that fetches the authenticated user's goals.
+ *
+ * The query is keyed by the current user's UID and will not run when there is no authenticated user.
+ *
+ * @returns The React Query result object containing the authenticated user's goals array and associated query state.
+ */
 export function useGoals() {
   const { user } = useAuth();
 
@@ -19,6 +26,11 @@ export function useGoals() {
   });
 }
 
+/**
+ * Create a goal and refresh the authenticated user's goals list after a successful creation.
+ *
+ * @returns The React Query mutation object for creating a goal. On success, if an authenticated user exists, invalidates the goals list query for that user's UID so the list is refetched.
+ */
 export function useCreateGoal() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -32,6 +44,15 @@ export function useCreateGoal() {
   });
 }
 
+/**
+ * Provides a React Query mutation for updating a goal with optimistic cache updates.
+ *
+ * The mutation performs an optimistic update of the cached goals list by merging the provided
+ * payload into the matching goal, returns context containing the previous cache for rollback,
+ * restores the previous cache on error, and invalidates the goals list query when settled.
+ *
+ * @returns The configured mutation object for updating a goal by `{ id, payload }`.
+ */
 export function useUpdateGoal() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -63,6 +84,11 @@ export function useUpdateGoal() {
   });
 }
 
+/**
+ * Provides a mutation hook to delete a goal and refresh the current user's goals list on success.
+ *
+ * @returns A React Query mutation object for deleting a goal; on successful deletion it invalidates the goals list query for the authenticated user (if present).
+ */
 export function useDeleteGoal() {
   const queryClient = useQueryClient();
   const { user } = useAuth();

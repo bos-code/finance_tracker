@@ -19,6 +19,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type IconName = string;
 
+/**
+ * Render a pill-shaped status chip containing an icon and a label.
+ *
+ * @param icon - MaterialCommunityIcons icon name to display on the left
+ * @param label - Text label shown next to the icon
+ * @param iconColor - Color used for the icon
+ * @param backgroundColor - Background color of the chip
+ * @param borderColor - Border color of the chip
+ * @param textColor - Optional text color for the label (defaults to `#334155`)
+ * @returns A React element representing the styled pill-shaped chip
+ */
 function SecurityChip({
   icon,
   label,
@@ -54,6 +65,18 @@ function SecurityChip({
   );
 }
 
+/**
+ * Renders a single PIN slot cell showing filled, empty, or active states.
+ *
+ * The cell displays a centered dot whose size and color reflect whether the
+ * slot is filled or merely active, and applies border/background tints based
+ * on the provided primary color.
+ *
+ * @param filled - True when the slot represents an entered digit
+ * @param active - True when the slot is the current input position
+ * @param primary - Hex or color string used to tint the filled/active styles
+ * @returns The JSX element for the PIN slot cell
+ */
 function PinSlot({
   filled,
   active,
@@ -99,6 +122,15 @@ function PinSlot({
   );
 }
 
+/**
+ * Renders the app lock screen UI that accepts a 4-digit PIN and optionally uses biometrics to unlock.
+ *
+ * The screen displays PIN slots, a numeric keypad, status chips, and a sign-out action. When biometrics
+ * are available it will auto-prompt once on mount and exposes a biometric unlock action; attempting sign-out
+ * shows a confirmation dialog that disables the local app lock before signing out.
+ *
+ * @returns A React element containing the app lock interface with PIN entry, biometric unlock controls, and sign-out UI.
+ */
 export function AppLockScreen() {
   const {
     unlock,

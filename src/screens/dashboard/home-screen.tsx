@@ -34,6 +34,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type TransactionType = "Expenditure" | "Revenue";
 
+/**
+ * Screen for creating and saving transactions (Expenditure or Revenue) with category, amount, date, and note inputs.
+ *
+ * Manages per-type in-memory category lists, form state (amount, note, category, date), drawer-based editors (amount, date, note, category),
+ * and save flow including validation, offline handling, and user feedback.
+ *
+ * @returns The React element for the Home screen.
+ */
 export function HomeScreen() {
   const { user } = useAuth();
   const theme = useAppStore((s) => s.theme);
