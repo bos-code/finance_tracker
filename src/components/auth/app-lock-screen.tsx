@@ -13,8 +13,91 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+type IconName = string;
+
+function SecurityChip({
+  icon,
+  label,
+  iconColor,
+  backgroundColor,
+  borderColor,
+  textColor = "#334155",
+}: {
+  icon: IconName;
+  label: string;
+  iconColor: string;
+  backgroundColor: string;
+  borderColor: string;
+  textColor?: string;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        backgroundColor,
+        borderColor,
+        borderWidth: 1.5,
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+      }}
+    >
+      <MaterialCommunityIcons name={icon} size={16} color={iconColor} />
+      <Text style={{ color: textColor, fontSize: 12, fontWeight: "800" }}>{label}</Text>
+    </View>
+  );
+}
+
+function PinSlot({
+  filled,
+  active,
+  primary,
+}: {
+  filled: boolean;
+  active: boolean;
+  primary: string;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        height: 60,
+        borderRadius: 18,
+        borderWidth: 1.5,
+        borderColor: filled ? primary : active ? `${primary}55` : "#dbe3ef",
+        backgroundColor: filled ? `${primary}14` : active ? "#ffffff" : "#f8fafc",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {filled ? (
+        <View
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: 6,
+            backgroundColor: primary,
+          }}
+        />
+      ) : (
+        <View
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+            backgroundColor: active ? `${primary}30` : "#cbd5e1",
+          }}
+        />
+      )}
+    </View>
+  );
+}
 
 export function AppLockScreen() {
   const {
@@ -29,6 +112,7 @@ export function AppLockScreen() {
   const theme = useAppStore((s) => s.theme);
   const primary = theme.primary;
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
 
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +120,7 @@ export function AppLockScreen() {
   const [autoPrompted, setAutoPrompted] = useState(false);
 
   const canUseBiometrics = useBiometrics && isBiometricsSupported;
+  const compactLayout = height < 760;
   const biometricIcon = useMemo(
     () => (biometricLabel.toLowerCase().includes("face") ? "face-recognition" : "fingerprint"),
     [biometricLabel],
@@ -88,224 +173,318 @@ export function AppLockScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#eef4ff", paddingTop: insets.top }}
+      style={{ flex: 1, backgroundColor: "#edf4ff", paddingTop: insets.top }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={{ flex: 1, paddingHorizontal: 22, paddingBottom: Math.max(insets.bottom, 18) }}>
-        <View style={{ flex: 1, justifyContent: "center" }}>
+      <View
+        style={{
+          position: "absolute",
+          top: -36,
+          right: -28,
+          width: 180,
+          height: 180,
+          borderRadius: 90,
+          backgroundColor: `${primary}14`,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          bottom: 160,
+          left: -52,
+          width: 160,
+          height: 160,
+          borderRadius: 80,
+          backgroundColor: "#dbeafe",
+        }}
+      />
+
+      <View
+        style={{
+          flex: 1,
+          paddingBottom: 0,
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            width: "100%",
+            maxWidth: 520,
+            alignSelf: "center",
+          }}
+        >
           <View
             style={{
-              backgroundColor: "#ffffff",
-              borderRadius: 34,
-              paddingHorizontal: 24,
-              paddingTop: 28,
-              paddingBottom: 24,
-              shadowColor: "#0f172a",
-              shadowOffset: { width: 0, height: 18 },
-              shadowOpacity: 0.1,
-              shadowRadius: 28,
-              elevation: 10,
+              flex: 1,
+              justifyContent: compactLayout ? "flex-start" : "center",
+              paddingHorizontal: 18,
+              paddingTop: compactLayout ? 12 : 18,
+              paddingBottom: 18,
             }}
           >
             <View
               style={{
-                width: 72,
-                height: 72,
-                borderRadius: 26,
-                backgroundColor: `${primary}14`,
+                alignSelf: "flex-start",
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                alignSelf: "center",
-                borderWidth: 1.5,
-                borderColor: `${primary}22`,
+                gap: 8,
+                borderRadius: 999,
+                backgroundColor: "rgba(255,255,255,0.82)",
+                borderWidth: 1,
+                borderColor: "#dbeafe",
+                paddingHorizontal: 12,
+                paddingVertical: 8,
               }}
             >
-              <MaterialCommunityIcons name="shield-lock-outline" size={32} color={primary} />
+              <MaterialCommunityIcons name="shield-check-outline" size={16} color={primary} />
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#334155" }}>App lock active</Text>
             </View>
 
-            <Text style={{ marginTop: 16, fontSize: 12, fontWeight: "800", color: primary, textAlign: "center", letterSpacing: 1 }}>
-              PROTECTED SPACE
-            </Text>
-            <Text style={{ marginTop: 8, fontSize: 27, fontWeight: "800", color: "#0f172a", textAlign: "center" }}>
-              Unlock Finance Tracker
-            </Text>
-            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: "#64748b", textAlign: "center" }}>
-              {canUseBiometrics
-                ? `Use your 4-digit PIN or ${biometricLabel.toLowerCase()} to continue.`
-                : "Enter your 4-digit PIN to continue."}
-            </Text>
-
-            <View style={{ marginTop: 24, flexDirection: "row", gap: 12 }}>
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 22,
-                  backgroundColor: "#f8fafc",
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  borderWidth: 1.5,
-                  borderColor: "#e2e8f0",
-                }}
-              >
-                <View style={{ width: 38, height: 38, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}>
-                  <MaterialCommunityIcons name="lock-outline" size={18} color="#475569" />
-                </View>
-                <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "800", color: "#0f172a" }}>PIN</Text>
-                <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#64748b", fontWeight: "600" }}>
-                  Always available as your fallback unlock method.
-                </Text>
-              </View>
-              {canUseBiometrics ? (
+            <View
+              style={{
+                marginTop: 14,
+                backgroundColor: "#ffffff",
+                borderRadius: 32,
+                paddingHorizontal: compactLayout ? 20 : 24,
+                paddingTop: compactLayout ? 20 : 24,
+                paddingBottom: compactLayout ? 18 : 22,
+                borderWidth: 1,
+                borderColor: "#dbeafe",
+                shadowColor: "#0f172a",
+                shadowOffset: { width: 0, height: 18 },
+                shadowOpacity: 0.08,
+                shadowRadius: 28,
+                elevation: 10,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <View
                   style={{
-                    flex: 1,
-                    borderRadius: 22,
-                    backgroundColor: `${primary}0f`,
-                    paddingHorizontal: 16,
-                    paddingVertical: 16,
+                    width: compactLayout ? 60 : 68,
+                    height: compactLayout ? 60 : 68,
+                    borderRadius: compactLayout ? 22 : 24,
+                    backgroundColor: `${primary}14`,
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderWidth: 1.5,
-                    borderColor: `${primary}24`,
+                    borderColor: `${primary}22`,
                   }}
                 >
-                  <View style={{ width: 38, height: 38, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" }}>
-                    <MaterialCommunityIcons name={biometricIcon as any} size={18} color={primary} />
-                  </View>
-                  <Text style={{ marginTop: 12, fontSize: 15, fontWeight: "800", color: "#0f172a" }}>{biometricLabel}</Text>
-                  <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#64748b", fontWeight: "600" }}>
-                    Faster access when you want a quick secure shortcut.
-                  </Text>
+                  <MaterialCommunityIcons name="shield-lock-outline" size={compactLayout ? 28 : 30} color={primary} />
                 </View>
-              ) : null}
-            </View>
 
-            <View style={{ marginTop: 28, alignItems: "center" }}>
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                {[0, 1, 2, 3].map((index) => {
-                  const filled = Boolean(pin[index]);
-                  return (
-                    <View
-                      key={index}
-                      style={{
-                        width: 54,
-                        height: 58,
-                        borderRadius: 18,
-                        backgroundColor: filled ? `${primary}14` : "#f8fafc",
-                        borderWidth: 1.5,
-                        borderColor: filled ? primary : "#e2e8f0",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {filled ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: primary }} /> : null}
-                    </View>
-                  );
-                })}
-              </View>
-
-              {error ? (
                 <View
                   style={{
-                    marginTop: 18,
-                    minHeight: 46,
-                    borderRadius: 16,
+                    borderRadius: 999,
+                    backgroundColor: "#f8fafc",
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: "#475569" }}>Secure access</Text>
+                </View>
+              </View>
+
+              <Text
+                style={{
+                  marginTop: 18,
+                  fontSize: compactLayout ? 26 : 30,
+                  fontWeight: "800",
+                  color: "#0f172a",
+                }}
+              >
+                Unlock to continue
+              </Text>
+              <Text
+                style={{
+                  marginTop: 8,
+                  fontSize: 14,
+                  lineHeight: 21,
+                  color: "#64748b",
+                  fontWeight: "600",
+                }}
+              >
+                {canUseBiometrics
+                  ? `Enter your 4-digit PIN or use ${biometricLabel.toLowerCase()} for quicker access.`
+                  : "Enter your 4-digit PIN to return to your finances."}
+              </Text>
+
+              <View style={{ marginTop: compactLayout ? 16 : 18, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <SecurityChip
+                  icon="numeric-4-circle-outline"
+                  label="4-digit PIN required"
+                  iconColor={primary}
+                  backgroundColor={`${primary}12`}
+                  borderColor={`${primary}26`}
+                />
+                <SecurityChip
+                  icon={canUseBiometrics ? biometricIcon : "information-outline"}
+                  label={canUseBiometrics ? `${biometricLabel} ready` : "Biometrics unavailable"}
+                  iconColor={canUseBiometrics ? primary : "#64748b"}
+                  backgroundColor={canUseBiometrics ? "#f0fdf4" : "#f8fafc"}
+                  borderColor={canUseBiometrics ? "#bbf7d0" : "#e2e8f0"}
+                />
+              </View>
+
+              <View
+                style={{
+                  marginTop: compactLayout ? 18 : 22,
+                  borderRadius: 26,
+                  backgroundColor: "#f8fafc",
+                  borderWidth: 1.5,
+                  borderColor: "#e2e8f0",
+                  padding: compactLayout ? 16 : 18,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#0f172a" }}>Enter PIN</Text>
+                    <Text style={{ marginTop: 4, fontSize: 12, color: "#64748b", fontWeight: "600" }}>
+                      {error ? "Check your PIN and try again." : "Your local fallback always works here."}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      borderRadius: 999,
+                      backgroundColor: "#ffffff",
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderWidth: 1,
+                      borderColor: "#e2e8f0",
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#475569" }}>{pin.length}/4</Text>
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 16, flexDirection: "row", gap: 10 }}>
+                  {[0, 1, 2, 3].map((index) => (
+                    <PinSlot
+                      key={index}
+                      filled={Boolean(pin[index])}
+                      active={index === pin.length && pin.length < 4}
+                      primary={primary}
+                    />
+                  ))}
+                </View>
+
+                <View
+                  style={{
+                    marginTop: 16,
+                    minHeight: 48,
+                    borderRadius: 18,
+                    borderWidth: 1.5,
+                    borderColor: error ? "#fecdd3" : "#e2e8f0",
+                    backgroundColor: error ? "#fff1f2" : "#ffffff",
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name={error ? "alert-circle-outline" : "shield-check-outline"}
+                    size={18}
+                    color={error ? "#e11d48" : primary}
+                  />
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: error ? "#be123c" : "#475569",
+                      fontSize: 12,
+                      fontWeight: "700",
+                      lineHeight: 18,
+                    }}
+                  >
+                    {error ?? "The app locks again whenever it leaves the foreground."}
+                  </Text>
+                </View>
+
+                {canUseBiometrics ? (
+                  <TouchableOpacity
+                    onPress={triggerBiometricUnlock}
+                    disabled={biometricPending}
+                    style={{
+                      marginTop: 14,
+                      height: 52,
+                      borderRadius: 18,
+                      borderWidth: 1.5,
+                      borderColor: `${primary}30`,
+                      backgroundColor: `${primary}12`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                      gap: 10,
+                    }}
+                  >
+                    {biometricPending ? (
+                      <ActivityIndicator color={primary} />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name={biometricIcon} size={20} color={primary} />
+                        <Text style={{ color: primary, fontWeight: "800", fontSize: 14 }}>Use {biometricLabel} instead</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          <UnifiedNumpad
+            value={pin}
+            onChange={handleChange}
+            mode="pin"
+            maxLength={4}
+            showBiometric={canUseBiometrics}
+            onBiometricPress={triggerBiometricUnlock}
+            biometricLabel={biometricLabel}
+            biometricIconName={biometricIcon}
+            pinPresentation="drawer"
+            bottomInset={Math.max(insets.bottom, 14)}
+            title="Security keypad"
+            subtitle={
+              canUseBiometrics
+                ? `Tap a digit or use ${biometricLabel.toLowerCase()} from the quick action.`
+                : "Tap the digits below to enter your PIN."
+            }
+            footer={
+              <>
+                <Pressable
+                  onPress={handleSignOut}
+                  style={{
+                    borderRadius: 18,
                     backgroundColor: "#fff1f2",
                     borderWidth: 1.5,
                     borderColor: "#fecdd3",
                     paddingHorizontal: 14,
-                    paddingVertical: 10,
+                    paddingVertical: 12,
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 10,
+                    justifyContent: "center",
+                    gap: 8,
                   }}
                 >
-                  <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
-                  <Text style={{ flex: 1, color: "#be123c", fontSize: 13, fontWeight: "700" }}>{error}</Text>
-                </View>
-              ) : (
-                <View
+                  <MaterialCommunityIcons name="logout" size={18} color="#e11d48" />
+                  <Text style={{ color: "#e11d48", fontWeight: "800", fontSize: 13 }}>Sign out instead</Text>
+                </Pressable>
+
+                <Text
                   style={{
-                    marginTop: 18,
-                    minHeight: 46,
-                    borderRadius: 16,
-                    backgroundColor: "#f8fafc",
-                    borderWidth: 1.5,
-                    borderColor: "#e2e8f0",
-                    paddingHorizontal: 14,
-                    paddingVertical: 10,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
+                    textAlign: "center",
+                    fontSize: 11,
+                    lineHeight: 16,
+                    color: "#94a3b8",
+                    fontWeight: "700",
                   }}
                 >
-                  <MaterialCommunityIcons name="shield-check-outline" size={18} color={primary} />
-                  <Text style={{ flex: 1, color: "#475569", fontSize: 13, fontWeight: "700" }}>
-                    Your finances stay protected whenever the app leaves the foreground.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {canUseBiometrics ? (
-              <TouchableOpacity
-                onPress={triggerBiometricUnlock}
-                disabled={biometricPending}
-                style={{
-                  marginTop: 22,
-                  height: 52,
-                  borderRadius: 18,
-                  borderWidth: 1.5,
-                  borderColor: `${primary}30`,
-                  backgroundColor: `${primary}12`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexDirection: "row",
-                  gap: 10,
-                }}
-              >
-                {biometricPending ? (
-                  <ActivityIndicator color={primary} />
-                ) : (
-                  <>
-                    <MaterialCommunityIcons name={biometricIcon as any} size={20} color={primary} />
-                    <Text style={{ color: primary, fontWeight: "800", fontSize: 14 }}>Use {biometricLabel}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ) : null}
-          </View>
+                  Signing out removes the local app lock and returns to the auth flow.
+                </Text>
+              </>
+            }
+          />
         </View>
-
-        <UnifiedNumpad
-          value={pin}
-          onChange={handleChange}
-          mode="pin"
-          maxLength={4}
-          showBiometric={canUseBiometrics}
-          onBiometricPress={triggerBiometricUnlock}
-          biometricLabel={biometricLabel}
-          biometricIconName={biometricIcon as any}
-          title="Security keypad"
-          subtitle={canUseBiometrics ? `Tap digits or use ${biometricLabel.toLowerCase()} from the action key.` : "Tap the digits below to enter your PIN."}
-        />
-
-        <Pressable
-          onPress={handleSignOut}
-          style={{
-            marginTop: 16,
-            paddingVertical: 12,
-            borderRadius: 16,
-            borderWidth: 1.5,
-            borderColor: "#fecdd3",
-            backgroundColor: "#fff1f2",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-          }}
-        >
-          <MaterialCommunityIcons name="logout" size={18} color="#e11d48" />
-          <Text style={{ color: "#e11d48", fontWeight: "800", fontSize: 13 }}>Sign out</Text>
-        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );

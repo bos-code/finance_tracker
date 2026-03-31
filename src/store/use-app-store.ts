@@ -87,8 +87,16 @@ interface AppStoreState {
   // App Lock (Settings)
   appLockEnabled: boolean;
   appLockPin: string | null;
+  appLockOwnerUserId: string | null;
+  appLockUseBiometrics: boolean;
   setAppLockEnabled: (enabled: boolean) => void;
   setAppLockPin: (pin: string | null) => void;
+  setAppLockOwnerUserId: (userId: string | null) => void;
+  setAppLockUseBiometrics: (enabled: boolean) => void;
+
+  // Persist hydration
+  hasHydrated: boolean;
+  setHasHydrated: (hydrated: boolean) => void;
 
   // Hydration
   hydrateFromMetadata: (metadata: any) => void;
@@ -103,6 +111,9 @@ export const useAppStore = create<AppStoreState>()(
       selectedAccountId: null,
       appLockEnabled: false,
       appLockPin: null,
+      appLockOwnerUserId: null,
+      appLockUseBiometrics: false,
+      hasHydrated: false,
 
       // Actions
       setTheme: async (theme, userId) => {
@@ -123,6 +134,9 @@ export const useAppStore = create<AppStoreState>()(
       setSelectedAccountId: (id) => set({ selectedAccountId: id }),
       setAppLockEnabled: (appLockEnabled) => set({ appLockEnabled }),
       setAppLockPin: (appLockPin) => set({ appLockPin }),
+      setAppLockOwnerUserId: (appLockOwnerUserId) => set({ appLockOwnerUserId }),
+      setAppLockUseBiometrics: (appLockUseBiometrics) => set({ appLockUseBiometrics }),
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       hydrateFromMetadataSlot: (metadata: any) => {
         if (!metadata) return;
@@ -138,14 +152,6 @@ export const useAppStore = create<AppStoreState>()(
           if (cur) updates.currency = cur;
         }
 
-        if (metadata.app_lock_enabled !== undefined) {
-          updates.appLockEnabled = !!metadata.app_lock_enabled;
-        }
-
-        if (metadata.app_lock_pin !== undefined) {
-          updates.appLockPin = metadata.app_lock_pin;
-        }
-
         if (Object.keys(updates).length > 0) {
           set(updates);
         }
@@ -158,6 +164,18 @@ export const useAppStore = create<AppStoreState>()(
     {
       name: "finance-tracker-app-store",
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        theme: state.theme,
+        currency: state.currency,
+        selectedAccountId: state.selectedAccountId,
+        appLockEnabled: state.appLockEnabled,
+        appLockPin: state.appLockPin,
+        appLockOwnerUserId: state.appLockOwnerUserId,
+        appLockUseBiometrics: state.appLockUseBiometrics,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

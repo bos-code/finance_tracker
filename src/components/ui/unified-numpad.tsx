@@ -1,11 +1,12 @@
 import { useAppStore } from "@/store/use-app-store";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useCallback, useMemo, type ComponentProps } from "react";
-import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useMemo } from "react";
+import type { ReactNode } from "react";
+import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 
-type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+type IconName = string;
 
 interface UnifiedNumpadProps {
   value: string;
@@ -19,6 +20,9 @@ interface UnifiedNumpadProps {
   biometricIconName?: IconName;
   title?: string;
   subtitle?: string;
+  pinPresentation?: "inline" | "drawer";
+  footer?: ReactNode;
+  bottomInset?: number;
 }
 
 const KEYS = [
@@ -52,6 +56,7 @@ function KeyButton({
   primaryColor,
   biometricLabel,
   biometricIconName,
+  pinKeySize,
 }: {
   val: string;
   onPress: (v: string) => void;
@@ -59,6 +64,7 @@ function KeyButton({
   primaryColor: string;
   biometricLabel?: string;
   biometricIconName?: IconName;
+  pinKeySize: number;
 }) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
@@ -93,12 +99,30 @@ function KeyButton({
   };
 
   return (
-    <View style={[styles.keyContainer, isPinMode && styles.pinKeyContainer]}>
+    <View
+      style={[
+        styles.keyContainer,
+        isPinMode && styles.pinKeyContainer,
+        isPinMode
+          ? {
+              height: pinKeySize,
+              width: pinKeySize,
+            }
+          : undefined,
+      ]}
+    >
       <Pressable onPress={() => onPress(val)} onPressIn={handlePressIn} onPressOut={handlePressOut} style={{ flex: 1 }}>
         <Animated.View
           style={[
             styles.key,
             isPinMode ? styles.pinKey : styles.amountKey,
+            isPinMode
+              ? {
+                  borderRadius: Math.round(pinKeySize * 0.32),
+                  height: pinKeySize,
+                  width: pinKeySize,
+                }
+              : undefined,
             !isActionKey ? styles.keyShadow : undefined,
             isPinMode && isActionKey ? styles.pinActionKey : undefined,
             isPinMode && isBiometric
@@ -123,7 +147,18 @@ function KeyButton({
               ) : null}
             </View>
           ) : (
-            <Text style={[styles.keyText, isPinMode ? styles.pinKeyText : undefined, val === "." && { fontSize: 32, marginBottom: 8 }]}>
+            <Text
+              style={[
+                styles.keyText,
+                isPinMode ? styles.pinKeyText : undefined,
+                isPinMode
+                  ? {
+                      fontSize: pinKeySize >= 82 ? 30 : 27,
+                    }
+                  : undefined,
+                val === "." && { fontSize: 32, marginBottom: 8 },
+              ]}
+            >
               {val}
             </Text>
           )}
@@ -145,10 +180,17 @@ export function UnifiedNumpad({
   biometricIconName,
   title,
   subtitle,
+  pinPresentation = "inline",
+  footer,
+  bottomInset = 0,
 }: UnifiedNumpadProps) {
   const theme = useAppStore((s) => s.theme);
   const primary = theme.primary;
   const isPinMode = mode === "pin";
+  const isPinDrawer = isPinMode && pinPresentation === "drawer";
+  const { width } = useWindowDimensions();
+
+  const pinKeySize = useMemo(() => Math.max(72, Math.min(86, Math.floor((width - 76) / 3))), [width]);
 
   const handlePress = useCallback(
     (key: string) => {
@@ -181,7 +223,13 @@ export function UnifiedNumpad({
   const keysToUse = useMemo(() => (isPinMode ? PIN_KEYS : KEYS), [isPinMode]);
 
   return (
-    <View style={[styles.container, isPinMode && styles.pinContainer]}>
+    <View style={[styles.container, isPinMode && styles.pinContainer, isPinDrawer && styles.pinDrawerContainer]}>
+      {isPinDrawer ? (
+        <View style={styles.pinDrawerHandleWrap}>
+          <View style={styles.pinDrawerHandle} />
+        </View>
+      ) : null}
+
       {onDone ? (
         <View style={styles.header}>
           <TouchableOpacity
@@ -197,13 +245,13 @@ export function UnifiedNumpad({
       ) : null}
 
       {isPinMode && (title || subtitle) ? (
-        <View style={styles.pinHeader}>
+        <View style={[styles.pinHeader, isPinDrawer && styles.pinDrawerHeader]}>
           {title ? <Text style={styles.pinHeaderTitle}>{title}</Text> : null}
           {subtitle ? <Text style={styles.pinHeaderSubtitle}>{subtitle}</Text> : null}
         </View>
       ) : null}
 
-      <View style={[styles.grid, isPinMode && styles.pinGrid]}>
+      <View style={[styles.grid, isPinMode && styles.pinGrid, isPinDrawer && styles.pinDrawerGrid]}>
         {keysToUse.map((row, index) => (
           <View key={`row-${index}`} style={[styles.row, isPinMode && styles.pinRow]}>
             {row.map((key, keyIndex) => {
@@ -217,12 +265,31 @@ export function UnifiedNumpad({
                   primaryColor={primary}
                   biometricLabel={biometricLabel}
                   biometricIconName={biometricIconName}
+                  pinKeySize={pinKeySize}
                 />
               );
             })}
           </View>
         ))}
       </View>
+
+      {footer ? (
+        <View
+          style={[
+            styles.pinFooter,
+            isPinDrawer && styles.pinDrawerFooter,
+            bottomInset
+              ? {
+                  paddingBottom: Math.max(bottomInset, isPinDrawer ? 14 : 0),
+                }
+              : undefined,
+          ]}
+        >
+          {footer}
+        </View>
+      ) : isPinDrawer && bottomInset ? (
+        <View style={{ height: Math.max(bottomInset, 14) }} />
+      ) : null}
     </View>
   );
 }
@@ -292,7 +359,7 @@ const styles = StyleSheet.create({
   },
   pinActionLabel: {
     color: "#64748b",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -303,15 +370,53 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 0,
     paddingTop: 0,
   },
+  pinDrawerContainer: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    borderTopColor: "#dbe3ef",
+    borderTopWidth: 1.5,
+    paddingTop: 12,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: -12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 18,
+  },
+  pinDrawerFooter: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+  },
+  pinDrawerGrid: {
+    paddingBottom: 6,
+    paddingHorizontal: 16,
+  },
+  pinDrawerHandle: {
+    backgroundColor: "#cbd5e1",
+    borderRadius: 999,
+    height: 5,
+    width: 46,
+  },
+  pinDrawerHandleWrap: {
+    alignItems: "center",
+    paddingBottom: 10,
+  },
+  pinDrawerHeader: {
+    paddingBottom: 18,
+    paddingHorizontal: 20,
+  },
+  pinFooter: {
+    gap: 10,
+  },
   pinGrid: {
     alignItems: "center",
-    gap: 14,
-    paddingBottom: 4,
+    gap: 12,
+    paddingBottom: 8,
     paddingHorizontal: 0,
   },
   pinHeader: {
     alignItems: "center",
-    paddingBottom: 18,
+    paddingBottom: 14,
     paddingHorizontal: 16,
   },
   pinHeaderSubtitle: {
@@ -330,23 +435,17 @@ const styles = StyleSheet.create({
   },
   pinKey: {
     borderColor: "#dbe3ef",
-    borderRadius: 28,
     borderWidth: 1.5,
-    height: 86,
-    width: 86,
   },
   pinKeyContainer: {
     flex: 0,
-    height: 86,
     marginHorizontal: 0,
-    width: 86,
   },
   pinKeyText: {
-    fontSize: 30,
     fontWeight: "800",
   },
   pinRow: {
-    gap: 14,
+    gap: 12,
     justifyContent: "center",
     marginBottom: 0,
   },

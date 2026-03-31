@@ -1,17 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/hooks/use-auth";
-import { supabaseUpdateUserSettings } from "@/services/supabase/auth-service";
 import { useAppStore } from "@/store/use-app-store";
 import * as LocalAuthentication from "expo-local-authentication";
 import type { PropsWithChildren } from "react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 
 type AppLockContextValue = {
   enabled: boolean;
   locked: boolean;
   hasPin: boolean;
+  hasHydrated: boolean;
+  isReady: boolean;
   useBiometrics: boolean;
+  canUseBiometrics: boolean;
   isBiometricsSupported: boolean;
   biometricLabel: string;
   enableLock: (pin: string, shouldUseBiometrics: boolean) => Promise<void>;
@@ -23,7 +25,7 @@ type AppLockContextValue = {
   lock: () => void;
 };
 
-const STORAGE_USE_BIOMETRICS = "@finance_tracker_app_lock_biometrics";
+const LEGACY_STORAGE_USE_BIOMETRICS = "@finance_tracker_app_lock_biometrics";
 
 function isValidPin(pin: string | null | undefined) {
   return /^\d{4}$/.test(pin ?? "");
@@ -53,146 +55,196 @@ export const AppLockContext = createContext<AppLockContextValue | undefined>(und
 
 export function AppLockProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
+  const hasHydrated = useAppStore((s) => s.hasHydrated);
   const storedEnabled = useAppStore((s) => s.appLockEnabled);
   const pin = useAppStore((s) => s.appLockPin);
+  const ownerUserId = useAppStore((s) => s.appLockOwnerUserId);
+  const biometricsPreference = useAppStore((s) => s.appLockUseBiometrics);
   const setAppLockEnabled = useAppStore((s) => s.setAppLockEnabled);
   const setAppLockPin = useAppStore((s) => s.setAppLockPin);
-
-  const hasPin = isValidPin(pin);
-  const enabled = storedEnabled && hasPin;
+  const setAppLockOwnerUserId = useAppStore((s) => s.setAppLockOwnerUserId);
+  const setAppLockUseBiometrics = useAppStore((s) => s.setAppLockUseBiometrics);
 
   const [locked, setLocked] = useState(false);
-  const [useBiometrics, setUseBiometricsState] = useState(false);
   const [isBiometricsSupported, setIsBiometricsSupported] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
-  const [bootstrapped, setBootstrapped] = useState(false);
+  const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
 
-  const persistBiometricsPreference = useCallback(
-    async (next: boolean) => {
-      const resolvedNext = enabled && isBiometricsSupported && next;
-      setUseBiometricsState(resolvedNext);
+  const appStateRef = useRef(AppState.currentState);
+  const skipNextAutoLockRef = useRef(false);
 
-      if (resolvedNext) {
-        await AsyncStorage.setItem(STORAGE_USE_BIOMETRICS, "true");
-        return;
-      }
+  const hasPin = isValidPin(pin);
+  const appliesToCurrentUser = Boolean(user?.uid) && (!ownerUserId || ownerUserId === user.uid);
+  const enabled = Boolean(user?.uid) && storedEnabled && hasPin && appliesToCurrentUser;
+  const useBiometrics = enabled && biometricsPreference && isBiometricsSupported;
+  const canUseBiometrics = useBiometrics;
+  const isReady = hasHydrated && capabilitiesLoaded;
 
-      await AsyncStorage.removeItem(STORAGE_USE_BIOMETRICS);
-    },
-    [enabled, isBiometricsSupported],
-  );
+  const refreshBiometricCapabilities = useCallback(async () => {
+    const [hasHardware, isEnrolled, authTypes] = await Promise.all([
+      LocalAuthentication.hasHardwareAsync(),
+      LocalAuthentication.isEnrolledAsync(),
+      LocalAuthentication.supportedAuthenticationTypesAsync(),
+    ]);
+
+    const supported = hasHardware && isEnrolled;
+    setIsBiometricsSupported(supported);
+    setBiometricLabel(getBiometricLabel(authTypes));
+    return supported;
+  }, []);
 
   useEffect(() => {
+    if (!hasHydrated || !storedEnabled || hasPin) return;
+
+    setAppLockEnabled(false);
+    setAppLockOwnerUserId(null);
+    setAppLockUseBiometrics(false);
+  }, [hasHydrated, hasPin, setAppLockEnabled, setAppLockOwnerUserId, setAppLockUseBiometrics, storedEnabled]);
+
+  useEffect(() => {
+    if (!hasHydrated || !user?.uid || !storedEnabled || !hasPin || ownerUserId) return;
+
+    setAppLockOwnerUserId(user.uid);
+  }, [hasHydrated, hasPin, ownerUserId, setAppLockOwnerUserId, storedEnabled, user?.uid]);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+
     let mounted = true;
 
-    (async () => {
-      const [biometricsRaw, hasHardware, isEnrolled, authTypes] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_USE_BIOMETRICS),
-        LocalAuthentication.hasHardwareAsync(),
-        LocalAuthentication.isEnrolledAsync(),
-        LocalAuthentication.supportedAuthenticationTypesAsync(),
-      ]);
+    const bootstrapSecurity = async () => {
+      const legacyBiometricsRaw = await AsyncStorage.getItem(LEGACY_STORAGE_USE_BIOMETRICS);
+
+      if (legacyBiometricsRaw !== null) {
+        if (legacyBiometricsRaw === "true" && !biometricsPreference) {
+          setAppLockUseBiometrics(true);
+        }
+
+        await AsyncStorage.removeItem(LEGACY_STORAGE_USE_BIOMETRICS);
+      }
+
+      await refreshBiometricCapabilities();
 
       if (!mounted) return;
+      setCapabilitiesLoaded(true);
+    };
 
-      const supported = hasHardware && isEnrolled;
-      setIsBiometricsSupported(supported);
-      setBiometricLabel(getBiometricLabel(authTypes));
-      setUseBiometricsState(supported && enabled && biometricsRaw === "true");
-      setLocked(enabled);
-      setBootstrapped(true);
-    })();
+    void bootstrapSecurity();
 
     return () => {
       mounted = false;
     };
-  }, [enabled]);
+  }, [biometricsPreference, hasHydrated, refreshBiometricCapabilities, setAppLockUseBiometrics]);
 
   useEffect(() => {
-    if (!bootstrapped || !enabled) return;
+    if (!isReady) return;
 
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "background" || state === "inactive") {
+    if (skipNextAutoLockRef.current) {
+      skipNextAutoLockRef.current = false;
+      setLocked(false);
+      return;
+    }
+
+    if (!enabled) {
+      setLocked(false);
+      return;
+    }
+
+    setLocked(true);
+  }, [enabled, isReady, user?.uid]);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (enabled && (nextState === "background" || nextState === "inactive")) {
         setLocked(true);
+      }
+
+      if (previousState !== "active" && nextState === "active") {
+        void refreshBiometricCapabilities();
       }
     });
 
     return () => subscription.remove();
-  }, [bootstrapped, enabled]);
+  }, [enabled, isReady, refreshBiometricCapabilities]);
+
+  const enableLock = useCallback(
+    async (nextPin: string, shouldUseBiometrics: boolean) => {
+      if (!user?.uid) {
+        throw new Error("Sign in to enable App Lock.");
+      }
+
+      if (!isValidPin(nextPin)) {
+        throw new Error("Enter a valid 4-digit PIN.");
+      }
+
+      skipNextAutoLockRef.current = true;
+      setAppLockPin(nextPin);
+      setAppLockOwnerUserId(user.uid);
+      setAppLockUseBiometrics(Boolean(shouldUseBiometrics && isBiometricsSupported));
+      setAppLockEnabled(true);
+      setLocked(false);
+    },
+    [
+      isBiometricsSupported,
+      setAppLockEnabled,
+      setAppLockOwnerUserId,
+      setAppLockPin,
+      setAppLockUseBiometrics,
+      user?.uid,
+    ],
+  );
 
   const disableLock = useCallback(async () => {
     setAppLockEnabled(false);
     setAppLockPin(null);
+    setAppLockOwnerUserId(null);
+    setAppLockUseBiometrics(false);
     setLocked(false);
-    setUseBiometricsState(false);
-
-    await Promise.all([
-      AsyncStorage.removeItem(STORAGE_USE_BIOMETRICS),
-      user
-        ? supabaseUpdateUserSettings({
-            app_lock_enabled: false,
-            app_lock_pin: null,
-          })
-        : Promise.resolve(),
-    ]);
-  }, [setAppLockEnabled, setAppLockPin, user]);
+    await AsyncStorage.removeItem(LEGACY_STORAGE_USE_BIOMETRICS);
+  }, [setAppLockEnabled, setAppLockOwnerUserId, setAppLockPin, setAppLockUseBiometrics]);
 
   const updatePin = useCallback(
     async (nextPin: string) => {
-      setAppLockPin(nextPin);
-
-      if (user) {
-        await supabaseUpdateUserSettings({ app_lock_pin: nextPin });
+      if (!user?.uid) {
+        throw new Error("Sign in to update App Lock.");
       }
-    },
-    [setAppLockPin, user],
-  );
 
-  const enableLock = useCallback(
-    async (nextPin: string, shouldUseBiometrics: boolean) => {
+      if (!isValidPin(nextPin)) {
+        throw new Error("Enter a valid 4-digit PIN.");
+      }
+
       setAppLockPin(nextPin);
-      setAppLockEnabled(true);
-      setLocked(false);
-
-      await Promise.all([
-        user
-          ? supabaseUpdateUserSettings({
-              app_lock_enabled: true,
-              app_lock_pin: nextPin,
-            })
-          : Promise.resolve(),
-        AsyncStorage.setItem(
-          STORAGE_USE_BIOMETRICS,
-          shouldUseBiometrics && isBiometricsSupported ? "true" : "false",
-        ),
-      ]);
-
-      setUseBiometricsState(shouldUseBiometrics && isBiometricsSupported);
+      setAppLockOwnerUserId(user.uid);
     },
-    [isBiometricsSupported, setAppLockEnabled, setAppLockPin, user],
+    [setAppLockOwnerUserId, setAppLockPin, user?.uid],
   );
 
   const setUseBiometrics = useCallback(
     async (next: boolean) => {
-      await persistBiometricsPreference(next);
+      setAppLockUseBiometrics(Boolean(next && isBiometricsSupported));
     },
-    [persistBiometricsPreference],
+    [isBiometricsSupported, setAppLockUseBiometrics],
   );
 
   const unlock = useCallback(
     async (attempt: string) => {
-      if (!pin || attempt !== pin) {
+      if (!enabled || !pin || attempt !== pin) {
         return false;
       }
 
       setLocked(false);
       return true;
     },
-    [pin],
+    [enabled, pin],
   );
 
   const biometricUnlock = useCallback(async () => {
-    if (!enabled || !useBiometrics || !isBiometricsSupported) return false;
+    if (!canUseBiometrics) return false;
 
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: "Unlock Finance Tracker",
@@ -206,7 +258,7 @@ export function AppLockProvider({ children }: PropsWithChildren) {
 
     setLocked(false);
     return true;
-  }, [enabled, isBiometricsSupported, useBiometrics]);
+  }, [canUseBiometrics]);
 
   const lock = useCallback(() => {
     if (enabled) {
@@ -219,7 +271,10 @@ export function AppLockProvider({ children }: PropsWithChildren) {
       enabled,
       locked,
       hasPin,
+      hasHydrated,
+      isReady,
       useBiometrics,
+      canUseBiometrics,
       isBiometricsSupported,
       biometricLabel,
       enableLock,
@@ -232,18 +287,21 @@ export function AppLockProvider({ children }: PropsWithChildren) {
     }),
     [
       biometricLabel,
+      biometricUnlock,
+      canUseBiometrics,
       disableLock,
       enableLock,
       enabled,
+      hasHydrated,
       hasPin,
       isBiometricsSupported,
+      isReady,
       lock,
       locked,
       setUseBiometrics,
       unlock,
       updatePin,
       useBiometrics,
-      biometricUnlock,
     ],
   );
 
