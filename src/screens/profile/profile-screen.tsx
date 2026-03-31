@@ -1,9 +1,9 @@
 import { Screen } from "@/components/ui/screen";
+import { AppLockSettingsPanel } from "@/components/auth/app-lock-settings-panel";
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
 import { CURRENCY_OPTIONS, GRADIENT_PRESETS, SOLID_PRESETS, useAppStore, type ThemeConfig } from "@/store/use-app-store";
-import { UnifiedNumpad } from "@/components/ui/unified-numpad";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -174,11 +174,8 @@ export function ProfileScreen() {
   const setCurrency = useAppStore((s) => s.setCurrency);
   const {
     enabled: appLockEnabled,
-    setEnabled: setAppLockEnabled,
-    setPin: setAppLockPin,
+    biometricLabel,
     useBiometrics,
-    setUseBiometrics,
-    isBiometricsSupported
   } = useAppLock();
   const insets = useSafeAreaInsets();
 
@@ -198,14 +195,11 @@ export function ProfileScreen() {
   // Name edit
   const [nameInput, setNameInput] = useState(user?.fullName ?? "");
   const [nameSaving, setNameSaving] = useState(false);
-  const [appLockPin, setAppLockPinInput] = useState("");
-  const [appLockConfirm, setAppLockConfirm] = useState("");
-  const [appLockError, setAppLockError] = useState<string | null>(null);
-  const [appLockSaving, setAppLockSaving] = useState(false);
 
   const primary = theme.primary;
   const displayName = user?.fullName?.trim() || (user?.email ? user.email.split("@")[0] : "") || "Guest User";
   const initials = getInitials(displayName);
+  const securitySummary = !appLockEnabled ? "Off" : useBiometrics ? `PIN + ${biometricLabel}` : "PIN only";
 
   const open = useCallback((m: typeof activeModal) => {
     if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -215,40 +209,6 @@ export function ProfileScreen() {
   }, [theme, user]);
 
   const close = () => setActiveModal("none");
-
-  const openAppLock = () => {
-    setAppLockError(null);
-    setActiveModal("appLock");
-  };
-
-  const handleToggleAppLock = (next: boolean) => {
-    if (next) {
-      openAppLock();
-      return;
-    }
-    setAppLockEnabled(false);
-  };
-
-  const saveAppLockPin = async () => {
-    const pin = appLockPin.replace(/[^0-9]/g, "");
-    const confirm = appLockConfirm.replace(/[^0-9]/g, "");
-    if (pin.length !== 4) {
-      setAppLockError("Enter a 4-digit PIN.");
-      return;
-    }
-    if (pin !== confirm) {
-      setAppLockError("PINs do not match.");
-      return;
-    }
-    try {
-      setAppLockSaving(true);
-      await setAppLockPin(pin);
-      await setAppLockEnabled(true);
-      close();
-    } finally {
-      setAppLockSaving(false);
-    }
-  };
 
   // ── Avatar upload ────────────────────────────────────────────────
 
@@ -315,7 +275,7 @@ export function ProfileScreen() {
       <ScrollView 
         className="flex-1" 
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: activeModal === "appLock" ? 450 : 120 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
       >
 
         {/* ── Hero header ───────────────────────────────────────── */}
@@ -365,36 +325,12 @@ export function ProfileScreen() {
             <SettingRow icon="bell-ring-outline" iconBg="#fef3c7" iconColor="#f59e0b" label="Notifications" value={notifications ? "On" : "Off"} onPress={() => open("notification")} />
             <Divider />
             <SettingRow
-              icon="lock-outline"
-              iconBg="#e2e8f0"
-              iconColor="#475569"
-              label="App Lock"
-              rightElement={(
-                <Switch
-                  value={appLockEnabled}
-                  onValueChange={handleToggleAppLock}
-                  trackColor={{ false: "#e2e8f0", true: "#22c55e" }}
-                  thumbColor="#fff"
-                  ios_backgroundColor="#e2e8f0"
-                />
-              )}
-            />
-            <Divider />
-            <SettingRow
-              icon="fingerprint"
-              iconBg="#f1f5f9"
-              iconColor="#475569"
-              label="Use Biometrics"
-              rightElement={(
-                <Switch
-                  value={useBiometrics}
-                  onValueChange={(v) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setUseBiometrics(v); }}
-                  disabled={!appLockEnabled || !isBiometricsSupported}
-                  trackColor={{ false: "#e2e8f0", true: "#22c55e" }}
-                  thumbColor="#fff"
-                  ios_backgroundColor="#e2e8f0"
-                />
-              )}
+              icon="shield-lock-outline"
+              iconBg={appLockEnabled ? `${primary}16` : "#e2e8f0"}
+              iconColor={appLockEnabled ? primary : "#475569"}
+              label="App Security"
+              value={securitySummary}
+              onPress={() => open("appLock")}
             />
             <Divider />
             <SettingRow icon="translate" iconBg="#e0e7ff" iconColor="#6366f1" label="Language" value={language} onPress={() => open("language")} />
@@ -449,72 +385,8 @@ export function ProfileScreen() {
       </BottomSheet>
 
       {/* ── App Lock ──────────────────────────────────────────── */}
-      <BottomSheet visible={activeModal === "appLock"} title="App Lock" onClose={close} scroll={false}>
-        <View style={{ padding: 20, gap: 12 }}>
-          <Text style={{ fontSize: 13, color: "#64748b", fontWeight: "600" }}>
-            Create a 4-digit PIN to lock the app.
-          </Text>
-          <View style={{ backgroundColor: "#f8fafc", borderRadius: 20, padding: 20, borderWidth: 1.5, borderColor: "#e2e8f0", gap: 16 }}>
-             <View style={{ alignItems: "center", gap: 8 }}>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", letterSpacing: 1.2 }}>PIN</Text>
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  {[0,1,2,3].map(i => (
-                    <View key={i} style={{ width: 44, height: 52, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1.5, borderColor: appLockPin[i] ? primary : "#cbd5e1", alignItems: "center", justifyContent: "center" }}>
-                      {appLockPin[i] && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#0f172a" }} />}
-                    </View>
-                  ))}
-                </View>
-             </View>
-
-             <View style={{ alignItems: "center", gap: 8 }}>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", letterSpacing: 1.2 }}>CONFIRM PIN</Text>
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  {[0,1,2,3].map(i => (
-                    <View key={i} style={{ width: 44, height: 52, borderRadius: 12, backgroundColor: "#fff", borderWidth: 1.5, borderColor: appLockConfirm[i] ? primary : "#cbd5e1", alignItems: "center", justifyContent: "center" }}>
-                      {appLockConfirm[i] && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#0f172a" }} />}
-                    </View>
-                  ))}
-                </View>
-             </View>
-          </View>
-
-          {appLockError ? (
-            <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "600", textAlign: "center" }}>{appLockError}</Text>
-          ) : null}
-
-          <UnifiedNumpad 
-            value={appLockPin.length < 4 ? appLockPin : appLockConfirm}
-            onChange={(val) => {
-              setAppLockError(null);
-              if (appLockPin.length < 4) {
-                setAppLockPinInput(val);
-              } else {
-                // If we're at the confirmation stage but delete everything, go back to stage 1
-                if (val === "" && appLockConfirm === "") {
-                  setAppLockPinInput(prev => prev.slice(0, -1));
-                } else {
-                  setAppLockConfirm(val);
-                }
-              }
-            }}
-            mode="pin"
-            maxLength={4}
-          />
-          {appLockError ? (
-            <Text style={{ color: "#ef4444", fontSize: 12, fontWeight: "600" }}>{appLockError}</Text>
-          ) : null}
-          <TouchableOpacity
-            onPress={saveAppLockPin}
-            disabled={appLockSaving || appLockConfirm.length < 4}
-            style={{ backgroundColor: appLockSaving || appLockConfirm.length < 4 ? "#93c5fd" : primary, borderRadius: 16, height: 52, alignItems: "center", justifyContent: "center", marginTop: 4 }}
-          >
-            {appLockSaving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Enable App Lock</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      <BottomSheet visible={activeModal === "appLock"} title="App Security" onClose={close}>
+        <AppLockSettingsPanel isOpen={activeModal === "appLock"} onClose={close} />
       </BottomSheet>
 
       {/* ── Theme picker ──────────────────────────────────────── */}

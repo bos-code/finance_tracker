@@ -1,8 +1,15 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
-import { supabaseSignIn, supabaseSignUp, supabaseSignOut, supabaseUpdateName, supabaseUpdatePassword } from "@/services/supabase/auth-service";
+import {
+  supabaseClearLegacyAppLockSettings,
+  supabaseSignIn,
+  supabaseSignOut,
+  supabaseSignUp,
+  supabaseUpdateName,
+  supabaseUpdatePassword,
+} from "@/services/supabase/auth-service";
 import { supabaseClient } from "@/services/supabase/supabase-client";
-import { Session, User } from "@supabase/supabase-js";
+import { useAppStore } from "@/store/use-app-store";
 
 type UserSession = {
   uid: string;
@@ -27,41 +34,41 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   useEffect(() => {
-    // getSession might return a stale JWT that doesn't include freshly updated metadata.
-    // getUser() guarantees we hit the Supabase server to get the latest `full_name`.
-    supabaseClient.auth.getUser().then(({ data: { user: currentUser } }) => {
+    const syncUserFromSupabase = async (fallbackUser?: any) => {
+      // getSession might return a stale JWT that doesn't include freshly updated metadata.
+      // getUser() guarantees we hit the Supabase server to get the latest `full_name`.
+      const { data: { user: refreshedUser } } = await supabaseClient.auth.getUser();
+      const currentUser = refreshedUser || fallbackUser || null;
+
       if (currentUser) {
         setUser({
           uid: currentUser.id,
           email: currentUser.email || "",
           fullName: currentUser.user_metadata?.full_name,
         });
-        // Hydrate settings from metadata
-        const { useAppStore } = require("@/store/use-app-store");
+
         useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
+
+        // Legacy cleanup: app lock is now device-local, so scrub old remote fields.
+        if (
+          currentUser.user_metadata?.app_lock_pin != null ||
+          currentUser.user_metadata?.app_lock_enabled != null
+        ) {
+          void supabaseClearLegacyAppLockSettings().catch((error) => {
+            console.warn("[auth] Failed to clear legacy app lock metadata:", error);
+          });
+        }
       } else {
         setUser(null);
       }
+
       setIsBootstrapping(false);
-    });
+    };
+
+    void syncUserFromSupabase();
 
     const { data: authListener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      // Whenever auth state changes, fetch the fresh user object to get the latest metadata
-      supabaseClient.auth.getUser().then(({ data: { user: updatedUser } }) => {
-        const userObj = updatedUser || session?.user;
-        if (userObj) {
-          setUser({
-            uid: userObj.id,
-            email: userObj.email || "",
-            fullName: userObj.user_metadata?.full_name,
-          });
-          // Hydrate settings from metadata
-          const { useAppStore } = require("@/store/use-app-store");
-          useAppStore.getState().hydrateFromMetadata(userObj.user_metadata);
-        } else {
-          setUser(null);
-        }
-      });
+      void syncUserFromSupabase(session?.user);
     });
 
     return () => {
