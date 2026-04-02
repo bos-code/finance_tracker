@@ -4,7 +4,7 @@
     "slug": "finance-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/icons/onboard.png",
+    "icon": "./src/assets/icons/favicon.png",
     "splash": {
       "image": "./src/assets/icons/onboard.png",
       "resizeMode": "contain",
@@ -12,27 +12,24 @@
     },
     "scheme": "financetracker",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "label": "Finance Tracker",
       "package": "com.anonymous.financetracker",
       "splash": {
         "backgroundColor": "#1d4ed8"
       },
       "adaptiveIcon": {
         "backgroundColor": "#1d4ed8",
-        "foregroundImage": "./src/assets/icons/onboard.png",
-        "monochromeImage": "./src/assets/icons/onboard.png"
+        "foregroundImage": "./src/assets/icons/favicon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./src/assets/icons/onboard.png",
+      "favicon": "./src/assets/icons/favicon.png",
       "backgroundColor": "#1d4ed8"
     },
     "plugins": [

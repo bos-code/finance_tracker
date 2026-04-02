@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type IconName = string;
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 function SecurityChip({
   icon,

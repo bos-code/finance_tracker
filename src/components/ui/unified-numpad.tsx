@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 
-type IconName = string;
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 interface UnifiedNumpadProps {
   value: string;

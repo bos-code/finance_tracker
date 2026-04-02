@@ -181,6 +181,92 @@ export function FloatingTabBar({
     transform: [{ translateX: 5 + position.value * slotWidth }],
   }));
 
+  const chrome = (
+    <>
+      <View
+        style={[
+          styles.chromeGlow,
+          { backgroundColor: withAlpha(secondary, 0.11) },
+        ]}
+      />
+
+      <View
+        onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
+        style={styles.row}
+      >
+        <Animated.View
+          style={[
+            styles.activePill,
+            {
+              backgroundColor: "rgba(255,255,255,0.92)",
+              borderColor: withAlpha(primary, 0.16),
+              shadowColor: primary,
+            },
+            indicatorStyle,
+          ]}
+        >
+          <View
+            style={[
+              styles.activePillGlow,
+              { backgroundColor: withAlpha(secondary, 0.12) },
+            ]}
+          />
+          <View
+            style={[
+              styles.activePillAccent,
+              { backgroundColor: primary },
+            ]}
+          />
+        </Animated.View>
+
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const meta = TAB_META[route.name];
+          const focused = state.index === index;
+          const label = resolveLabel(
+            route.name,
+            typeof options.title === "string" ? options.title : undefined,
+          );
+
+          const onPress = () => {
+            const event = navigation.emit({
+              canPreventDefault: true,
+              target: route.key,
+              type: "tabPress",
+            });
+
+            if (focused || event.defaultPrevented) {
+              return;
+            }
+
+            void Haptics.selectionAsync();
+            navigation.navigate(route.name);
+          };
+
+          const onLongPress = () => {
+            navigation.emit({
+              target: route.key,
+              type: "tabLongPress",
+            });
+          };
+
+          return (
+            <TabBarItem
+              activeIcon={meta?.activeIcon ?? "checkbox-marked-circle"}
+              focused={focused}
+              icon={meta?.icon ?? "checkbox-blank-circle-outline"}
+              key={route.key}
+              label={label}
+              onLongPress={onLongPress}
+              onPress={onPress}
+              primary={primary}
+            />
+          );
+        })}
+      </View>
+    </>
+  );
+
   return (
     <View
       pointerEvents="box-none"
@@ -198,94 +284,19 @@ export function FloatingTabBar({
           },
         ]}
       >
-        <BlurView
-          experimentalBlurMethod="dimezisBlurView"
-          intensity={Platform.OS === "ios" ? 70 : 90}
-          style={styles.blur}
-          tint="light"
-        >
-          <View
-            style={[
-              styles.chromeGlow,
-              { backgroundColor: withAlpha(secondary, 0.11) },
-            ]}
-          />
-
-          <View
-            onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
-            style={styles.row}
+        {Platform.OS === "ios" ? (
+          <BlurView
+            intensity={70}
+            style={styles.blur}
+            tint="light"
           >
-            <Animated.View
-              style={[
-                styles.activePill,
-                {
-                  backgroundColor: "rgba(255,255,255,0.92)",
-                  borderColor: withAlpha(primary, 0.16),
-                  shadowColor: primary,
-                },
-                indicatorStyle,
-              ]}
-            >
-              <View
-                style={[
-                  styles.activePillGlow,
-                  { backgroundColor: withAlpha(secondary, 0.12) },
-                ]}
-              />
-              <View
-                style={[
-                  styles.activePillAccent,
-                  { backgroundColor: primary },
-                ]}
-              />
-            </Animated.View>
-
-            {state.routes.map((route, index) => {
-              const { options } = descriptors[route.key];
-              const meta = TAB_META[route.name];
-              const focused = state.index === index;
-              const label = resolveLabel(
-                route.name,
-                typeof options.title === "string" ? options.title : undefined,
-              );
-
-              const onPress = () => {
-                const event = navigation.emit({
-                  canPreventDefault: true,
-                  target: route.key,
-                  type: "tabPress",
-                });
-
-                if (focused || event.defaultPrevented) {
-                  return;
-                }
-
-                void Haptics.selectionAsync();
-                navigation.navigate(route.name);
-              };
-
-              const onLongPress = () => {
-                navigation.emit({
-                  target: route.key,
-                  type: "tabLongPress",
-                });
-              };
-
-              return (
-                <TabBarItem
-                  activeIcon={meta?.activeIcon ?? "checkbox-marked-circle"}
-                  focused={focused}
-                  icon={meta?.icon ?? "checkbox-blank-circle-outline"}
-                  key={route.key}
-                  label={label}
-                  onLongPress={onLongPress}
-                  onPress={onPress}
-                  primary={primary}
-                />
-              );
-            })}
+            {chrome}
+          </BlurView>
+        ) : (
+          <View style={[styles.blur, styles.androidFallback]}>
+            {chrome}
           </View>
-        </BlurView>
+        )}
       </View>
     </View>
   );
@@ -314,6 +325,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 8,
     position: "relative",
+  },
+  androidFallback: {
+    backgroundColor: "rgba(248,250,252,0.96)",
   },
   chromeGlow: {
     borderRadius: 999,

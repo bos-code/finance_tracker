@@ -35,34 +35,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const syncUserFromSupabase = async (fallbackUser?: any) => {
-      // getSession might return a stale JWT that doesn't include freshly updated metadata.
-      // getUser() guarantees we hit the Supabase server to get the latest `full_name`.
-      const { data: { user: refreshedUser } } = await supabaseClient.auth.getUser();
-      const currentUser = refreshedUser || fallbackUser || null;
+      try {
+        // getSession might return a stale JWT that doesn't include freshly updated metadata.
+        // getUser() guarantees we hit the Supabase server to get the latest `full_name`.
+        const { data: { user: refreshedUser } } = await supabaseClient.auth.getUser();
+        const currentUser = refreshedUser || fallbackUser || null;
 
-      if (currentUser) {
-        setUser({
-          uid: currentUser.id,
-          email: currentUser.email || "",
-          fullName: currentUser.user_metadata?.full_name,
-        });
-
-        useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
-
-        // Legacy cleanup: app lock is now device-local, so scrub old remote fields.
-        if (
-          currentUser.user_metadata?.app_lock_pin != null ||
-          currentUser.user_metadata?.app_lock_enabled != null
-        ) {
-          void supabaseClearLegacyAppLockSettings().catch((error) => {
-            console.warn("[auth] Failed to clear legacy app lock metadata:", error);
+        if (currentUser) {
+          setUser({
+            uid: currentUser.id,
+            email: currentUser.email || "",
+            fullName: currentUser.user_metadata?.full_name,
           });
-        }
-      } else {
-        setUser(null);
-      }
 
-      setIsBootstrapping(false);
+          useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
+
+          // Legacy cleanup: app lock is now device-local, so scrub old remote fields.
+          if (
+            currentUser.user_metadata?.app_lock_pin != null ||
+            currentUser.user_metadata?.app_lock_enabled != null
+          ) {
+            void supabaseClearLegacyAppLockSettings().catch((error) => {
+              console.warn("[auth] Failed to clear legacy app lock metadata:", error);
+            });
+          }
+        } else {
+          setUser(null);
+        }
+
+      } catch (error) {
+        console.warn("[auth] Failed to restore session:", error);
+        setUser(null);
+      } finally {
+        setIsBootstrapping(false);
+      }
     };
 
     void syncUserFromSupabase();

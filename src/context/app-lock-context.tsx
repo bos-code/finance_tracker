@@ -74,23 +74,32 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   const skipNextAutoLockRef = useRef(false);
 
   const hasPin = isValidPin(pin);
-  const appliesToCurrentUser = Boolean(user?.uid) && (!ownerUserId || ownerUserId === user.uid);
-  const enabled = Boolean(user?.uid) && storedEnabled && hasPin && appliesToCurrentUser;
+  const currentUserId = user?.uid ?? null;
+  const appliesToCurrentUser =
+    Boolean(currentUserId) && (!ownerUserId || ownerUserId === currentUserId);
+  const enabled = Boolean(currentUserId) && storedEnabled && hasPin && appliesToCurrentUser;
   const useBiometrics = enabled && biometricsPreference && isBiometricsSupported;
   const canUseBiometrics = useBiometrics;
   const isReady = hasHydrated && capabilitiesLoaded;
 
   const refreshBiometricCapabilities = useCallback(async () => {
-    const [hasHardware, isEnrolled, authTypes] = await Promise.all([
-      LocalAuthentication.hasHardwareAsync(),
-      LocalAuthentication.isEnrolledAsync(),
-      LocalAuthentication.supportedAuthenticationTypesAsync(),
-    ]);
+    try {
+      const [hasHardware, isEnrolled, authTypes] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+        LocalAuthentication.supportedAuthenticationTypesAsync(),
+      ]);
 
-    const supported = hasHardware && isEnrolled;
-    setIsBiometricsSupported(supported);
-    setBiometricLabel(getBiometricLabel(authTypes));
-    return supported;
+      const supported = hasHardware && isEnrolled;
+      setIsBiometricsSupported(supported);
+      setBiometricLabel(getBiometricLabel(authTypes));
+      return supported;
+    } catch (error) {
+      console.warn("[app-lock] Failed to load biometric capabilities:", error);
+      setIsBiometricsSupported(false);
+      setBiometricLabel("Biometrics");
+      return false;
+    }
   }, []);
 
   useEffect(() => {
@@ -113,17 +122,20 @@ export function AppLockProvider({ children }: PropsWithChildren) {
     let mounted = true;
 
     const bootstrapSecurity = async () => {
-      const legacyBiometricsRaw = await AsyncStorage.getItem(LEGACY_STORAGE_USE_BIOMETRICS);
+      try {
+        const legacyBiometricsRaw = await AsyncStorage.getItem(LEGACY_STORAGE_USE_BIOMETRICS);
 
-      if (legacyBiometricsRaw !== null) {
-        if (legacyBiometricsRaw === "true" && !biometricsPreference) {
-          setAppLockUseBiometrics(true);
+        if (legacyBiometricsRaw !== null) {
+          if (legacyBiometricsRaw === "true" && !biometricsPreference) {
+            setAppLockUseBiometrics(true);
+          }
+
+          await AsyncStorage.removeItem(LEGACY_STORAGE_USE_BIOMETRICS);
         }
-
-        await AsyncStorage.removeItem(LEGACY_STORAGE_USE_BIOMETRICS);
+        await refreshBiometricCapabilities();
+      } catch (error) {
+        console.warn("[app-lock] Failed to bootstrap local security state:", error);
       }
-
-      await refreshBiometricCapabilities();
 
       if (!mounted) return;
       setCapabilitiesLoaded(true);
@@ -151,7 +163,7 @@ export function AppLockProvider({ children }: PropsWithChildren) {
     }
 
     setLocked(true);
-  }, [enabled, isReady, user?.uid]);
+  }, [currentUserId, enabled, isReady]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -246,18 +258,23 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   const biometricUnlock = useCallback(async () => {
     if (!canUseBiometrics) return false;
 
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock Finance Tracker",
-      fallbackLabel: "Use PIN",
-      cancelLabel: "Cancel",
-    });
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Unlock Finance Tracker",
+        fallbackLabel: "Use PIN",
+        cancelLabel: "Cancel",
+      });
 
-    if (!result.success) {
+      if (!result.success) {
+        return false;
+      }
+
+      setLocked(false);
+      return true;
+    } catch (error) {
+      console.warn("[app-lock] Biometric unlock failed:", error);
       return false;
     }
-
-    setLocked(false);
-    return true;
   }, [canUseBiometrics]);
 
   const lock = useCallback(() => {
