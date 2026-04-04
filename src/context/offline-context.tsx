@@ -41,13 +41,18 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const prevOnlineRef = useRef(isOnline);
 
   const refreshPendingCount = useCallback(async () => {
-    const ops = await getPendingOps();
-    setPendingCount(ops.length);
+    try {
+      const ops = await getPendingOps();
+      setPendingCount(ops.length);
+    } catch (error) {
+      console.warn("[offline] Failed to refresh pending count:", error);
+      setPendingCount(0);
+    }
   }, []);
 
   // Refresh count on every change (after adds/removes)
   useEffect(() => {
-    refreshPendingCount();
+    void refreshPendingCount();
   }, [refreshPendingCount]);
 
   // Trigger sync whenever the device comes back online
@@ -67,12 +72,14 @@ export function OfflineProvider({ children }: PropsWithChildren) {
           setJustSynced(true);
           setTimeout(() => setJustSynced(false), 2500);
         }
+      } catch (error) {
+        console.warn("[offline] Failed to sync pending operations:", error);
       } finally {
         setIsSyncing(false);
       }
     };
 
-    doSync();
+    void doSync();
   }, [isOnline, refreshPendingCount]);
 
   const value = useMemo<OfflineContextValue>(

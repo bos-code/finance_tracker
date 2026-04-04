@@ -11,9 +11,14 @@ export function useNetwork(): { isOnline: boolean } {
 
   useEffect(() => {
     // Fetch current state immediately on mount
-    NetInfo.fetch().then((state) => {
-      setIsOnline(state.isConnected ?? true);
-    });
+    void NetInfo.fetch()
+      .then((state) => {
+        setIsOnline(state.isConnected ?? true);
+      })
+      .catch((error) => {
+        console.warn("[network] Failed to read current connectivity:", error);
+        setIsOnline(true);
+      });
 
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsOnline(state.isConnected ?? true);
