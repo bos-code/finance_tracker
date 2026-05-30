@@ -52,6 +52,10 @@
       "reactCompiler": true
     },
     "extra": {
+      "googleExpoClientId": "",
+      "googleIosClientId": "",
+      "googleAndroidClientId": "",
+      "googleWebClientId": "",
       "router": {},
       "eas": {
         "projectId": "d500d2e5-f29e-4a40-99ed-5caa918eab29"

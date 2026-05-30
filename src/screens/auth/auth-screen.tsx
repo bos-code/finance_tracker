@@ -4,8 +4,11 @@ import { Screen } from "@/components/ui/screen";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
 import { isValidEmail } from "@/utils/validators";
+import * as Google from "expo-auth-session/providers/google";
 import { router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -26,8 +29,39 @@ type FormErrors = {
   confirmPassword?: string;
 };
 
+function getAuthErrorMessage(error: unknown) {
+  const text = error instanceof Error ? error.message.toLowerCase() : "";
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code: unknown }).code)
+      : "";
+
+  if (code.includes("auth/network-request-failed")) {
+    return "Network error. Check your internet connection and try again.";
+  }
+  if (code.includes("auth/invalid-credential")) {
+    return "Invalid credentials. Please check your email and password.";
+  }
+  if (code.includes("auth/user-not-found")) {
+    return "No account found for this email address.";
+  }
+  if (code.includes("auth/wrong-password")) {
+    return "Incorrect password.";
+  }
+  if (code.includes("auth/email-already-in-use")) {
+    return "This email is already in use.";
+  }
+  if (code.includes("invalid_request") || text.includes("invalid request")) {
+    return "Google sign-in is misconfigured. Check your OAuth client IDs.";
+  }
+
+  return "Authentication failed. Please try again.";
+}
+
+WebBrowser.maybeCompleteAuthSession();
+
 export function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signInWithGoogle, signUp } = useAuth();
 
   const [mode, setMode] = useState<Mode>("signIn");
   const [fullName, setFullName] = useState("");
@@ -35,6 +69,8 @@ export function AuthScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
   const emailRef = useRef<TextInput | null>(null);
@@ -45,6 +81,84 @@ export function AuthScreen() {
     () => (mode === "signIn" ? "Sign In" : "Create Account"),
     [mode],
   );
+  const googleConfig = Constants.expoConfig?.extra as
+    | {
+        googleExpoClientId?: string;
+        googleIosClientId?: string;
+        googleAndroidClientId?: string;
+        googleWebClientId?: string;
+      }
+    | undefined;
+  const hasGoogleClientId = Boolean(
+    googleConfig?.googleExpoClientId ||
+      googleConfig?.googleIosClientId ||
+      googleConfig?.googleAndroidClientId ||
+      googleConfig?.googleWebClientId,
+  );
+
+  const [googleRequest, googleResponse, promptGoogleSignIn] =
+    Google.useIdTokenAuthRequest({
+      expoClientId: googleConfig?.googleExpoClientId,
+      iosClientId: googleConfig?.googleIosClientId,
+      androidClientId: googleConfig?.googleAndroidClientId,
+      webClientId: googleConfig?.googleWebClientId,
+    });
+
+  useEffect(() => {
+    const syncGoogleSession = async () => {
+      if (!googleResponse) {
+        return;
+      }
+      if (googleResponse.type === "error") {
+        setAuthError(
+          "Google sign-in request failed. Verify OAuth client IDs and redirect settings.",
+        );
+        return;
+      }
+      if (googleResponse.type !== "success") {
+        return;
+      }
+
+      const idToken = googleResponse.params.id_token;
+      if (!idToken) {
+        return;
+      }
+
+      try {
+        setIsGoogleSubmitting(true);
+        setAuthError(null);
+        await signInWithGoogle({ idToken });
+        router.replace(ROUTES.TABS_HOME);
+      } catch (error) {
+        setAuthError(getAuthErrorMessage(error));
+      } finally {
+        setIsGoogleSubmitting(false);
+      }
+    };
+
+    void syncGoogleSession();
+  }, [googleResponse, signInWithGoogle]);
+
+  const handleGoogleSignInPress = async () => {
+    if (!hasGoogleClientId) {
+      setAuthError(
+        "Google OAuth client IDs are missing in app.json (expo.extra).",
+      );
+      return;
+    }
+    if (!googleRequest) {
+      setAuthError(
+        "Google sign-in is not ready yet. Wait a moment and try again.",
+      );
+      return;
+    }
+    try {
+      setAuthError(null);
+      await promptGoogleSignIn();
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    }
+  };
 
   const validate = () => {
     const nextErrors: FormErrors = {};
@@ -81,12 +195,15 @@ export function AuthScreen() {
 
     try {
       setIsSubmitting(true);
+      setAuthError(null);
       if (mode === "signIn") {
         await signIn(email, password);
       } else {
         await signUp(fullName, email, password);
       }
       router.replace(ROUTES.TABS_HOME);
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -106,125 +223,151 @@ export function AuthScreen() {
             Continue to your finance dashboard.
           </Text>
 
-          <View className="mt-6 flex-row rounded-xl bg-slate-200 p-1">
-            <Pressable
-              onPress={() => {
-                setMode("signIn");
-                setErrors({});
-              }}
-              className={`flex-1 rounded-lg px-4 py-3 ${
-                mode === "signIn" ? "bg-blue-700" : ""
-              }`}>
-              <Text
-                className={`text-center font-semibold ${
-                  mode === "signIn" ? "text-white" : "text-slate-700"
-                }`}>
-                Sign In
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setMode("signUp");
-                setErrors({});
-              }}
-              className={`flex-1 rounded-lg px-4 py-3 ${
-                mode === "signUp" ? "bg-blue-700" : ""
-              }`}>
-              <Text
-                className={`text-center font-semibold ${
-                  mode === "signUp" ? "text-white" : "text-slate-700"
-                }`}>
-                Sign Up
-              </Text>
-            </Pressable>
-          </View>
-
-          <View className="mt-8 gap-5">
-            {mode === "signUp" ? (
-              <AppInput
-                label="Full Name"
-                value={fullName}
-                onChangeText={(text) => {
-                  setFullName(text);
-                  setErrors((previous) => ({ ...previous, fullName: undefined }));
+          <View
+            className="mt-6 rounded-3xl border border-white/70 p-4"
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.68)",
+              shadowColor: "#0f172a",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.18,
+              shadowRadius: 18,
+              elevation: 4,
+            }}>
+            <View className="flex-row rounded-xl bg-slate-200/80 p-1">
+              <Pressable
+                onPress={() => {
+                  setMode("signIn");
+                  setErrors({});
                 }}
-                placeholder="John Doe"
-                autoCapitalize="words"
+                className={`flex-1 rounded-lg px-4 py-3 ${
+                  mode === "signIn" ? "bg-blue-700" : ""
+                }`}>
+                <Text
+                  className={`text-center font-semibold ${
+                    mode === "signIn" ? "text-white" : "text-slate-700"
+                  }`}>
+                  Sign In
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setMode("signUp");
+                  setErrors({});
+                }}
+                className={`flex-1 rounded-lg px-4 py-3 ${
+                  mode === "signUp" ? "bg-blue-700" : ""
+                }`}>
+                <Text
+                  className={`text-center font-semibold ${
+                    mode === "signUp" ? "text-white" : "text-slate-700"
+                  }`}>
+                  Sign Up
+                </Text>
+              </Pressable>
+            </View>
+
+            <View className="mt-8 gap-5">
+              {mode === "signUp" ? (
+                <AppInput
+                  label="Full Name"
+                  value={fullName}
+                  onChangeText={(text) => {
+                    setFullName(text);
+                    setErrors((previous) => ({ ...previous, fullName: undefined }));
+                  }}
+                  placeholder="John Doe"
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  error={errors.fullName}
+                />
+              ) : null}
+
+              <AppInput
+                ref={emailRef}
+                label="Email Address"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setErrors((previous) => ({ ...previous, email: undefined }));
+                }}
+                placeholder="you@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
                 returnKeyType="next"
-                onSubmitEditing={() => emailRef.current?.focus()}
-                error={errors.fullName}
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                error={errors.email}
               />
-            ) : null}
 
-            <AppInput
-              ref={emailRef}
-              label="Email Address"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setErrors((previous) => ({ ...previous, email: undefined }));
-              }}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              error={errors.email}
-            />
-
-            <AppInput
-              ref={passwordRef}
-              label="Password"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setErrors((previous) => ({ ...previous, password: undefined }));
-              }}
-              placeholder="Enter password"
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType={mode === "signUp" ? "next" : "done"}
-              onSubmitEditing={() => {
-                if (mode === "signUp") {
-                  confirmPasswordRef.current?.focus();
-                } else {
-                  void submit();
-                }
-              }}
-              error={errors.password}
-            />
-
-            {mode === "signUp" ? (
               <AppInput
-                ref={confirmPasswordRef}
-                label="Confirm Password"
-                value={confirmPassword}
+                ref={passwordRef}
+                label="Password"
+                value={password}
                 onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  setErrors((previous) => ({
-                    ...previous,
-                    confirmPassword: undefined,
-                  }));
+                  setPassword(text);
+                  setErrors((previous) => ({ ...previous, password: undefined }));
                 }}
-                placeholder="Re-enter password"
+                placeholder="Enter password"
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={() => void submit()}
-                error={errors.confirmPassword}
+                returnKeyType={mode === "signUp" ? "next" : "done"}
+                onSubmitEditing={() => {
+                  if (mode === "signUp") {
+                    confirmPasswordRef.current?.focus();
+                  } else {
+                    void submit();
+                  }
+                }}
+                error={errors.password}
               />
-            ) : null}
-          </View>
 
-          <View className="mt-8">
-            <AppButton
-              title={mode === "signIn" ? "Continue to App" : "Create Account"}
-              onPress={() => void submit()}
-              isLoading={isSubmitting}
-            />
+              {mode === "signUp" ? (
+                <AppInput
+                  ref={confirmPasswordRef}
+                  label="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    setErrors((previous) => ({
+                      ...previous,
+                      confirmPassword: undefined,
+                    }));
+                  }}
+                  placeholder="Re-enter password"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void submit()}
+                  error={errors.confirmPassword}
+                />
+              ) : null}
+            </View>
+
+            <View className="mt-8">
+              <AppButton
+                title={mode === "signIn" ? "Continue to App" : "Create Account"}
+                onPress={() => void submit()}
+                isLoading={isSubmitting}
+              />
+            </View>
+
+            {authError ? (
+              <Text className="mt-3 text-center text-sm text-red-600">{authError}</Text>
+            ) : null}
+
+            <Pressable
+              disabled={isGoogleSubmitting}
+              onPress={() => void handleGoogleSignInPress()}
+              className={`mt-3 rounded-xl border border-slate-300 px-4 py-4 ${
+                isGoogleSubmitting ? "bg-slate-200/80" : "bg-white/80"
+              }`}>
+              <Text className="text-center text-base font-semibold text-slate-800">
+                {isGoogleSubmitting ? "Connecting Google..." : "Continue with Google"}
+              </Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -1,6 +1,13 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
+
+import {
+  firebaseSignIn,
+  firebaseSignInWithGoogle,
+  firebaseSignOut,
+  firebaseSignUp,
+  subscribeToAuthState,
+} from "@/services/firebase/auth-service";
 
 type UserSession = {
   uid: string;
@@ -13,10 +20,12 @@ type AuthContextValue = {
   isBootstrapping: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (fullName: string, email: string, password: string) => Promise<void>;
+  signInWithGoogle: (tokens: {
+    idToken?: string;
+    accessToken?: string;
+  }) => Promise<void>;
   signOut: () => Promise<void>;
 };
-
-const AUTH_STORAGE_KEY = "auth_session";
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -25,58 +34,46 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   useEffect(() => {
-    const bootstrap = async () => {
-      try {
-        const rawSession = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-        if (rawSession) {
-          setUser(JSON.parse(rawSession) as UserSession);
-        }
-      } finally {
-        setIsBootstrapping(false);
+    const unsubscribe = subscribeToAuthState((nextUser) => {
+      if (!nextUser) {
+        setUser(null);
+      } else {
+        setUser({
+          uid: nextUser.uid,
+          email: nextUser.email ?? "",
+          fullName: nextUser.displayName ?? undefined,
+        });
       }
-    };
+      setIsBootstrapping(false);
+    });
 
-    void bootstrap();
-  }, []);
-
-  const persistSession = useCallback(async (session: UserSession | null) => {
-    if (!session) {
-      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-      return;
-    }
-
-    await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    return unsubscribe;
   }, []);
 
   const signIn = useCallback(
-    async (email: string, _password: string) => {
-      const session: UserSession = {
-        uid: "local-user",
-        email,
-      };
-      setUser(session);
-      await persistSession(session);
+    async (email: string, password: string) => {
+      await firebaseSignIn(email, password);
     },
-    [persistSession],
+    [],
   );
 
   const signUp = useCallback(
-    async (fullName: string, email: string, _password: string) => {
-      const session: UserSession = {
-        uid: "local-user",
-        email,
-        fullName,
-      };
-      setUser(session);
-      await persistSession(session);
+    async (fullName: string, email: string, password: string) => {
+      await firebaseSignUp(fullName, email, password);
     },
-    [persistSession],
+    [],
   );
 
   const signOut = useCallback(async () => {
-    setUser(null);
-    await persistSession(null);
-  }, [persistSession]);
+    await firebaseSignOut();
+  }, []);
+
+  const signInWithGoogle = useCallback(
+    async (tokens: { idToken?: string; accessToken?: string }) => {
+      await firebaseSignInWithGoogle(tokens);
+    },
+    [],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -84,9 +81,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isBootstrapping,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
     }),
-    [isBootstrapping, signIn, signOut, signUp, user],
+    [isBootstrapping, signIn, signInWithGoogle, signOut, signUp, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
