@@ -47,15 +47,10 @@ export default function OnboardingScreen() {
           </Text>
 
           <Pressable style={styles.button} onPress={() => router.push("/")}>
-            <Text style={styles.buttonText}>
-              <>
-                First spending
-                <Image
-                  source={arrowWhite}
-                  className=" px-6  items-center"
-                  resizeMode="contain"></Image>
-              </>
-            </Text>
+            <View style={styles.buttonContent}>
+              <Text style={styles.buttonText}>First spending</Text>
+              <Image source={arrowWhite} style={styles.buttonArrow} resizeMode="contain" />
+            </View>
           </Pressable>
         </View>
       </View>
@@ -115,11 +110,21 @@ const styles = StyleSheet.create({
     borderRadius: SPACING.buttonRadius,
     paddingHorizontal: SPACING.buttonHorizontal,
     paddingVertical: SPACING.buttonVertical,
+    alignItems: "center",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   buttonText: {
     color: COLORS.buttonText,
     fontSize: 16,
     fontWeight: "600",
     lineHeight: 20,
+  },
+  buttonArrow: {
+    width: 18,
+    height: 18,
   },
 });

@@ -1,6 +1,3 @@
-import { AppButton } from "@/components/common/app-button";
-import { AppInput } from "@/components/common/app-input";
-import { Screen } from "@/components/ui/screen";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
 import { isValidEmail } from "@/utils/validators";
@@ -10,6 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +17,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Mode = "signIn" | "signUp";
 
@@ -72,6 +71,7 @@ export function AuthScreen() {
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
+  const insets = useSafeAreaInsets();
 
   const emailRef = useRef<TextInput | null>(null);
   const passwordRef = useRef<TextInput | null>(null);
@@ -188,6 +188,7 @@ export function AuthScreen() {
 
   const submit = async () => {
     Keyboard.dismiss();
+    setSubmitError(null);
 
     if (!validate()) {
       return;
@@ -210,18 +211,31 @@ export function AuthScreen() {
   };
 
   return (
-    <Screen>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: 'white' }}
+      edges={["top", "bottom"]}
+    >
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      >
         <ScrollView
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 24, paddingBottom: 48 }}>
-          <Text className="text-3xl font-bold text-slate-900">{headerText}</Text>
-          <Text className="mt-2 text-sm text-slate-600">
-            Continue to your finance dashboard.
-          </Text>
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 60, paddingBottom: 48, flexGrow: 1 }}
+        >
+          {/* Header Section */}
+          <View className="mb-10 items-center">
+            <View className="h-16 w-16 bg-blue-50 rounded-2xl items-center justify-center mb-6">
+               <Text className="text-blue-600 text-3xl font-bold">F</Text>
+            </View>
+            <Text className="text-[28px] font-extrabold text-[#0b1220] tracking-tight">{headerText}</Text>
+            <Text className="mt-2 text-[15px] text-[#64748b] text-center max-w-[80%]">
+              {subHeaderText}
+            </Text>
+          </View>
 
           <View
             className="mt-6 rounded-3xl border border-white/70 p-4"
@@ -369,8 +383,9 @@ export function AuthScreen() {
               </Text>
             </Pressable>
           </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
-    </Screen>
+    </SafeAreaView>
   );
 }

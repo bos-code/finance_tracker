@@ -25,6 +25,8 @@ type AuthContextValue = {
     accessToken?: string;
   }) => Promise<void>;
   signOut: () => Promise<void>;
+  updateName: (fullName: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -83,6 +85,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signUp,
       signInWithGoogle,
       signOut,
+      updateName,
+      updatePassword,
     }),
     [isBootstrapping, signIn, signInWithGoogle, signOut, signUp, user],
   );
