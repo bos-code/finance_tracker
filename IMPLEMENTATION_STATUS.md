@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 7 — transaction reliability and offline synchronization
+**Batch:** 8 — workspace, account, and currency foundation
 
 **Branch:** `master`
 
@@ -237,11 +237,48 @@
   temporary-ID remapping, retry scheduling, conflict behavior, mutation/RLS
   invariants, and new provider error mappings.
 
+### Backend Stage 3 — workspace, accounts, and currency
+
+- Added an additive Stage 3 migration for ISO currencies, regional currency
+  defaults, profiles, workspaces, memberships, and financial accounts.
+- Provisioned exactly one `Personal Finance` workspace, owner membership, and
+  default Cash account for every existing and newly-created Supabase user.
+- Captured country, locale, timezone, default currency, and currency-detection
+  source at signup; the suggested currency is shown for confirmation and is
+  never changed automatically when the device later travels.
+- Verified the 2026 EUR defaults for Bulgaria and the official euro microstates
+  against current EU/ECB sources; Nigerian signup continues to suggest NGN.
+- Added explicit workspace, account, original currency, reporting currency,
+  exchange-rate, and base-amount fields to every transaction, with a safe
+  rate-1 backfill for existing rows.
+- Added workspace scope to goals and workspace-scoped RLS policies and indexes
+  across transactions, goals, accounts, membership, and profile data.
+- Kept Stage 2 installed clients compatible: omitted scope fields resolve to
+  the user's personal workspace and default account during the cutover.
+- Extended the idempotent mutation RPC to accept explicit scope and currency;
+  new rows must capture the workspace's current reporting currency, while
+  historical rows retain their original stored base after a later preference
+  change.
+- Added an atomic manual currency RPC that updates the personal workspace and
+  default account without rewriting or relabelling historical transactions.
+- Added a user/workspace-scoped offline workspace cache and upgraded the
+  transaction cache to v3 without orphaning the existing v2 pending queue;
+  queued Stage 2 work is scoped in place before its first Stage 3 sync.
+- Wired the Workspace provider through signup, Home, Ledger, Goals, Insights,
+  Profile, queries, mutation payloads, reporting filters, fixtures, and money
+  formatting.
+- Mixed-currency summaries now use stored base amounts only when their stored
+  reporting base matches the selected workspace currency; ledger rows still
+  display each transaction's original currency.
+- Expanded backend coverage from 23 to 32 tests, including regional defaults,
+  workspace/currency SQL invariants, scope contracts, and base-amount
+  reporting plus prior-version queue migration.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
 - `pnpm lint` — passed with zero errors and zero warnings.
-- `pnpm test:backend` — passed; 23 tests, zero failures.
+- `pnpm test:backend` — passed; 32 tests, zero failures.
 - Expo fixture-mode production web export — passed; all 16 routes bundled.
 - Expo normal production web export with non-secret placeholder Supabase values
   — passed; all 16 routes bundled.
@@ -258,10 +295,14 @@
   Supabase schema, canonical service contracts, and Edge Function boundary.
 - Backend Stage 2 TypeScript and lint checks — passed after the RPC, cache,
   queue, sync context, and UI-state integration.
-- `pnpm test:backend` — passed; 23 tests, zero failures.
+- `pnpm test:backend` — passed; 32 tests, zero failures.
 - Backend Stage 2 normal and fixture-mode production web exports — passed; all
   16 routes bundled in both modes.
-- The Stage 2 SQL is statically covered but has not been executed against a
+- Backend Stage 3 TypeScript, lint, and 32-test backend suite — passed after
+  workspace, account, regional signup, currency, cache, and reporting wiring.
+- Backend Stage 3 normal and fixture-mode production web exports — passed; all
+  16 routes bundled in both modes.
+- The Stage 1–3 SQL is statically covered but has not been executed against a
   local or linked Supabase project in this workspace; live migration, RLS, and
   concurrent replay verification remain deployment gates.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
@@ -282,22 +323,23 @@
 
 ## Not yet redesigned or implemented
 
-- Backend persistence for workspace, account, connection, privacy, and
-  notification settings
 - receipt vault, review drafts, Telegram connection UI, and OCR review UI
-- new backend schemas, contracts, Edge Functions, storage policies, bot flows,
-  and production hardening described in `PLAN_BACKEND.md`
-- live application of the Stage 2 migrations to development/preview/production
+- receipt/attachment schemas, Edge Functions, storage policies, bot flows,
+  realtime automation, privacy/notification persistence, and production
+  hardening described in `PLAN_BACKEND.md`
+- live application of the Stage 1–3 migrations to development/preview/production
   Supabase projects and device-level reconnect/concurrency validation
 
 ## Exact next batch
 
-1. Apply the Stage 2 migrations to a development Supabase project and run the
-   two-user RLS, duplicate replay, revision conflict, and reconnect matrix.
-2. Begin Backend Stage 3 with additive profiles, personal workspaces,
-   memberships, financial accounts, and ISO currency storage/backfill.
-3. Keep the current single-person workspace UI intact while introducing the
-   backend foundation behind it, then verify and push Stage 3 separately.
+1. Apply the ordered Stage 1–3 migrations to a development Supabase project and
+   run the two-user RLS, bootstrap, duplicate replay, currency-history,
+   revision-conflict, and reconnect matrix when project access is available.
+2. Begin Backend Stage 4 with a private receipt bucket, attachment records,
+   MIME/size/hash validation, signed viewing URLs, retryable upload state, and
+   owner/workspace isolation.
+3. Keep optional receipt failures independent from transaction saves, verify
+   both app modes, and publish Stage 4 as its own checkpoint.
 
 ## Backend clarification
 

@@ -33,6 +33,13 @@ export const SYNC_STATES = [
   "conflict",
 ] as const;
 
+export const CURRENCY_DETECTION_SOURCES = [
+  "device_region",
+  "manual",
+  "migration",
+  "system_default",
+] as const;
+
 export const BACKEND_ERROR_CODES = [
   "VALIDATION_FAILED",
   "AUTHENTICATION_REQUIRED",
@@ -62,15 +69,21 @@ export type EntityId = string;
 
 export type TransactionType = "Expenditure" | "Revenue";
 
-/** Transaction row after the additive Stage 2 reliability migration. */
+/** Transaction row after the additive Stage 3 workspace/currency migration. */
 export type TransactionRecord = {
   id: EntityId;
   user_id: EntityId;
+  workspace_id: EntityId;
+  account_id: EntityId;
   type: TransactionType;
   amount: number;
   note: string;
   category_id: string;
   transaction_date: ISODateString;
+  currency_code: CurrencyCode;
+  base_currency_code: CurrencyCode;
+  base_amount: number;
+  exchange_rate: number;
   idempotency_key: string | null;
   lifecycle: TransactionLifecycle;
   source: TransactionSource;
@@ -83,15 +96,23 @@ export type TransactionRecord = {
 export type TransactionInsert = Pick<
   TransactionRecord,
   | "user_id"
+  | "workspace_id"
+  | "account_id"
   | "type"
   | "amount"
   | "note"
   | "category_id"
   | "transaction_date"
+  | "currency_code"
+  | "base_currency_code"
+  | "exchange_rate"
 >;
 
 export type TransactionUpdate = Partial<
-  Omit<TransactionInsert, "user_id">
+  Omit<
+    TransactionInsert,
+    "user_id" | "workspace_id" | "base_currency_code"
+  >
 >;
 
 export type TransactionView = TransactionRecord & {
@@ -105,6 +126,7 @@ export type GoalStatus = "active" | "completed";
 export type GoalRecord = {
   id: EntityId;
   user_id: EntityId;
+  workspace_id: EntityId;
   title: string;
   goal_type: GoalType;
   target_amount: number;
@@ -128,12 +150,14 @@ export type GoalInsert = Omit<
 };
 
 export type GoalUpdate = Partial<
-  Omit<GoalRecord, "id" | "user_id" | "created_at" | "updated_at">
+  Omit<
+    GoalRecord,
+    "id" | "user_id" | "workspace_id" | "created_at" | "updated_at"
+  >
 >;
 
-export type UserContract = {
+export type ProfileContract = {
   id: EntityId;
-  email: string;
   full_name: string | null;
   country_code: string | null;
   locale: string | null;
@@ -142,14 +166,31 @@ export type UserContract = {
   updated_at: ISODateTimeString;
 };
 
+export type UserContract = ProfileContract & { email: string };
+
+export type CurrencyDetectionSource =
+  (typeof CURRENCY_DETECTION_SOURCES)[number];
+
+export type WorkspaceType = "personal" | "business";
+
 export type WorkspaceContract = {
   id: EntityId;
   owner_user_id: EntityId;
   name: string;
+  workspace_type: WorkspaceType;
   default_currency: CurrencyCode;
-  currency_detection_source: "device_region" | "manual" | "migration";
+  currency_detection_source: CurrencyDetectionSource;
   created_at: ISODateTimeString;
   updated_at: ISODateTimeString;
+};
+
+export type WorkspaceMemberRole = "owner" | "member";
+
+export type WorkspaceMemberContract = {
+  workspace_id: EntityId;
+  user_id: EntityId;
+  role: WorkspaceMemberRole;
+  joined_at: ISODateTimeString;
 };
 
 export type FinancialAccountType =
@@ -168,6 +209,7 @@ export type FinancialAccountContract = {
   account_type: FinancialAccountType;
   currency_code: CurrencyCode;
   opening_balance: number;
+  is_default: boolean;
   is_archived: boolean;
   created_at: ISODateTimeString;
   updated_at: ISODateTimeString;

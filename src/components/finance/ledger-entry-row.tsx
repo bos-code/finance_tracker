@@ -2,7 +2,11 @@ import { ALL_CATEGORIES } from "@/constants/categories";
 import type { Transaction } from "@/services/supabase/transaction-service";
 import { palette } from "@/theme/colors";
 import { fonts } from "@/theme/typography";
-import { formatMoney, type DisplayCurrency } from "@/utils/money";
+import {
+  displayCurrencyForCode,
+  formatMoney,
+  type DisplayCurrency,
+} from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -16,6 +20,9 @@ export function LedgerEntryRow({
   transaction: Transaction;
 }) {
   const category = ALL_CATEGORIES[transaction.category_id];
+  const transactionCurrency = displayCurrencyForCode(
+    transaction.currency_code || currency.code,
+  );
   const isIncome = transaction.type === "Revenue";
   const syncLabel = {
     conflict: "CONFLICT",
@@ -31,7 +38,7 @@ export function LedgerEntryRow({
 
   return (
     <Pressable
-      accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, currency)}${syncLabel ? `, sync status ${syncLabel.toLocaleLowerCase()}` : ""}`}
+      accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, transactionCurrency)}${syncLabel ? `, sync status ${syncLabel.toLocaleLowerCase()}` : ""}`}
       accessibilityRole={onPress != null ? "button" : undefined}
       disabled={onPress == null}
       onPress={onPress}
@@ -69,7 +76,7 @@ export function LedgerEntryRow({
           { color: isIncome ? palette.income : palette.text },
         ]}>
         {isIncome ? "+" : "−"}
-        {formatMoney(transaction.amount, currency)}
+        {formatMoney(transaction.amount, transactionCurrency)}
       </Text>
     </Pressable>
   );

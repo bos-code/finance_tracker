@@ -38,9 +38,14 @@ async function markCacheState(
     operation.opType === "create"
       ? operation.payload.data.transaction_date
       : operation.payload.transactionDate;
-  if (!transactionDate) return;
+  const workspaceId =
+    operation.opType === "create"
+      ? operation.payload.data.workspace_id
+      : operation.payload.workspaceId;
+  if (!transactionDate || !workspaceId) return;
   await setCachedTransactionSyncState(
     operation.userId,
+    workspaceId,
     transactionDate,
     transactionId,
     state,
@@ -64,6 +69,7 @@ async function executeOperation(operation: PendingOp) {
     );
     await replaceCachedTransaction(
       operation.userId,
+      saved.workspace_id,
       operation.payload.tempId,
       operation.payload.data.transaction_date,
       saved,
@@ -79,6 +85,7 @@ async function executeOperation(operation: PendingOp) {
       queueOnNetworkFailure: false,
       transactionDate: operation.payload.transactionDate,
       userId: operation.userId,
+      workspaceId: operation.payload.workspaceId,
     });
     return;
   }
@@ -93,6 +100,7 @@ async function executeOperation(operation: PendingOp) {
       queueOnNetworkFailure: false,
       transactionDate: operation.payload.transactionDate,
       userId: operation.userId,
+      workspaceId: operation.payload.workspaceId,
     },
   );
 }

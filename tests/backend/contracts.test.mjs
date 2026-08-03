@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   BACKEND_ERROR_CODES,
+  CURRENCY_DETECTION_SOURCES,
   SYNC_STATES,
   TRANSACTION_LIFECYCLE_STATES,
   TRANSACTION_SOURCES,
@@ -34,6 +35,12 @@ test("transaction lifecycle and source contracts stay explicit", () => {
     "synced",
     "failed",
     "conflict",
+  ]);
+  assert.deepEqual(CURRENCY_DETECTION_SOURCES, [
+    "device_region",
+    "manual",
+    "migration",
+    "system_default",
   ]);
 });
 

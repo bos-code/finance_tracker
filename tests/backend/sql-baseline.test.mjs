@@ -12,6 +12,11 @@ const reliabilityUrl = new URL(
   import.meta.url,
 );
 const reliabilitySql = await readFile(reliabilityUrl, "utf8");
+const workspaceUrl = new URL(
+  "../../supabase/migrations/20260803000300_workspace_currency_foundation.sql",
+  import.meta.url,
+);
+const workspaceSql = await readFile(workspaceUrl, "utf8");
 
 test("baseline creates the current critical tables", () => {
   assert.match(sql, /create table if not exists public\.transactions/i);
@@ -65,4 +70,95 @@ test("reliability migration uses soft deletion without stranding older clients",
     /drop policy if exists "Users can insert their own transactions"/i,
   );
   assert.match(reliabilitySql, /grant execute on function public\.mutate_transaction/i);
+});
+
+test("workspace migration provisions the complete personal-finance boundary", () => {
+  for (const table of [
+    "currencies",
+    "country_currency_defaults",
+    "profiles",
+    "workspaces",
+    "workspace_members",
+    "financial_accounts",
+  ]) {
+    assert.match(
+      workspaceSql,
+      new RegExp(`create table if not exists public\\.${table}`, "i"),
+    );
+    assert.match(
+      workspaceSql,
+      new RegExp(`alter table public\\.${table} enable row level security`, "i"),
+    );
+  }
+  assert.match(workspaceSql, /workspaces_one_personal_owner_idx/i);
+  assert.match(workspaceSql, /financial_accounts_one_default_idx/i);
+  assert.match(workspaceSql, /auth_user_finance_bootstrap/i);
+  assert.match(workspaceSql, /auth_user_finance_metadata_sync/i);
+  assert.match(workspaceSql, /from auth\.users/i);
+});
+
+test("existing financial records receive explicit scope and ISO currency", () => {
+  for (const column of [
+    "workspace_id",
+    "account_id",
+    "currency_code",
+    "base_currency_code",
+    "base_amount",
+    "exchange_rate",
+  ]) {
+    assert.match(
+      workspaceSql,
+      new RegExp(`add column if not exists ${column}`, "i"),
+    );
+    assert.match(
+      workspaceSql,
+      new RegExp(`alter column ${column} set not null`, "i"),
+    );
+  }
+  assert.match(workspaceSql, /set workspace_id = workspace\.id/i);
+  assert.match(workspaceSql, /base_amount = transaction\.amount/i);
+  assert.match(workspaceSql, /exchange_rate = 1/i);
+  assert.match(workspaceSql, /goals_currency_fk/i);
+  assert.match(workspaceSql, /add column if not exists workspace_id uuid[\s\S]*alter table public\.goals/i);
+});
+
+test("workspace currency changes are atomic and historical amounts stay untouched", () => {
+  assert.match(workspaceSql, /set_personal_workspace_currency/i);
+  assert.match(workspaceSql, /currency_detection_source = 'manual'/i);
+  assert.match(
+    workspaceSql,
+    /update public\.financial_accounts[\s\S]*is_default and not is_archived/i,
+  );
+  assert.doesNotMatch(
+    workspaceSql,
+    /update public\.transactions\s+set\s+currency_code\s*=\s*v_currency_code/i,
+  );
+  assert.doesNotMatch(
+    workspaceSql,
+    /create policy "Owners can update workspaces"/i,
+  );
+});
+
+test("Stage 3 RPC remains callable by older clients while accepting scope", () => {
+  assert.match(workspaceSql, /p_workspace_id uuid default null/i);
+  assert.match(workspaceSql, /p_account_id uuid default null/i);
+  assert.match(workspaceSql, /p_base_currency_code text default null/i);
+  assert.match(workspaceSql, /transactions_scope_write/i);
+  assert.match(workspaceSql, /public\.is_workspace_member\(v_workspace_id\)/i);
+  assert.match(workspaceSql, /v_legacy_request_payload/i);
+  assert.match(workspaceSql, /not \(v_existing\.request_payload \? 'workspace_id'\)/i);
+  assert.match(
+    workspaceSql,
+    /tg_op = 'INSERT' and new\.base_currency_code <> v_workspace_currency/i,
+  );
+  assert.doesNotMatch(workspaceSql, /drop table/i);
+});
+
+test("2026 regional defaults include Bulgaria and official euro microstates", () => {
+  for (const country of ["AD", "BG", "MC", "SM", "VA"]) {
+    assert.match(
+      workspaceSql,
+      new RegExp(`\\('${country}', 'EUR'\\)`, "i"),
+    );
+  }
 });

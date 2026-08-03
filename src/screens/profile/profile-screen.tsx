@@ -7,6 +7,7 @@ import { Screen } from "@/components/ui/screen";
 import { SignalThreads } from "@/components/visuals/signal-threads";
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { ROUTES } from "@/navigation/route-names";
 import { CURRENCY_OPTIONS, useAppStore } from "@/store/use-app-store";
 import { palette } from "@/theme/colors";
@@ -195,7 +196,13 @@ function ReadinessRow({
 export function ProfileScreen() {
   const { signOut, updateName, user } = useAuth();
   const currency = useAppStore((state) => state.currency);
-  const setCurrency = useAppStore((state) => state.setCurrency);
+  const {
+    activeAccount,
+    errorCode: workspaceError,
+    isLoading: workspaceLoading,
+    setBaseCurrency,
+    workspace,
+  } = useWorkspace();
   const {
     biometricLabel,
     disableLock,
@@ -283,13 +290,15 @@ export function ProfileScreen() {
     );
     if (!nextCurrency) return;
     try {
-      await setCurrency(nextCurrency, user?.uid);
+      await setBaseCurrency(nextCurrency.code);
       closeSheet();
-    } catch {
+    } catch (error) {
       closeSheet();
       Alert.alert(
-        "Saved on this device",
-        "The currency changed locally, but its cloud preference could not be updated yet.",
+        "Currency not changed",
+        error instanceof Error
+          ? error.message
+          : "Your workspace currency could not be updated yet.",
       );
     }
   };
@@ -374,15 +383,28 @@ export function ProfileScreen() {
         <View style={styles.workspacePanel}>
           <View style={styles.workspaceTopline}>
             <Text style={styles.workspaceEyebrow}>WORKSPACE 01</Text>
-            <Text style={styles.workspaceStatus}>CURRENT</Text>
+            <Text style={styles.workspaceStatus}>
+              {workspace
+                ? "CURRENT"
+                : workspaceLoading
+                  ? "SYNCING"
+                  : "SETUP"}
+            </Text>
           </View>
-          <Text style={styles.workspaceTitle}>Personal ledger</Text>
+          <Text style={styles.workspaceTitle}>
+            {workspace?.name ?? "Personal Finance"}
+          </Text>
           <Text style={styles.workspaceDescription}>
-            A single-owner workspace. Multi-account structure arrives with the
-            backend workspace and account contracts.
+            {workspace
+              ? `${activeAccount?.name ?? "Cash"} is the default account. Every new entry now carries explicit workspace, account, and currency ownership.`
+              : workspaceError === "NETWORK_UNAVAILABLE"
+                ? "Connect once to restore this signed-in workspace scope on the device."
+                : "The backend is preparing your private workspace and default Cash account."}
           </Text>
           <View style={styles.workspaceMeta}>
-            <Text style={styles.workspaceMetaText}>{currency.code} BASE</Text>
+            <Text style={styles.workspaceMetaText}>
+              {workspace?.default_currency ?? currency.code} BASE
+            </Text>
             <View style={styles.workspaceMetaRule} />
             <Text style={styles.workspaceMetaText}>PRIVATE BY DEFAULT</Text>
           </View>
@@ -390,7 +412,7 @@ export function ProfileScreen() {
 
         <SettingsSection label="Money and attention">
           <SettingRow
-            description="Manual choice remains stable while travelling."
+            description="New entries use this base; travel never changes it automatically."
             icon="cash-multiple"
             label="Currency"
             onPress={() => openSheet("currency")}
@@ -500,7 +522,7 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
-        description="Changing this updates display formatting; it does not convert historical values."
+        description="Changing the base affects new entries and display formatting. Historical records keep their original currency and amount."
         onClose={closeSheet}
         title="Currency"
         visible={activeSheet === "currency"}>

@@ -11,7 +11,11 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import { useNetwork } from "@/hooks/use-network";
-import { getPendingSummary } from "@/services/offline/offline-store";
+import { useWorkspace } from "@/hooks/use-workspace";
+import {
+  getPendingSummary,
+  scopePendingOps,
+} from "@/services/offline/offline-store";
 import {
   retryFailedOps,
   syncPendingOps,
@@ -44,6 +48,7 @@ export const OfflineContext = createContext<OfflineContextValue | undefined>(
 
 export function OfflineProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
+  const { activeAccount, workspace } = useWorkspace();
   const { isOnline } = useNetwork();
   const [isSyncing, setIsSyncing] = useState(false);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
@@ -65,12 +70,17 @@ export function OfflineProvider({ children }: PropsWithChildren) {
 
   const runSync = useCallback(
     async (mode: "due" | "failed" | "force" = "due") => {
-      if (!isOnline || !user?.uid) return;
+      if (!isOnline || !user?.uid || !workspace || !activeAccount) return;
       if (syncFlight.current) return syncFlight.current;
 
       const flight = (async () => {
         setIsSyncing(true);
         try {
+          await scopePendingOps(user.uid, {
+            accountId: activeAccount.id,
+            currencyCode: workspace.default_currency,
+            workspaceId: workspace.id,
+          });
           const result =
             mode === "failed"
               ? await retryFailedOps(user.uid)
@@ -98,7 +108,13 @@ export function OfflineProvider({ children }: PropsWithChildren) {
         if (syncFlight.current === flight) syncFlight.current = null;
       }
     },
-    [isOnline, refreshPendingCount, user?.uid],
+    [
+      activeAccount,
+      isOnline,
+      refreshPendingCount,
+      user?.uid,
+      workspace,
+    ],
   );
 
   const retryFailed = useCallback(() => runSync("failed"), [runSync]);
@@ -110,16 +126,18 @@ export function OfflineProvider({ children }: PropsWithChildren) {
 
   // Restores work after an app restart and drains it after every reconnection.
   useEffect(() => {
-    if (isOnline && user?.uid) void runSync("due");
-  }, [isOnline, runSync, user?.uid]);
+    if (isOnline && user?.uid && workspace && activeAccount) {
+      void runSync("due");
+    }
+  }, [activeAccount, isOnline, runSync, user?.uid, workspace]);
 
   // Due retries use persisted exponential backoff; this timer merely wakes the
   // queue and does not reset any retry metadata.
   useEffect(() => {
-    if (!isOnline || !user?.uid) return;
+    if (!isOnline || !user?.uid || !workspace || !activeAccount) return;
     const timer = setInterval(() => void runSync("due"), 30_000);
     return () => clearInterval(timer);
-  }, [isOnline, runSync, user?.uid]);
+  }, [activeAccount, isOnline, runSync, user?.uid, workspace]);
 
   useEffect(
     () => () => {

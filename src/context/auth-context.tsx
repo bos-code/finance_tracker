@@ -13,6 +13,7 @@ import { supabaseClient } from "@/services/supabase/supabase-client";
 import { useAppStore } from "@/store/use-app-store";
 import { UI_PREVIEW_ENABLED } from "@/config/runtime";
 import { PREVIEW_USER } from "@/fixtures/preview-data";
+import { detectRegionalDefaults } from "@/features/profile/region-defaults";
 
 type UserSession = {
   uid: string;
@@ -28,6 +29,7 @@ type AuthContextValue = {
     fullName: string,
     email: string,
     password: string,
+    currencyCode?: string,
   ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
   updateName: (fullName: string) => Promise<void>;
@@ -131,7 +133,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const signUp = useCallback(async (fullName: string, email: string, password: string) => {
+  const signUp = useCallback(async (
+    fullName: string,
+    email: string,
+    password: string,
+    currencyCode?: string,
+  ) => {
     if (UI_PREVIEW_ENABLED) {
       setUser({ uid: PREVIEW_USER.uid, email, fullName });
       return { requiresEmailConfirmation: false };
@@ -139,7 +146,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // Pass full_name inside signUp options so it's atomic — avoids a separate
     // updateUser call that can fail if email-confirmation hasn't established a
     // session yet.
-    const result = await supabaseSignUp(email, password, fullName);
+    const regionalDefaults = detectRegionalDefaults();
+    const selectedCurrency = currencyCode ?? regionalDefaults.currencyCode;
+    const result = await supabaseSignUp(email, password, {
+      country_code: regionalDefaults.countryCode ?? undefined,
+      currency_code: selectedCurrency,
+      currency_detection_source:
+        selectedCurrency !== regionalDefaults.currencyCode
+          ? "manual"
+          : regionalDefaults.currencyDetectionSource === "device_region"
+            ? "device_region"
+            : "system_default",
+      full_name: fullName,
+      locale: regionalDefaults.locale ?? undefined,
+      timezone: regionalDefaults.timezone ?? undefined,
+    });
     if (result.session && result.user) {
       setUser({
         uid: result.user.id,

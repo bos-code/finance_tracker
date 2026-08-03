@@ -6,6 +6,7 @@ import {
   TransactionInsert 
 } from "@/services/supabase/transaction-service";
 import { useAuth } from "@/hooks/use-auth";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { useOffline } from "@/context/offline-context";
 import { UI_PREVIEW_ENABLED } from "@/config/runtime";
 import {
@@ -15,21 +16,40 @@ import {
 
 export const transactionKeys = {
   all: ["transactions"] as const,
-  month: (userId: string, year: number, month?: number) => 
-    [...transactionKeys.all, userId, year, month].filter(Boolean) as string[],
+  month: (
+    userId: string,
+    workspaceId: string,
+    year: number,
+    month?: number,
+  ) =>
+    [...transactionKeys.all, userId, workspaceId, year, month].filter(
+      Boolean,
+    ) as string[],
 };
 
 export function useTransactions(year: number, month?: number) {
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
   const { isOnline } = useOffline();
 
   return useQuery({
-    queryKey: transactionKeys.month(user?.uid || "", year, month),
+    queryKey: transactionKeys.month(
+      user?.uid || "",
+      workspace?.id || "",
+      year,
+      month,
+    ),
     queryFn: () =>
       UI_PREVIEW_ENABLED
         ? Promise.resolve(getPreviewTransactions(year, month))
-        : getTransactionsByMonth(user?.uid || "", year, month, isOnline),
-    enabled: UI_PREVIEW_ENABLED || !!user?.uid,
+        : getTransactionsByMonth(
+            user?.uid || "",
+            workspace?.id || "",
+            year,
+            month,
+            isOnline,
+          ),
+    enabled: UI_PREVIEW_ENABLED || (!!user?.uid && !!workspace?.id),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
@@ -46,7 +66,12 @@ export function useCreateTransaction() {
     onMutate: async (newTx) => {
       // Parse date for query key
       const [year, month] = newTx.transaction_date.split("-").map(Number);
-      const queryKey = transactionKeys.month(newTx.user_id, year, month);
+      const queryKey = transactionKeys.month(
+        newTx.user_id,
+        newTx.workspace_id,
+        year,
+        month,
+      );
 
       // Cancel refetches
       await queryClient.cancelQueries({ queryKey });
@@ -58,6 +83,7 @@ export function useCreateTransaction() {
       const optimisticId = `opt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const optimisticTx: Transaction = {
         ...newTx,
+        base_amount: Number((newTx.amount * newTx.exchange_rate).toFixed(2)),
         created_at: timestamp,
         deleted_at: null,
         id: optimisticId,

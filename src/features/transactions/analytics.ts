@@ -21,6 +21,22 @@ export type CategoryBreakdown = {
   percentage: number;
 };
 
+/** Converts only records whose stored base matches the requested reporting base. */
+export function transactionsForBaseCurrency<T extends TransactionRecord>(
+  transactions: T[],
+  baseCurrencyCode: string,
+): T[] {
+  return transactions
+    .filter(
+      (transaction) =>
+        transaction.base_currency_code === baseCurrencyCode,
+    )
+    .map(
+      (transaction) =>
+        ({ ...transaction, amount: transaction.base_amount }) as T,
+    );
+}
+
 export function calcMonthSummary(
   transactions: TransactionRecord[],
 ): MonthSummary {

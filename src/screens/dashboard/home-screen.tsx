@@ -12,17 +12,21 @@ import {
 } from "@/constants/categories";
 import { useOffline } from "@/context/offline-context";
 import { useAuth } from "@/hooks/use-auth";
+import { useWorkspace } from "@/hooks/use-workspace";
 import {
   useCreateTransaction,
   useTransactions,
 } from "@/hooks/use-transactions";
 import { ROUTES } from "@/navigation/route-names";
-import { calcMonthSummary } from "@/services/supabase/transaction-service";
+import {
+  calcMonthSummary,
+  transactionsForBaseCurrency,
+} from "@/services/supabase/transaction-service";
 import { useAppStore } from "@/store/use-app-store";
 import { palette, withAlpha } from "@/theme/colors";
 import { fonts } from "@/theme/typography";
 import { toLocalDateString } from "@/utils/date";
-import { formatMoney } from "@/utils/money";
+import { displayCurrencyForCode, formatMoney } from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -117,6 +121,7 @@ function Metric({
 export function HomeScreen() {
   const { user } = useAuth();
   const currency = useAppStore((state) => state.currency);
+  const { activeAccount, errorCode: workspaceError, workspace } = useWorkspace();
   const {
     conflictCount,
     failedCount,
@@ -163,9 +168,13 @@ export function HomeScreen() {
   const selectedCategory = activeCategories.find(
     (category) => category.id === categoryId,
   );
+  const baseTransactions = useMemo(
+    () => transactionsForBaseCurrency(transactions, currency.code),
+    [currency.code, transactions],
+  );
   const summary = useMemo(
-    () => calcMonthSummary(transactions),
-    [transactions],
+    () => calcMonthSummary(baseTransactions),
+    [baseTransactions],
   );
   const recentTransactions = useMemo(
     () =>
@@ -227,6 +236,19 @@ export function HomeScreen() {
       return;
     }
 
+    if (!workspace || !activeAccount) {
+      setFeedback({
+        visible: true,
+        type: "error",
+        title: "Workspace not ready",
+        message:
+          workspaceError === "NETWORK_UNAVAILABLE"
+            ? "Connect once to restore your personal workspace on this device."
+            : "Your personal workspace and Cash account are still being prepared.",
+      });
+      return;
+    }
+
     const rawAmount = Number.parseFloat(amount.replace(/[^0-9.]/g, ""));
     if (!rawAmount || rawAmount <= 0) {
       setFeedback({
@@ -252,11 +274,16 @@ export function HomeScreen() {
       closeDrawer();
       const savedTransaction = await createTx({
         user_id: user.uid,
+        workspace_id: workspace.id,
+        account_id: activeAccount.id,
         type,
         amount: rawAmount,
         note: note.trim(),
         category_id: categoryId,
         transaction_date: toLocalDateString(date),
+        currency_code: activeAccount.currency_code,
+        base_currency_code: workspace.default_currency,
+        exchange_rate: 1,
       });
       await refreshPendingCount();
 
@@ -348,7 +375,7 @@ export function HomeScreen() {
               {formatMoney(summary.remaining, currency)}
             </Text>
             <Text style={styles.balanceCaption}>
-              Income minus outflow for the current month
+              Income minus outflow for {currency.code}-base entries this month
             </Text>
 
             <View style={styles.metricsRow}>
@@ -437,6 +464,9 @@ export function HomeScreen() {
               recentTransactions.map((transaction, index) => {
                 const category = ALL_CATEGORIES[transaction.category_id];
                 const isIncome = transaction.type === "Revenue";
+                const transactionCurrency = displayCurrencyForCode(
+                  transaction.currency_code,
+                );
                 const syncLabel = {
                   conflict: "CONFLICT",
                   failed: "FAILED",
@@ -455,7 +485,7 @@ export function HomeScreen() {
                 return (
                   <Pressable
                     accessibilityHint="Opens the ledger"
-                    accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, currency)}`}
+                    accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, transactionCurrency)}`}
                     accessibilityRole="button"
                     key={transaction.id}
                     onPress={viewTransactions}
@@ -500,7 +530,7 @@ export function HomeScreen() {
                         },
                       ]}>
                       {isIncome ? "+" : "−"}
-                      {formatMoney(transaction.amount, currency)}
+                      {formatMoney(transaction.amount, transactionCurrency)}
                     </Text>
                   </Pressable>
                 );

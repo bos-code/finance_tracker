@@ -46,6 +46,7 @@ export type PendingUpdate = PendingOperationBase & {
     expectedRevision: number | null;
     transactionDate: string;
     transactionId: string;
+    workspaceId: string;
   };
 };
 
@@ -55,10 +56,65 @@ export type PendingDelete = PendingOperationBase & {
     expectedRevision: number | null;
     transactionDate: string;
     transactionId: string;
+    workspaceId: string;
   };
 };
 
 export type PendingOp = PendingCreate | PendingUpdate | PendingDelete;
+
+export type TransactionQueueScope = {
+  accountId: string;
+  currencyCode: string;
+  workspaceId: string;
+};
+
+/** Adds Stage 3 scope to durable Stage 2 operations without changing identity. */
+export function applyTransactionQueueScope(
+  operation: PendingOp,
+  scope: TransactionQueueScope,
+): PendingOp {
+  if (operation.opType === "create") {
+    const currencyCode =
+      operation.payload.data.currency_code || scope.currencyCode;
+    const baseCurrencyCode =
+      operation.payload.data.base_currency_code || scope.currencyCode;
+    return {
+      ...operation,
+      payload: {
+        ...operation.payload,
+        data: {
+          ...operation.payload.data,
+          account_id: operation.payload.data.account_id || scope.accountId,
+          base_currency_code: baseCurrencyCode,
+          currency_code: currencyCode,
+          exchange_rate:
+            operation.payload.data.exchange_rate ||
+            (currencyCode === baseCurrencyCode ? 1 : 0),
+          workspace_id:
+            operation.payload.data.workspace_id || scope.workspaceId,
+        },
+      },
+    };
+  }
+
+  if (operation.opType === "update") {
+    return {
+      ...operation,
+      payload: {
+        ...operation.payload,
+        workspaceId: operation.payload.workspaceId || scope.workspaceId,
+      },
+    };
+  }
+
+  return {
+    ...operation,
+    payload: {
+      ...operation.payload,
+      workspaceId: operation.payload.workspaceId || scope.workspaceId,
+    },
+  };
+}
 
 function referencesTransaction(operation: PendingOp, transactionId: string) {
   if (operation.opType === "create") {

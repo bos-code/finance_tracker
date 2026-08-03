@@ -10,6 +10,7 @@ import { SaveFeedback } from "@/components/ui/save-feedback";
 import { Screen } from "@/components/ui/screen";
 import { SignalThreads } from "@/components/visuals/signal-threads";
 import { useAuth } from "@/hooks/use-auth";
+import { useWorkspace } from "@/hooks/use-workspace";
 import {
   useCreateGoal,
   useDeleteGoal,
@@ -320,6 +321,7 @@ function GoalLedgerRow({
 export function GoalsScreen() {
   const { user } = useAuth();
   const currency = useAppStore((state) => state.currency);
+  const { workspace } = useWorkspace();
   const goalsQuery = useGoals();
   const goals = goalsQuery.data ?? EMPTY_GOALS;
   const createGoalMutation = useCreateGoal();
@@ -430,6 +432,13 @@ export function GoalsScreen() {
       showErrorFeedback("Sign in required", "Sign in to create and manage goals.");
       return;
     }
+    if (!workspace) {
+      showErrorFeedback(
+        "Workspace not ready",
+        "Connect once while your personal workspace is prepared.",
+      );
+      return;
+    }
 
     const title = form.title.trim();
     const targetAmount = parseCurrencyInput(form.targetAmount);
@@ -479,6 +488,7 @@ export function GoalsScreen() {
           })
         : await createGoalMutation.mutateAsync({
             user_id: user.uid,
+            workspace_id: workspace.id,
             ...payload,
           });
 

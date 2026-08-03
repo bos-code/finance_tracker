@@ -17,10 +17,14 @@ export function isMissingGoalsTableError(error: unknown) {
   return toBackendError(error).code === "BACKEND_NOT_READY";
 }
 
-export async function listGoals(userId: string): Promise<Goal[]> {
+export async function listGoals(
+  userId: string,
+  workspaceId: string,
+): Promise<Goal[]> {
   const { data, error } = await goalsTable()
     .select("*")
     .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
     .order("status", { ascending: true })
     .order("target_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false });

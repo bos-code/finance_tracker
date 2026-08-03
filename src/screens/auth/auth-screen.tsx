@@ -2,18 +2,21 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
 import { SegmentedControl } from "@/components/finance/segmented-control";
+import { detectRegionalDefaults } from "@/features/profile/region-defaults";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
+import { CURRENCY_OPTIONS } from "@/store/use-app-store";
 import { palette, withAlpha } from "@/theme/colors";
 import { fonts } from "@/theme/typography";
 import { isValidEmail } from "@/utils/validators";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Keyboard,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -92,6 +95,7 @@ function VisibilityButton({
 
 export function AuthScreen() {
   const { signIn, signUp } = useAuth();
+  const regionalDefaults = useMemo(() => detectRegionalDefaults(), []);
   const [mode, setMode] = useState<Mode>("signIn");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -102,6 +106,9 @@ export function AuthScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [signupCurrencyCode, setSignupCurrencyCode] = useState(
+    regionalDefaults.currencyCode,
+  );
   const [errors, setErrors] = useState<FormErrors>({});
 
   const emailRef = useRef<TextInput | null>(null);
@@ -155,7 +162,12 @@ export function AuthScreen() {
         return;
       }
 
-      const result = await signUp(fullName.trim(), email.trim(), password);
+      const result = await signUp(
+        fullName.trim(),
+        email.trim(),
+        password,
+        signupCurrencyCode,
+      );
       if (result.requiresEmailConfirmation) {
         setVerificationEmail(email.trim());
         return;
@@ -234,20 +246,68 @@ export function AuthScreen() {
       ) : null}
 
       {mode === "signUp" ? (
-        <FinanceField
-          autoCapitalize="words"
-          error={errors.fullName}
-          label="Full name"
-          onChangeText={(value) => {
-            setFullName(value);
-            setErrors((current) => ({ ...current, fullName: undefined }));
-            setSubmitError(null);
-          }}
-          onSubmitEditing={() => emailRef.current?.focus()}
-          placeholder="Jordan Lee"
-          returnKeyType="next"
-          value={fullName}
-        />
+        <>
+          <FinanceField
+            autoCapitalize="words"
+            error={errors.fullName}
+            label="Full name"
+            onChangeText={(value) => {
+              setFullName(value);
+              setErrors((current) => ({ ...current, fullName: undefined }));
+              setSubmitError(null);
+            }}
+            onSubmitEditing={() => emailRef.current?.focus()}
+            placeholder="Jordan Lee"
+            returnKeyType="next"
+            value={fullName}
+          />
+          <View style={styles.currencyPanel}>
+            <View style={styles.currencyHeading}>
+              <Text style={styles.currencyLabel}>BASE CURRENCY / CONFIRM</Text>
+              <Text style={styles.currencySource}>
+                {regionalDefaults.countryCode
+                  ? `REGION ${regionalDefaults.countryCode}`
+                  : "SYSTEM DEFAULT"}
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              contentContainerStyle={styles.currencyOptions}
+              showsHorizontalScrollIndicator={false}>
+              {CURRENCY_OPTIONS.map((option) => {
+                const selected = option.code === signupCurrencyCode;
+                return (
+                  <Pressable
+                    accessibilityLabel={`${option.code} base currency`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={option.code}
+                    onPress={() => {
+                      setSignupCurrencyCode(option.code);
+                      void Haptics.selectionAsync();
+                    }}
+                    style={({ pressed }) => [
+                      styles.currencyOption,
+                      selected ? styles.currencyOptionSelected : null,
+                      { opacity: pressed ? 0.58 : 1 },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.currencyOptionText,
+                        selected ? styles.currencyOptionTextSelected : null,
+                      ]}>
+                      {option.code}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.currencyHint}>
+              This choice stays fixed while travelling. You can change it later
+              without rewriting historical entries.
+            </Text>
+          </View>
+        </>
       ) : null}
 
       <FinanceField
@@ -357,6 +417,57 @@ export function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
+  currencyPanel: {
+    borderColor: palette.line,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  currencyHeading: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  currencyLabel: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+    letterSpacing: 0.8,
+  },
+  currencySource: {
+    color: palette.signalMoss,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.6,
+  },
+  currencyOptions: { gap: 7 },
+  currencyOption: {
+    alignItems: "center",
+    borderColor: palette.lineStrong,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 54,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  currencyOptionSelected: {
+    backgroundColor: palette.text,
+    borderColor: palette.text,
+  },
+  currencyOptionText: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 10,
+    textAlign: "center",
+  },
+  currencyOptionTextSelected: { color: palette.black },
+  currencyHint: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    lineHeight: 15,
+  },
   errorPanel: {
     alignItems: "center",
     backgroundColor: withAlpha(palette.expense, 0.05),

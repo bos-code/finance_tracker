@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { createGoal, deleteGoal, listGoals, updateGoal } from "@/services/supabase/goal-service";
 import type { Goal, GoalInsert, GoalUpdate } from "@/types/domain/goal";
 import { UI_PREVIEW_ENABLED } from "@/config/runtime";
@@ -12,17 +13,21 @@ import {
 
 export const goalKeys = {
   all: ["goals"] as const,
-  list: (userId: string) => [...goalKeys.all, userId] as const,
+  list: (userId: string, workspaceId: string) =>
+    [...goalKeys.all, userId, workspaceId] as const,
 };
 
 export function useGoals() {
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
 
   return useQuery({
-    queryKey: goalKeys.list(user?.uid || ""),
+    queryKey: goalKeys.list(user?.uid || "", workspace?.id || ""),
     queryFn: () =>
-      UI_PREVIEW_ENABLED ? listPreviewGoals() : listGoals(user?.uid || ""),
-    enabled: UI_PREVIEW_ENABLED || !!user?.uid,
+      UI_PREVIEW_ENABLED
+        ? listPreviewGoals()
+        : listGoals(user?.uid || "", workspace?.id || ""),
+    enabled: UI_PREVIEW_ENABLED || (!!user?.uid && !!workspace?.id),
     staleTime: 1000 * 60 * 5,
   });
 }
@@ -30,13 +35,16 @@ export function useGoals() {
 export function useCreateGoal() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
 
   return useMutation({
     mutationFn: (payload: GoalInsert) =>
       UI_PREVIEW_ENABLED ? createPreviewGoal(payload) : createGoal(payload),
     onSuccess: () => {
       if (!user?.uid) return;
-      queryClient.invalidateQueries({ queryKey: goalKeys.list(user.uid) });
+      queryClient.invalidateQueries({
+        queryKey: goalKeys.list(user.uid, workspace?.id || ""),
+      });
     },
   });
 }
@@ -44,6 +52,7 @@ export function useCreateGoal() {
 export function useUpdateGoal() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
 
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: GoalUpdate }) =>
@@ -53,7 +62,7 @@ export function useUpdateGoal() {
     onMutate: async ({ id, payload }) => {
       if (!user?.uid) return undefined;
 
-      const queryKey = goalKeys.list(user.uid);
+      const queryKey = goalKeys.list(user.uid, workspace?.id || "");
       await queryClient.cancelQueries({ queryKey });
       const previousGoals = queryClient.getQueryData<Goal[]>(queryKey);
 
@@ -70,7 +79,9 @@ export function useUpdateGoal() {
     },
     onSettled: () => {
       if (!user?.uid) return;
-      queryClient.invalidateQueries({ queryKey: goalKeys.list(user.uid) });
+      queryClient.invalidateQueries({
+        queryKey: goalKeys.list(user.uid, workspace?.id || ""),
+      });
     },
   });
 }
@@ -78,13 +89,16 @@ export function useUpdateGoal() {
 export function useDeleteGoal() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { workspace } = useWorkspace();
 
   return useMutation({
     mutationFn: (id: string) =>
       UI_PREVIEW_ENABLED ? deletePreviewGoal(id) : deleteGoal(id),
     onSuccess: () => {
       if (!user?.uid) return;
-      queryClient.invalidateQueries({ queryKey: goalKeys.list(user.uid) });
+      queryClient.invalidateQueries({
+        queryKey: goalKeys.list(user.uid, workspace?.id || ""),
+      });
     },
   });
 }

@@ -11,6 +11,7 @@ import { useTransactions } from "@/hooks/use-transactions";
 import {
   calcDailyTotals,
   calcMonthSummary,
+  transactionsForBaseCurrency,
   type Transaction,
 } from "@/services/supabase/transaction-service";
 import { useAppStore } from "@/store/use-app-store";
@@ -219,13 +220,17 @@ export function CalendarScreen() {
     refetch,
   } = useTransactions(year, month);
 
+  const baseTransactions = useMemo(
+    () => transactionsForBaseCurrency(transactions, currency.code),
+    [currency.code, transactions],
+  );
   const summary = useMemo(
-    () => calcMonthSummary(transactions),
-    [transactions],
+    () => calcMonthSummary(baseTransactions),
+    [baseTransactions],
   );
   const dailyTotals = useMemo(
-    () => calcDailyTotals(transactions),
-    [transactions],
+    () => calcDailyTotals(baseTransactions),
+    [baseTransactions],
   );
   const calendarDays = useMemo(
     () => buildCalendarDays(year, month),
@@ -320,7 +325,7 @@ export function CalendarScreen() {
   const header = (
     <View style={styles.headerContent}>
       <PageHeading
-        description="Search, filter, and inspect every movement without losing the shape of the month."
+        description={`Search every original-currency entry. Summary and calendar signals use the ${currency.code} reporting base.`}
         eyebrow="RECORD / PERSONAL"
         title="Ledger"
       />

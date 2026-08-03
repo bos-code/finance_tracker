@@ -14,7 +14,8 @@ secure PIN and optional biometrics.
 - View monthly/yearly cashflow trends and category breakdowns
 - Create and manage savings or item-based goals
 - Queue transaction changes offline and sync them automatically when the device reconnects
-- Choose the display currency from the profile control center
+- Confirm a region-suggested base currency at signup and change it later
+  without relabelling historical transactions
 - Protect the native app with a SecureStore-backed 4-digit PIN and optional
   biometrics
 
@@ -48,7 +49,7 @@ src/
     feedback/
     navigation/
     ui/
-  context/                  Auth, offline, and app-lock providers
+  context/                  Auth, workspace, offline, and app-lock providers
   contracts/                Canonical backend and current database contracts
   features/                 Feature-owned domain logic
   hooks/                    Shared hooks for auth, goals, transactions, network
@@ -125,11 +126,17 @@ The current migrations create or update:
 
 - `public.transactions`
 - `public.goals`
+- `public.currencies` and `public.country_currency_defaults`
+- `public.profiles`
+- `public.workspaces` and `public.workspace_members`
+- `public.financial_accounts`
 - update triggers for timestamps, goal completion state, and transaction revision
-- owner-scoped read policies
-- an authenticated idempotent transaction mutation RPC and server-only mutation journal
+- workspace-scoped RLS policies
+- an authenticated idempotent, workspace-aware transaction mutation RPC and
+  server-only mutation journal
+- an atomic personal-workspace currency update RPC
 
-The Stage 2 app uses the mutation RPC. Owner-only legacy write policies remain
+The Stage 3 app uses the mutation RPC. Owner-only legacy write policies remain
 temporarily so an older installed build is not broken by the schema rollout;
 remove them only after an explicit minimum-version cutover.
 
@@ -172,7 +179,7 @@ Offline support currently focuses on transactions.
 - New transactions can be created while offline
 - Offline creates, updates, and deletes are serialized in a versioned,
   user-scoped queue
-- Cached monthly transaction data is used when the network is unavailable
+- Cached workspace and monthly transaction data are used when the network is unavailable
 - Pending operations use stable idempotency keys, retry metadata, and
   exponential backoff
 - Temporary IDs and dependent queued edits are remapped after server creation
@@ -184,6 +191,10 @@ Goals are currently fetched and written directly through Supabase and do not use
 ## Data Notes
 
 - Transaction dates are stored as local `YYYY-MM-DD` strings to avoid UTC date-shift bugs
+- Every transaction stores its original currency plus the workspace reporting
+  currency, conversion rate, and base amount captured at write time
+- Changing the workspace currency does not rewrite historical transactions;
+  mixed-base summaries include only records compatible with the selected base
 - Goal completion timestamps are managed by the database trigger
 - Some profile preferences are still hydrated from Supabase Auth user metadata
 - Database/provider errors are normalized and are never returned as an empty

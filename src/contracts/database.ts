@@ -1,8 +1,13 @@
 import type {
+  CurrencyContract,
+  FinancialAccountContract,
   GoalRecord,
+  ProfileContract,
   TransactionInsert,
   TransactionRecord,
   TransactionSource,
+  WorkspaceContract,
+  WorkspaceMemberContract,
 } from "@/contracts/backend";
 
 export type Json =
@@ -26,7 +31,7 @@ type TransactionDatabaseInsert = TransactionInsert & {
 
 type GoalDatabaseInsert = Pick<
   GoalRecord,
-  "user_id" | "title" | "target_amount"
+  "user_id" | "workspace_id" | "title" | "target_amount"
 > & {
   id?: string;
   goal_type?: GoalRecord["goal_type"];
@@ -42,6 +47,43 @@ type GoalDatabaseInsert = Pick<
   updated_at?: string;
 };
 
+type ProfileDatabaseInsert = Omit<
+  ProfileContract,
+  "created_at" | "updated_at"
+> & {
+  created_at?: string;
+  updated_at?: string;
+};
+
+type WorkspaceDatabaseInsert = Omit<
+  WorkspaceContract,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type FinancialAccountDatabaseInsert = Omit<
+  FinancialAccountContract,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type TransactionMutationRow = {
+  id: string;
+  user_id: string;
+  idempotency_key: string;
+  operation: "create" | "update" | "delete";
+  request_payload: Json;
+  transaction_id: string | null;
+  result_snapshot: Json | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -55,6 +97,51 @@ export type Database = {
         Row: GoalRecord;
         Insert: GoalDatabaseInsert;
         Update: Partial<GoalDatabaseInsert>;
+        Relationships: [];
+      };
+      profiles: {
+        Row: ProfileContract;
+        Insert: ProfileDatabaseInsert;
+        Update: Partial<Omit<ProfileDatabaseInsert, "id">>;
+        Relationships: [];
+      };
+      workspaces: {
+        Row: WorkspaceContract;
+        Insert: WorkspaceDatabaseInsert;
+        Update: Partial<Omit<WorkspaceDatabaseInsert, "owner_user_id">>;
+        Relationships: [];
+      };
+      workspace_members: {
+        Row: WorkspaceMemberContract;
+        Insert: WorkspaceMemberContract;
+        Update: Partial<Pick<WorkspaceMemberContract, "role">>;
+        Relationships: [];
+      };
+      financial_accounts: {
+        Row: FinancialAccountContract;
+        Insert: FinancialAccountDatabaseInsert;
+        Update: Partial<FinancialAccountDatabaseInsert>;
+        Relationships: [];
+      };
+      currencies: {
+        Row: CurrencyContract;
+        Insert: CurrencyContract;
+        Update: Partial<Omit<CurrencyContract, "code">>;
+        Relationships: [];
+      };
+      country_currency_defaults: {
+        Row: { country_code: string; currency_code: string };
+        Insert: { country_code: string; currency_code: string };
+        Update: { currency_code?: string };
+        Relationships: [];
+      };
+      transaction_mutations: {
+        Row: TransactionMutationRow;
+        Insert: Omit<TransactionMutationRow, "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<TransactionMutationRow>;
         Relationships: [];
       };
     };
@@ -84,8 +171,25 @@ export type Database = {
           p_category_id?: string | null;
           p_transaction_date?: string | null;
           p_source?: TransactionSource;
+          p_workspace_id?: string | null;
+          p_account_id?: string | null;
+          p_currency_code?: string | null;
+          p_base_currency_code?: string | null;
+          p_exchange_rate?: number | null;
         };
         Returns: TransactionRecord[];
+      };
+      is_workspace_member: {
+        Args: { p_workspace_id: string };
+        Returns: boolean;
+      };
+      is_workspace_owner: {
+        Args: { p_workspace_id: string };
+        Returns: boolean;
+      };
+      set_personal_workspace_currency: {
+        Args: { p_workspace_id: string; p_currency_code: string };
+        Returns: WorkspaceContract[];
       };
     };
     Enums: Record<string, never>;

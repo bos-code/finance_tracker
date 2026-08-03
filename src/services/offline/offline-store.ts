@@ -6,22 +6,31 @@ import type {
   TransactionView,
 } from "@/contracts/backend";
 import {
+  applyTransactionQueueScope,
   enqueuePendingOperation,
   remapPendingTransactionId,
   type PendingOp,
+  type TransactionQueueScope,
 } from "@/features/transactions/offline-queue";
 
-const STORAGE_VERSION = "v2";
-const CACHE_PREFIX = `@finance-tracker/offline/${STORAGE_VERSION}/transactions`;
-const QUEUE_PREFIX = `@finance-tracker/offline/${STORAGE_VERSION}/pending`;
+const CACHE_VERSION = "v3";
+const QUEUE_VERSION = "v2";
+const CACHE_PREFIX = `@finance-tracker/offline/${CACHE_VERSION}/transactions`;
+const QUEUE_PREFIX = `@finance-tracker/offline/${QUEUE_VERSION}/pending`;
+const LEGACY_CACHE_PREFIX = "@finance-tracker/offline/v2/transactions";
 const LEGACY_PENDING_OPS_KEY = "@offline_pending_ops";
 const LEGACY_MIGRATION_PREFIX =
-  `@finance-tracker/offline/${STORAGE_VERSION}/legacy-migrated`;
+  `@finance-tracker/offline/${QUEUE_VERSION}/legacy-migrated`;
 
 const locks = new Map<string, Promise<void>>();
 
-function txCacheKey(userId: string, year: number, month: number) {
-  return `${CACHE_PREFIX}/${userId}/${year}/${month}`;
+function txCacheKey(
+  userId: string,
+  workspaceId: string,
+  year: number,
+  month: number,
+) {
+  return `${CACHE_PREFIX}/${userId}/${workspaceId}/${year}/${month}`;
 }
 
 function pendingOpsKey(userId: string) {
@@ -96,12 +105,29 @@ function normalizeTransaction(value: unknown): TransactionView | null {
   return {
     id: row.id,
     user_id: row.user_id,
+    workspace_id:
+      typeof row.workspace_id === "string" ? row.workspace_id : "",
+    account_id: typeof row.account_id === "string" ? row.account_id : "",
     type: row.type,
     amount: row.amount,
     note: typeof row.note === "string" ? row.note : "",
     category_id:
       typeof row.category_id === "string" ? row.category_id : "other",
     transaction_date: row.transaction_date,
+    currency_code:
+      typeof row.currency_code === "string" ? row.currency_code : "USD",
+    base_currency_code:
+      typeof row.base_currency_code === "string"
+        ? row.base_currency_code
+        : typeof row.currency_code === "string"
+          ? row.currency_code
+          : "USD",
+    base_amount:
+      typeof row.base_amount === "number" ? row.base_amount : row.amount,
+    exchange_rate:
+      typeof row.exchange_rate === "number" && row.exchange_rate > 0
+        ? row.exchange_rate
+        : 1,
     idempotency_key:
       typeof row.idempotency_key === "string" ? row.idempotency_key : null,
     lifecycle: [
@@ -154,21 +180,39 @@ function dedupeTransactions(values: unknown[]): TransactionView[] {
 
 async function readCachedMonthRaw(
   userId: string,
+  workspaceId: string,
   year: number,
   month: number,
 ) {
-  const raw = await AsyncStorage.getItem(txCacheKey(userId, year, month));
-  return dedupeTransactions(parseJsonArray(raw));
+  const key = txCacheKey(userId, workspaceId, year, month);
+  const raw = await AsyncStorage.getItem(key);
+  if (raw) return dedupeTransactions(parseJsonArray(raw));
+
+  const legacyRaw = await AsyncStorage.getItem(
+    `${LEGACY_CACHE_PREFIX}/${userId}/${year}/${month}`,
+  );
+  const migrated = dedupeTransactions(parseJsonArray(legacyRaw))
+    .filter(
+      (transaction) =>
+        !transaction.workspace_id || transaction.workspace_id === workspaceId,
+    )
+    .map((transaction) => ({
+      ...transaction,
+      workspace_id: transaction.workspace_id || workspaceId,
+    }));
+  if (legacyRaw) await AsyncStorage.setItem(key, JSON.stringify(migrated));
+  return migrated;
 }
 
 async function writeCachedMonthRaw(
   userId: string,
+  workspaceId: string,
   year: number,
   month: number,
   transactions: TransactionView[],
 ) {
   await AsyncStorage.setItem(
-    txCacheKey(userId, year, month),
+    txCacheKey(userId, workspaceId, year, month),
     JSON.stringify(dedupeTransactions(transactions)),
   );
 }
@@ -185,13 +229,19 @@ function visibleTransactions(transactions: TransactionView[]) {
 /** Stores a server snapshot without overwriting queued local changes. */
 export async function setCachedTransactions(
   userId: string,
+  workspaceId: string,
   year: number,
   month: number,
   transactions: TransactionView[],
 ): Promise<void> {
-  const key = txCacheKey(userId, year, month);
+  const key = txCacheKey(userId, workspaceId, year, month);
   await withKeyLock(key, async () => {
-    const current = await readCachedMonthRaw(userId, year, month);
+    const current = await readCachedMonthRaw(
+      userId,
+      workspaceId,
+      year,
+      month,
+    );
     const pending = current.filter(
       (transaction) => transaction.sync_state !== "synced",
     );
@@ -202,20 +252,35 @@ export async function setCachedTransactions(
       ]),
     );
     for (const transaction of pending) merged.set(transaction.id, transaction);
-    await writeCachedMonthRaw(userId, year, month, [...merged.values()]);
+    await writeCachedMonthRaw(
+      userId,
+      workspaceId,
+      year,
+      month,
+      [...merged.values()],
+    );
   });
 }
 
 export async function getCachedTransactions(
   userId: string,
+  workspaceId: string,
   year: number,
   month: number,
 ): Promise<TransactionView[] | null> {
   try {
-    const key = txCacheKey(userId, year, month);
+    const key = txCacheKey(userId, workspaceId, year, month);
     const raw = await AsyncStorage.getItem(key);
-    if (!raw) return null;
-    return visibleTransactions(dedupeTransactions(parseJsonArray(raw)));
+    if (raw) {
+      return visibleTransactions(dedupeTransactions(parseJsonArray(raw)));
+    }
+    const migrated = await readCachedMonthRaw(
+      userId,
+      workspaceId,
+      year,
+      month,
+    );
+    return migrated.length > 0 ? visibleTransactions(migrated) : null;
   } catch {
     return null;
   }
@@ -223,13 +288,28 @@ export async function getCachedTransactions(
 
 export async function getCachedTransactionsByYear(
   userId: string,
+  workspaceId: string,
   year: number,
 ) {
   try {
-    const prefix = `${CACHE_PREFIX}/${userId}/${year}/`;
+    const prefix = `${CACHE_PREFIX}/${userId}/${workspaceId}/${year}/`;
     const keys = (await AsyncStorage.getAllKeys()).filter((key) =>
       key.startsWith(prefix),
     );
+    if (keys.length === 0) {
+      const legacyPrefix = `${LEGACY_CACHE_PREFIX}/${userId}/${year}/`;
+      const legacyKeys = (await AsyncStorage.getAllKeys()).filter((key) =>
+        key.startsWith(legacyPrefix),
+      );
+      if (legacyKeys.length === 0) return [];
+      for (const legacyKey of legacyKeys) {
+        const month = Number(legacyKey.slice(legacyPrefix.length));
+        if (Number.isInteger(month) && month >= 1 && month <= 12) {
+          await readCachedMonthRaw(userId, workspaceId, year, month);
+        }
+      }
+      return getCachedTransactionsByYear(userId, workspaceId, year);
+    }
     const rows = await AsyncStorage.multiGet(keys);
     return visibleTransactions(
       dedupeTransactions(
@@ -243,19 +323,32 @@ export async function getCachedTransactionsByYear(
 
 export async function patchCachedMonth(
   userId: string,
+  workspaceId: string,
   year: number,
   month: number,
   patch: (transactions: TransactionView[]) => TransactionView[],
 ): Promise<void> {
-  const key = txCacheKey(userId, year, month);
+  const key = txCacheKey(userId, workspaceId, year, month);
   await withKeyLock(key, async () => {
-    const current = await readCachedMonthRaw(userId, year, month);
-    await writeCachedMonthRaw(userId, year, month, patch(current));
+    const current = await readCachedMonthRaw(
+      userId,
+      workspaceId,
+      year,
+      month,
+    );
+    await writeCachedMonthRaw(
+      userId,
+      workspaceId,
+      year,
+      month,
+      patch(current),
+    );
   });
 }
 
 export async function replaceCachedTransaction(
   userId: string,
+  workspaceId: string,
   temporaryId: string,
   temporaryDate: string,
   saved: TransactionView,
@@ -265,37 +358,55 @@ export async function replaceCachedTransaction(
   const replacement = { ...saved, sync_error_code: undefined };
 
   if (oldYear === newYear && oldMonth === newMonth) {
-    await patchCachedMonth(userId, oldYear, oldMonth, (transactions) => [
-      ...transactions.filter(
-        (transaction) =>
-          transaction.id !== temporaryId && transaction.id !== saved.id,
-      ),
-      replacement,
-    ]);
+    await patchCachedMonth(
+      userId,
+      workspaceId,
+      oldYear,
+      oldMonth,
+      (transactions) => [
+        ...transactions.filter(
+          (transaction) =>
+            transaction.id !== temporaryId && transaction.id !== saved.id,
+        ),
+        replacement,
+      ],
+    );
     return;
   }
 
-  await patchCachedMonth(userId, oldYear, oldMonth, (transactions) =>
-    transactions.filter(
-      (transaction) =>
-        transaction.id !== temporaryId && transaction.id !== saved.id,
-    ),
+  await patchCachedMonth(
+    userId,
+    workspaceId,
+    oldYear,
+    oldMonth,
+    (transactions) =>
+      transactions.filter(
+        (transaction) =>
+          transaction.id !== temporaryId && transaction.id !== saved.id,
+      ),
   );
-  await patchCachedMonth(userId, newYear, newMonth, (transactions) => [
-    ...transactions.filter((transaction) => transaction.id !== saved.id),
-    replacement,
-  ]);
+  await patchCachedMonth(
+    userId,
+    workspaceId,
+    newYear,
+    newMonth,
+    (transactions) => [
+      ...transactions.filter((transaction) => transaction.id !== saved.id),
+      replacement,
+    ],
+  );
 }
 
 export async function setCachedTransactionSyncState(
   userId: string,
+  workspaceId: string,
   transactionDate: string,
   transactionId: string,
   syncState: TransactionView["sync_state"],
   errorCode?: BackendErrorCode,
 ) {
   const [year, month] = transactionDate.split("-").map(Number);
-  await patchCachedMonth(userId, year, month, (transactions) =>
+  await patchCachedMonth(userId, workspaceId, year, month, (transactions) =>
     transactions.map((transaction) =>
       transaction.id === transactionId
         ? {
@@ -382,11 +493,26 @@ function normalizePendingOperation(
       payload: {
         data: {
           user_id: expectedUserId,
+          ...(typeof createData.workspace_id === "string"
+            ? { workspace_id: createData.workspace_id }
+            : {}),
+          ...(typeof createData.account_id === "string"
+            ? { account_id: createData.account_id }
+            : {}),
           type: createData.type,
           amount: createData.amount,
           note: typeof createData.note === "string" ? createData.note : "",
           category_id: createData.category_id,
           transaction_date: createData.transaction_date,
+          ...(typeof createData.currency_code === "string"
+            ? { currency_code: createData.currency_code }
+            : {}),
+          ...(typeof createData.base_currency_code === "string"
+            ? { base_currency_code: createData.base_currency_code }
+            : {}),
+          ...(typeof createData.exchange_rate === "number"
+            ? { exchange_rate: createData.exchange_rate }
+            : {}),
         },
         source: payload.source ?? "mobile_app",
         tempId:
@@ -406,6 +532,8 @@ function normalizePendingOperation(
         ? payload.transactionDate
         : "",
     transactionId: payload.transactionId,
+    workspaceId:
+      typeof payload.workspaceId === "string" ? payload.workspaceId : "",
   };
 
   if (opType === "update") {
@@ -470,6 +598,17 @@ export async function getPendingOps(userId: string): Promise<PendingOp[]> {
     .map((value) => normalizePendingOperation(value, userId))
     .filter((value): value is PendingOp => value != null)
     .sort((left, right) => left.createdAt - right.createdAt);
+}
+
+export function scopePendingOps(
+  userId: string,
+  scope: TransactionQueueScope,
+) {
+  return mutatePendingOps(userId, (operations) =>
+    operations.map((operation) =>
+      applyTransactionQueueScope(operation, scope),
+    ),
+  );
 }
 
 export async function addPendingOp(userId: string, operation: PendingOp) {

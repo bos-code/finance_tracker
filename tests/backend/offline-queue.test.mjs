@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyTransactionQueueScope,
   enqueuePendingOperation,
   isOperationDue,
   nextRetryTime,
@@ -29,12 +30,17 @@ function create(id = "create-1", tempId = "local-1") {
     opType: "create",
     payload: {
       data: {
+        account_id: "account-1",
         amount: 25,
+        base_currency_code: "USD",
         category_id: "food",
+        currency_code: "USD",
+        exchange_rate: 1,
         note: "Lunch",
         transaction_date: "2026-08-03",
         type: "Expenditure",
         user_id: "user-1",
+        workspace_id: "workspace-1",
       },
       source: "mobile_app",
       tempId,
@@ -51,6 +57,7 @@ function update(id = "update-1", transactionId = "local-1", data = {}) {
       expectedRevision: 1,
       transactionDate: "2026-08-03",
       transactionId,
+      workspaceId: "workspace-1",
     },
   };
 }
@@ -63,6 +70,7 @@ function remove(id = "delete-1", transactionId = "local-1") {
       expectedRevision: 1,
       transactionDate: "2026-08-03",
       transactionId,
+      workspaceId: "workspace-1",
     },
   };
 }
@@ -122,6 +130,36 @@ test("server IDs remap dependent operations without touching the create", () => 
   assert.equal(queue[0].payload.tempId, "local-1");
   assert.equal(queue[1].payload.transactionId, "server-1");
   assert.equal(queue[2].payload.transactionId, "server-1");
+});
+
+test("Stage 2 operations receive Stage 3 scope without changing identity", () => {
+  const legacyCreate = create();
+  delete legacyCreate.payload.data.account_id;
+  delete legacyCreate.payload.data.base_currency_code;
+  delete legacyCreate.payload.data.currency_code;
+  delete legacyCreate.payload.data.exchange_rate;
+  delete legacyCreate.payload.data.workspace_id;
+
+  const scopedCreate = applyTransactionQueueScope(legacyCreate, {
+    accountId: "account-3",
+    currencyCode: "NGN",
+    workspaceId: "workspace-3",
+  });
+  assert.equal(scopedCreate.idempotencyKey, legacyCreate.idempotencyKey);
+  assert.equal(scopedCreate.payload.data.account_id, "account-3");
+  assert.equal(scopedCreate.payload.data.workspace_id, "workspace-3");
+  assert.equal(scopedCreate.payload.data.currency_code, "NGN");
+  assert.equal(scopedCreate.payload.data.base_currency_code, "NGN");
+  assert.equal(scopedCreate.payload.data.exchange_rate, 1);
+
+  const legacyUpdate = update("update-legacy", "server-1", { amount: 50 });
+  legacyUpdate.payload.workspaceId = "";
+  const scopedUpdate = applyTransactionQueueScope(legacyUpdate, {
+    accountId: "account-3",
+    currencyCode: "NGN",
+    workspaceId: "workspace-3",
+  });
+  assert.equal(scopedUpdate.payload.workspaceId, "workspace-3");
 });
 
 test("retry delay grows exponentially and caps at five minutes", () => {

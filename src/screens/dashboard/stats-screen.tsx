@@ -10,6 +10,7 @@ import { useTransactions } from "@/hooks/use-transactions";
 import {
   calcCategoryBreakdown,
   calcMonthSummary,
+  transactionsForBaseCurrency,
   type Transaction,
   type TransactionType,
 } from "@/services/supabase/transaction-service";
@@ -212,8 +213,17 @@ export function StatsScreen() {
 
   const currentQuery = useTransactions(year, queryMonth);
   const previousQuery = useTransactions(previousYear, previousMonth);
-  const transactions = currentQuery.data ?? EMPTY_TRANSACTIONS;
-  const previousTransactions = previousQuery.data ?? EMPTY_TRANSACTIONS;
+  const allTransactions = currentQuery.data ?? EMPTY_TRANSACTIONS;
+  const allPreviousTransactions = previousQuery.data ?? EMPTY_TRANSACTIONS;
+  const transactions = useMemo(
+    () => transactionsForBaseCurrency(allTransactions, currency.code),
+    [allTransactions, currency.code],
+  );
+  const previousTransactions = useMemo(
+    () =>
+      transactionsForBaseCurrency(allPreviousTransactions, currency.code),
+    [allPreviousTransactions, currency.code],
+  );
 
   const summary = useMemo(
     () => calcMonthSummary(transactions),
@@ -316,7 +326,7 @@ export function StatsScreen() {
         }
         showsVerticalScrollIndicator={false}>
         <PageHeading
-          description="Read the pattern behind the ledger. Every figure below is calculated from recorded movement."
+          description={`Read the pattern behind the ledger. Figures use only records stored in the ${currency.code} reporting base.`}
           eyebrow="ANALYSIS / PERSONAL"
           title="Insights"
         />

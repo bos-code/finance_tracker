@@ -5,18 +5,25 @@ import {
   calcCategoryBreakdown,
   calcDailyTotals,
   calcMonthSummary,
+  transactionsForBaseCurrency,
 } from "../../src/features/transactions/analytics.ts";
 
 function transaction(overrides = {}) {
   return {
     amount: 1,
+    account_id: "account-1",
+    base_amount: 1,
+    base_currency_code: "USD",
     category_id: "other",
     created_at: "2026-08-03T12:00:00.000Z",
     id: crypto.randomUUID(),
+    currency_code: "USD",
+    exchange_rate: 1,
     note: "",
     transaction_date: "2026-08-03",
     type: "Expenditure",
     user_id: "user-1",
+    workspace_id: "workspace-1",
     ...overrides,
   };
 }
@@ -42,6 +49,30 @@ test("month summary derives totals only from supplied records", () => {
     totalExpenditure: 150,
     totalRevenue: 250,
   });
+});
+
+test("reporting excludes incompatible bases and uses stored base amounts", () => {
+  const normalized = transactionsForBaseCurrency(
+    [
+      transaction({
+        amount: 1_000,
+        base_amount: 650,
+        base_currency_code: "USD",
+        currency_code: "EUR",
+      }),
+      transaction({
+        amount: 20_000,
+        base_amount: 20_000,
+        base_currency_code: "NGN",
+        currency_code: "NGN",
+      }),
+    ],
+    "USD",
+  );
+
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].amount, 650);
+  assert.equal(normalized[0].currency_code, "EUR");
 });
 
 test("daily totals keep revenue and expenditure separate", () => {

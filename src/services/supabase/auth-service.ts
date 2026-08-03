@@ -13,11 +13,22 @@ export async function supabaseSignIn(email: string, password: string) {
   return data;
 }
 
-export async function supabaseSignUp(email: string, password: string, fullName?: string) {
+export async function supabaseSignUp(
+  email: string,
+  password: string,
+  metadata?: {
+    country_code?: string;
+    currency_code?: string;
+    currency_detection_source?: "device_region" | "manual" | "system_default";
+    full_name?: string;
+    locale?: string;
+    timezone?: string;
+  },
+) {
   const { data, error } = await supabaseClient.auth.signUp({
     email,
     password,
-    options: fullName ? { data: { full_name: fullName } } : undefined,
+    options: metadata ? { data: metadata } : undefined,
   });
 
   if (error) {

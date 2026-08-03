@@ -3,8 +3,9 @@
 ## Current state
 
 Timestamped migrations now live under `supabase/migrations/`. The baseline
-captures the previously manual transaction/goal schema, and the next migration
-adds transaction reliability without dropping existing IDs or rows. This
+captures the previously manual transaction/goal schema; the following
+migrations add transaction reliability and the workspace/account/currency
+foundation without dropping existing IDs or rows. This
 workspace is not linked to a Supabase project and has no local Supabase CLI or
 Postgres runtime, so repository checks are static; apply and integration-test
 the migrations in development before production.
@@ -64,6 +65,24 @@ PostgreSQL schema rollback is not assumed to be a blind down migration.
    revision conflict, and soft delete with two authenticated users.
 5. Promote the same ordered migrations and client build through preview before
    production.
+
+## Stage 3 workspace/currency sequence
+
+1. Apply `20260803000300_workspace_currency_foundation.sql` only after the
+   Stage 2 reliability migration is verified.
+2. Confirm every existing Auth user received one profile, one personal
+   workspace, one owner membership, and one active default Cash account.
+3. Confirm every existing transaction and goal received a valid workspace;
+   every transaction must also receive an account, original/base currency,
+   rate `1`, and unchanged base amount.
+4. Test signup with detected, manually overridden, and system-default currency
+   metadata. Test a later manual currency change and verify historical
+   transaction currency/base fields remain byte-for-byte unchanged.
+5. Test reads and every allowed write with two users and verify workspace RLS
+   isolation before deploying the Stage 3 client.
+6. Promote the ordered migrations and app build together through preview, then
+   retain the older-client compatibility policies until the minimum-version
+   cutover is measured and approved.
 
 ## Verification checklist
 

@@ -3,6 +3,20 @@ export type DisplayCurrency = {
   symbol: string;
 };
 
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+  KRW: "₩",
+  NGN: "₦",
+  USD: "$",
+  VND: "₫",
+};
+
+export function displayCurrencyForCode(code: string): DisplayCurrency {
+  return { code, symbol: CURRENCY_SYMBOLS[code] ?? `${code} ` };
+}
+
 const formatterCache = new Map<string, Intl.NumberFormat>();
 
 function formatterFor(currency: DisplayCurrency, hasFraction: boolean) {

@@ -29,6 +29,7 @@ export {
   calcCategoryBreakdown,
   calcDailyTotals,
   calcMonthSummary,
+  transactionsForBaseCurrency,
 } from "@/features/transactions/analytics";
 export type {
   CategoryBreakdown,
@@ -51,6 +52,7 @@ type WriteOptions = {
   queueOnNetworkFailure?: boolean;
   transactionDate?: string;
   userId?: string;
+  workspaceId?: string;
 };
 
 function transactionsTable() {
@@ -113,6 +115,7 @@ async function mutateTransaction({
   source?: TransactionSource;
   transactionId?: string | null;
 }) {
+  const scopedData = data as Partial<TransactionInsert> | undefined;
   const { data: saved, error } = await supabaseClient
     .rpc("mutate_transaction", {
       p_operation: operation,
@@ -125,6 +128,11 @@ async function mutateTransaction({
       p_category_id: data?.category_id ?? null,
       p_transaction_date: data?.transaction_date ?? null,
       p_source: source,
+      p_workspace_id: scopedData?.workspace_id ?? null,
+      p_account_id: data?.account_id ?? null,
+      p_currency_code: data?.currency_code ?? null,
+      p_base_currency_code: scopedData?.base_currency_code ?? null,
+      p_exchange_rate: data?.exchange_rate ?? null,
     })
     .single();
 
@@ -141,6 +149,7 @@ async function createQueuedTransaction(
   const id = `local_${identity.id.slice(3)}`;
   const localTransaction: Transaction = {
     ...data,
+    base_amount: Number((data.amount * data.exchange_rate).toFixed(2)),
     created_at: createdAt,
     deleted_at: null,
     id,
@@ -153,10 +162,16 @@ async function createQueuedTransaction(
   };
   const [year, month] = parseDateParts(data.transaction_date);
 
-  await patchCachedMonth(data.user_id, year, month, (transactions) => [
-    ...transactions.filter((transaction) => transaction.id !== id),
-    localTransaction,
-  ]);
+  await patchCachedMonth(
+    data.user_id,
+    data.workspace_id,
+    year,
+    month,
+    (transactions) => [
+      ...transactions.filter((transaction) => transaction.id !== id),
+      localTransaction,
+    ],
+  );
 
   const operation: PendingCreate = {
     ...pendingBase("create", data.user_id, identity),
@@ -192,10 +207,16 @@ export async function createTransaction(
       source,
     });
     const [year, month] = parseDateParts(saved.transaction_date);
-    await patchCachedMonth(saved.user_id, year, month, (transactions) => [
-      ...transactions.filter((transaction) => transaction.id !== saved.id),
-      saved,
-    ]);
+    await patchCachedMonth(
+      saved.user_id,
+      saved.workspace_id,
+      year,
+      month,
+      (transactions) => [
+        ...transactions.filter((transaction) => transaction.id !== saved.id),
+        saved,
+      ],
+    );
     return saved;
   } catch (error) {
     const backendError = toBackendError(error, "TRANSACTION_WRITE_FAILED");
@@ -220,13 +241,14 @@ export async function deleteTransaction(
     idempotencyKey: options.idempotencyKey ?? generated.idempotencyKey,
   };
   const userId = options.userId ?? options.current?.user_id;
+  const workspaceId = options.workspaceId ?? options.current?.workspace_id;
   const transactionDate =
     options.transactionDate ?? options.current?.transaction_date;
   const expectedRevision =
     options.expectedRevision ?? options.current?.revision ?? null;
 
   const queueDelete = async () => {
-    if (!userId || !transactionDate) {
+    if (!userId || !workspaceId || !transactionDate) {
       throw new BackendError({
         code: "VALIDATION_FAILED",
         message: "Offline deletion needs the transaction owner and date.",
@@ -239,11 +261,12 @@ export async function deleteTransaction(
         expectedRevision,
         transactionDate,
         transactionId: id,
+        workspaceId,
       },
     };
     const queue = await addPendingOp(userId, operation);
     const [year, month] = parseDateParts(transactionDate);
-    await patchCachedMonth(userId, year, month, (transactions) =>
+    await patchCachedMonth(userId, workspaceId, year, month, (transactions) =>
       id.startsWith("local_") && !queue.some((item) => item.id === operation.id)
         ? transactions.filter((transaction) => transaction.id !== id)
         : transactions.map((transaction) =>
@@ -268,9 +291,9 @@ export async function deleteTransaction(
       operation: "delete",
       transactionId: id,
     });
-    if (userId && transactionDate) {
+    if (userId && workspaceId && transactionDate) {
       const [year, month] = parseDateParts(transactionDate);
-      await patchCachedMonth(userId, year, month, (transactions) =>
+      await patchCachedMonth(userId, workspaceId, year, month, (transactions) =>
         transactions.filter((transaction) => transaction.id !== saved.id),
       );
     }
@@ -301,13 +324,15 @@ export async function updateTransaction(
     idempotencyKey: normalized.idempotencyKey ?? generated.idempotencyKey,
   };
   const userId = normalized.userId ?? normalized.current?.user_id;
+  const workspaceId =
+    normalized.workspaceId ?? normalized.current?.workspace_id;
   const transactionDate =
     normalized.transactionDate ?? normalized.current?.transaction_date;
   const expectedRevision =
     normalized.expectedRevision ?? normalized.current?.revision ?? null;
 
   const queueUpdate = async () => {
-    if (!userId || !transactionDate || !normalized.current) {
+    if (!userId || !workspaceId || !transactionDate || !normalized.current) {
       throw new BackendError({
         code: "VALIDATION_FAILED",
         message: "Offline editing needs the current transaction snapshot.",
@@ -321,6 +346,7 @@ export async function updateTransaction(
         expectedRevision,
         transactionDate,
         transactionId: id,
+        workspaceId,
       },
     };
     await addPendingOp(userId, operation);
@@ -331,7 +357,13 @@ export async function updateTransaction(
       sync_state: "queued",
       updated_at: new Date().toISOString(),
     };
-    await replaceCachedTransaction(userId, id, transactionDate, updated);
+    await replaceCachedTransaction(
+      userId,
+      workspaceId,
+      id,
+      transactionDate,
+      updated,
+    );
     return updated;
   };
 
@@ -345,8 +377,14 @@ export async function updateTransaction(
       operation: "update",
       transactionId: id,
     });
-    if (userId && transactionDate) {
-      await replaceCachedTransaction(userId, id, transactionDate, saved);
+    if (userId && workspaceId && transactionDate) {
+      await replaceCachedTransaction(
+        userId,
+        workspaceId,
+        id,
+        transactionDate,
+        saved,
+      );
     }
     return saved;
   } catch (error) {
@@ -364,14 +402,15 @@ export async function updateTransaction(
 /** Reads a month or year while preserving local work over server snapshots. */
 export async function getTransactionsByMonth(
   userId: string,
+  workspaceId: string,
   year: number,
   month?: number,
   isOnline = true,
 ): Promise<Transaction[]> {
   if (!isOnline) {
     return month
-      ? ((await getCachedTransactions(userId, year, month)) ?? [])
-      : getCachedTransactionsByYear(userId, year);
+      ? ((await getCachedTransactions(userId, workspaceId, year, month)) ?? [])
+      : getCachedTransactionsByYear(userId, workspaceId, year);
   }
 
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -384,6 +423,7 @@ export async function getTransactionsByMonth(
   const { data, error } = await transactionsTable()
     .select("*")
     .eq("user_id", userId)
+    .eq("workspace_id", workspaceId)
     .neq("lifecycle", "deleted")
     .gte("transaction_date", start)
     .lte("transaction_date", end)
@@ -393,8 +433,8 @@ export async function getTransactionsByMonth(
     const backendError = toBackendError(error, "TRANSACTION_READ_FAILED");
     if (backendError.code === "NETWORK_UNAVAILABLE") {
       const cached = month
-        ? await getCachedTransactions(userId, year, month)
-        : await getCachedTransactionsByYear(userId, year);
+        ? await getCachedTransactions(userId, workspaceId, year, month)
+        : await getCachedTransactionsByYear(userId, workspaceId, year);
       if (cached !== null) return cached;
     }
     throw backendError;
@@ -402,15 +442,28 @@ export async function getTransactionsByMonth(
 
   const transactions = (data ?? []).map(toSyncedTransaction);
   if (month) {
-    await setCachedTransactions(userId, year, month, transactions);
-    return (await getCachedTransactions(userId, year, month)) ?? transactions;
+    await setCachedTransactions(
+      userId,
+      workspaceId,
+      year,
+      month,
+      transactions,
+    );
+    return (
+      (await getCachedTransactions(userId, workspaceId, year, month)) ??
+      transactions
+    );
   }
 
   const months = new Set<number>();
   for (const transaction of transactions) {
     months.add(parseDateParts(transaction.transaction_date)[1]);
   }
-  const pending = await getCachedTransactionsByYear(userId, year);
+  const pending = await getCachedTransactionsByYear(
+    userId,
+    workspaceId,
+    year,
+  );
   for (const transaction of pending) {
     if (transaction.sync_state !== "synced") {
       months.add(parseDateParts(transaction.transaction_date)[1]);
@@ -419,6 +472,7 @@ export async function getTransactionsByMonth(
   for (const targetMonth of months) {
     await setCachedTransactions(
       userId,
+      workspaceId,
       year,
       targetMonth,
       transactions.filter(
@@ -427,5 +481,5 @@ export async function getTransactionsByMonth(
       ),
     );
   }
-  return getCachedTransactionsByYear(userId, year);
+  return getCachedTransactionsByYear(userId, workspaceId, year);
 }

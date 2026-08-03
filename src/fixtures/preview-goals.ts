@@ -1,5 +1,8 @@
 import type { Goal, GoalInsert, GoalUpdate } from "@/types/domain/goal";
-import { PREVIEW_USER } from "@/fixtures/preview-data";
+import {
+  PREVIEW_USER,
+  PREVIEW_WORKSPACE_ID,
+} from "@/fixtures/preview-data";
 
 function futureDate(daysFromNow: number) {
   const date = new Date();
@@ -13,6 +16,7 @@ let previewGoals: Goal[] = [
   {
     id: "preview-goal-reserve",
     user_id: PREVIEW_USER.uid,
+    workspace_id: PREVIEW_WORKSPACE_ID,
     title: "Emergency reserve",
     goal_type: "saving",
     target_amount: 12000,
@@ -30,6 +34,7 @@ let previewGoals: Goal[] = [
   {
     id: "preview-goal-studio",
     user_id: PREVIEW_USER.uid,
+    workspace_id: PREVIEW_WORKSPACE_ID,
     title: "Studio move",
     goal_type: "item",
     target_amount: 6500,
@@ -47,6 +52,7 @@ let previewGoals: Goal[] = [
   {
     id: "preview-goal-laptop",
     user_id: PREVIEW_USER.uid,
+    workspace_id: PREVIEW_WORKSPACE_ID,
     title: "Laptop refresh",
     goal_type: "item",
     target_amount: 2400,

@@ -2,8 +2,8 @@
 
 ## Status
 
-This document is the Stage 1 contract for Finance Tracker. It describes the
-existing backend and the decisions that govern Stages 2–10 in
+This document records the implemented backend through Stage 3. It describes
+the existing backend and the decisions that govern Stages 4–10 in
 `PLAN_BACKEND.md`.
 
 ## Architectural decisions
@@ -12,7 +12,7 @@ existing backend and the decisions that govern Stages 2–10 in
 | --- | --- | --- |
 | Service shape | Supabase backend-as-a-service plus feature-first TypeScript Edge Functions | Preserves the working mobile integration while giving Telegram, parsing, receipts, and scheduled work trusted server boundaries. |
 | Database | Supabase PostgreSQL | The current schema, RLS, Auth identities, and client all depend on Postgres; H2 is not part of this architecture. |
-| Client boundary | Typed Supabase client, transaction mutation RPC, and React Query | Reads remain owner-scoped through RLS; financial writes cross one idempotent, revision-aware database boundary. |
+| Client boundary | Typed Supabase client, transaction mutation RPC, and React Query | Reads are workspace-scoped through RLS; financial writes cross one idempotent, revision-aware database boundary. |
 | Authentication | Supabase Auth JWT plus database RLS | The mobile SDK manages session refresh and `auth.uid()` is the final row-isolation boundary. |
 | Realtime | Supabase Postgres Changes/Broadcast in Stage 9 | Realtime is valuable after mutation idempotency and workspace scoping are stable. |
 | Errors | `BackendError` plus the canonical `ApiResult` envelope | Provider details stay internal and every user-facing failure has a stable code, message, and retry policy. |
@@ -23,19 +23,22 @@ existing backend and the decisions that govern Stages 2–10 in
 1. Expo restores a Supabase session from platform storage.
 2. React Query invokes the transaction or goal service.
 3. The typed Supabase client sends the current JWT to PostgREST.
-4. PostgreSQL RLS limits reads with `auth.uid() = user_id`; transaction writes
-   use `mutate_transaction` with the same explicit identity check.
-5. Successful monthly transaction reads warm a user-and-month AsyncStorage
+4. The Workspace provider restores or fetches the signed-in user's personal
+   workspace, membership boundary, default account, and base currency.
+5. PostgreSQL RLS limits reads by workspace membership; transaction writes use
+   `mutate_transaction` with explicit authenticated identity and membership
+   checks.
+6. Successful monthly transaction reads warm a user/workspace/month AsyncStorage
    cache.
-6. Offline transaction writes create a local record and a versioned,
+7. Offline transaction writes create a local record and a versioned,
    user-scoped pending operation for later synchronization.
-7. The database mutation journal makes create, update, and soft-delete retries
+8. The database mutation journal makes create, update, and soft-delete retries
    idempotent; revision checks surface cross-device conflicts.
 
-Direct table reads remain appropriate for current owner-scoped data. The Stage
-2 client writes through the database RPC. Existing owner-scoped write policies
-remain temporarily for installed-client compatibility and must be revoked only
-after a minimum-version cutover. Trusted work that
+Direct table reads remain appropriate for current workspace-scoped data. The
+Stage 3 client writes through the database RPC. Existing owner-scoped write
+policies remain temporarily for installed-client compatibility and must be
+revoked only after a minimum-version cutover. Trusted work that
 requires service-role access, provider secrets, webhook verification, AI calls,
 file validation, or broader cross-row orchestration belongs in a Supabase Edge
 Function.
@@ -54,22 +57,33 @@ Function.
 No UI type, fixture, Telegram payload, or local cache may independently invent
 a transaction lifecycle value or backend error code.
 
-## Canonical transaction model
+## Canonical workspace and transaction model
 
-The Stage 2 migration preserves owner, type, amount, note, category, and local
-calendar date, and adds:
+Each Auth user owns one current `Personal Finance` workspace with an owner
+membership and default Cash account. The workspace holds the confirmed base
+currency; profiles hold stable signup-region context. Manual currency changes
+update the workspace and default account atomically but do not mutate prior
+financial rows.
+
+The Stage 2–3 migrations preserve owner, type, amount, note, category, and local
+calendar date, and add:
 
 - lifecycle: `draft`, `pending_confirmation`, `confirmed`, `needs_review`,
   `reversed`, `deleted`
 - source: `mobile_app`, `telegram`, `whatsapp`, `web_dashboard`, `import`,
   `system`
+- scope: `workspace_id` and `account_id`
+- money identity: `currency_code`, `base_currency_code`, `base_amount`, and
+  `exchange_rate`
 - synchronization: `local_only`, `queued`, `syncing`, `synced`, `failed`,
   `conflict`
 
 Synchronization state remains device-local because it describes a particular
-replica. Lifecycle, source, revision, deletion time, and idempotency identity
-are database-backed. The repository cannot claim a remote project has these
-columns until the timestamped migrations are applied there.
+replica. Scope, currencies, lifecycle, source, revision, deletion time, and
+idempotency identity are database-backed. New transaction rows capture the
+workspace base at write time; later workspace-currency changes preserve those
+historical values. The repository cannot claim a remote project has these
+objects until the timestamped migrations are applied there.
 
 ## Security boundaries
 

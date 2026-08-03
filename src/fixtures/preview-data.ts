@@ -9,6 +9,9 @@ export const PREVIEW_USER = {
   fullName: "Jordan Lee",
 } as const;
 
+export const PREVIEW_WORKSPACE_ID = "preview-workspace-personal";
+export const PREVIEW_ACCOUNT_ID = "preview-account-cash";
+
 function localDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -21,12 +24,34 @@ const currentDay = Math.max(1, Math.min(today.getDate(), lastDay));
 const day = (offset: number) => Math.max(1, currentDay - offset);
 
 function previewTransaction(
-  data: TransactionInsert & { id: string },
+  data: Omit<
+    TransactionInsert,
+    | "workspace_id"
+    | "account_id"
+    | "currency_code"
+    | "base_currency_code"
+    | "exchange_rate"
+  > &
+    Partial<
+      Pick<
+        TransactionInsert,
+        | "workspace_id"
+        | "account_id"
+        | "currency_code"
+        | "base_currency_code"
+        | "exchange_rate"
+      >
+    > & { id: string },
 ): Transaction {
   const timestamp = new Date().toISOString();
+  const exchangeRate = data.exchange_rate ?? 1;
   return {
     ...data,
+    account_id: data.account_id ?? PREVIEW_ACCOUNT_ID,
+    base_amount: Number((data.amount * exchangeRate).toFixed(2)),
+    base_currency_code: data.base_currency_code ?? "USD",
     created_at: timestamp,
+    currency_code: data.currency_code ?? "USD",
     deleted_at: null,
     idempotency_key: null,
     lifecycle: "confirmed",
@@ -34,6 +59,8 @@ function previewTransaction(
     source: "mobile_app",
     sync_state: "synced",
     updated_at: timestamp,
+    workspace_id: data.workspace_id ?? PREVIEW_WORKSPACE_ID,
+    exchange_rate: exchangeRate,
   };
 }
 
