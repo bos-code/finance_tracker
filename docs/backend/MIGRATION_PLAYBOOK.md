@@ -1,12 +1,13 @@
 # Migration and Rollback Playbook
 
-## Current limitation
+## Current state
 
-`supabase/001_create_goals.sql` is a transactional, mostly idempotent baseline
-intended for manual SQL Editor execution. It is not in the directory or naming
-format expected by the Supabase CLI, and no verified rollback accompanies it.
-Stage 2 will establish `supabase/migrations/<timestamp>_<name>.sql` without
-rewriting an already-deployed production database.
+Timestamped migrations now live under `supabase/migrations/`. The baseline
+captures the previously manual transaction/goal schema, and the next migration
+adds transaction reliability without dropping existing IDs or rows. This
+workspace is not linked to a Supabase project and has no local Supabase CLI or
+Postgres runtime, so repository checks are static; apply and integration-test
+the migrations in development before production.
 
 ## Migration rules
 
@@ -53,14 +54,16 @@ PostgreSQL schema rollback is not assumed to be a blind down migration.
 
 ## Stage 2 baseline sequence
 
-1. Initialize the standard Supabase migration directory and capture the current
-   two-table schema without changing existing rows.
-2. Add transaction idempotency and sync metadata as nullable/defaulted fields.
-3. Backfill deterministic defaults.
-4. Add unique/validation constraints after the backfill.
-5. Deploy a client that writes and reads both legacy and new fields safely.
-6. Verify create, retry, offline reconciliation, update, and delete with two
-   authenticated users.
+1. Apply `20260803000100_current_schema_baseline.sql` only after reconciling it
+   with the development project's migration history.
+2. Apply `20260803000200_transaction_reliability.sql` and verify that existing
+   row counts and IDs are unchanged.
+3. Deploy the Stage 2 client, which reads the additive fields and writes through
+   `mutate_transaction`.
+4. Verify create, replay with the same key, offline reconciliation, update,
+   revision conflict, and soft delete with two authenticated users.
+5. Promote the same ordered migrations and client build through preview before
+   production.
 
 ## Verification checklist
 
@@ -69,6 +72,6 @@ PostgreSQL schema rollback is not assumed to be a blind down migration.
 - [ ] Row counts and primary keys are unchanged unless explicitly expected.
 - [ ] Two-user RLS isolation tests pass for every operation.
 - [ ] Duplicate idempotency-key tests return one financial record.
-- [ ] App TypeScript, backend tests, lint, and production export pass.
+- [x] App TypeScript, backend tests, lint, and production export pass.
 - [ ] Recovery query or forward-fix SQL is reviewed before deployment.
 - [ ] Commit and remote tree are verified before beginning the next stage.

@@ -62,7 +62,7 @@ src/
   utils/                    Date, formatting, validation helpers
   assets/                   Fonts and icons
 supabase/
-  001_create_goals.sql      Transactions + goals schema, triggers, and RLS
+  migrations/               Ordered baseline and forward schema changes
 docs/backend/               Architecture, inventory, errors, and migrations
 tests/backend/              Executable contract, SQL, error, and analytics tests
 ```
@@ -116,19 +116,27 @@ Do not enable `EXPO_PUBLIC_UI_PREVIEW` in a production build.
 
 ### 3. Set up Supabase
 
-Run the SQL in [supabase/001_create_goals.sql](supabase/001_create_goals.sql) inside the Supabase SQL Editor.
+Apply the ordered SQL files in [supabase/migrations](supabase/migrations) to a
+development Supabase project first. If the older manual baseline was already
+applied, reconcile migration history before running the captured baseline; do
+not blindly recreate production objects.
 
-That migration creates:
+The current migrations create or update:
 
 - `public.transactions`
 - `public.goals`
-- update triggers for timestamps and goal completion state
-- row-level security policies scoped to the authenticated user
+- update triggers for timestamps, goal completion state, and transaction revision
+- owner-scoped read policies
+- an authenticated idempotent transaction mutation RPC and server-only mutation journal
 
-The current SQL file predates a standard Supabase migration directory. Read
-[the migration playbook](docs/backend/MIGRATION_PLAYBOOK.md) before changing a
-deployed schema; Backend Stage 2 will establish timestamped migrations without
-dropping current rows.
+The Stage 2 app uses the mutation RPC. Owner-only legacy write policies remain
+temporarily so an older installed build is not broken by the schema rollout;
+remove them only after an explicit minimum-version cutover.
+
+Read [the migration playbook](docs/backend/MIGRATION_PLAYBOOK.md) before
+changing a deployed schema. The repository migrations are additive, but their
+live application still requires schema-history reconciliation and two-user RLS
+verification.
 
 ### 4. Add the password reset redirect
 
@@ -162,10 +170,14 @@ pnpm test:backend
 Offline support currently focuses on transactions.
 
 - New transactions can be created while offline
-- Offline updates and deletes are queued locally
+- Offline creates, updates, and deletes are serialized in a versioned,
+  user-scoped queue
 - Cached monthly transaction data is used when the network is unavailable
-- Pending operations sync automatically after the device reconnects
-- The global banner shows offline, syncing, and recently-synced states
+- Pending operations use stable idempotency keys, retry metadata, and
+  exponential backoff
+- Temporary IDs and dependent queued edits are remapped after server creation
+- Pending operations sync after app restoration and reconnection
+- The global banner and ledger show queued, syncing, failed, and conflict states
 
 Goals are currently fetched and written directly through Supabase and do not use the offline queue.
 
@@ -192,7 +204,8 @@ The repo includes EAS build profiles in [eas.json](eas.json):
 - ESLint is configured through Expo
 - React Query handles remote caching and mutation invalidation
 - The zero-dependency Node test suite covers canonical contracts, safe errors,
-  current SQL/RLS invariants, and transaction analytics
+  SQL/RLS/idempotency invariants, offline queue compaction, retry behavior, and
+  transaction analytics
 
 ## Implementation Plans
 

@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 6 — backend audit, contracts, and foundation
+**Batch:** 7 — transaction reliability and offline synchronization
 
 **Branch:** `master`
 
@@ -196,11 +196,52 @@
   contracts, API envelopes, error normalization, SQL/RLS invariants, and
   transaction analytics.
 
+### Backend Stage 2 — transaction reliability
+
+- Added a standard timestamped migration baseline for the existing
+  transactions/goals schema and an additive reliability migration.
+- Added database-backed transaction idempotency, lifecycle, source, revision,
+  and soft-deletion fields without replacing existing IDs or rows.
+- Added a server-owned `transaction_mutations` journal and authenticated
+  `mutate_transaction` RPC; repeated keys replay the first committed result
+  instead of creating a duplicate financial record, while reuse with different
+  input is rejected as a conflict.
+- Added optimistic revision checks for update/delete and stable conflict,
+  validation, and not-found error mapping.
+- Routed the Stage 2 client through the RPC boundary while intentionally
+  retaining owner-only legacy write policies for an installed-client
+  compatibility window; they can be revoked after a minimum-version cutover.
+- Replaced the global legacy pending queue with a versioned, user-scoped queue.
+  Legacy creates are migrated only when ownership is provable; ambiguous
+  legacy update/delete entries are never reassigned to a later account.
+- Serialized every queue and monthly-cache read/modify/write operation to avoid
+  AsyncStorage lost-update races.
+- Added queue compaction for local create→edit, repeated edits, create→delete,
+  and update→delete sequences.
+- Added stable idempotency keys, attempt timestamps, retry counts, last errors,
+  bounded exponential backoff, and durable queued/syncing/failed/conflict
+  states.
+- Added single-flight per-user synchronization, app-restoration sync,
+  reconnect sync, timed due-retry wakeups, and manual retry for failed work.
+- Restored the last valid locally persisted Supabase user while offline so the
+  correct user-scoped cache and queue remain available; explicit 401/403
+  verification failures still clear access.
+- Reconciled temporary IDs across dependent operations and cache rows, and
+  de-duplicated optimistic, temporary, and server records.
+- Preserved pending local edits over server refreshes and added tombstones so
+  an offline delete cannot reappear during a fetch.
+- Made failed/conflicting entries visible again in the ledger and surfaced
+  explicit status in Home, Ledger, filters, and the global retry banner.
+- Added offline year-cache reads instead of returning an unexplained empty year.
+- Expanded backend coverage from 12 to 23 tests, including compaction,
+  temporary-ID remapping, retry scheduling, conflict behavior, mutation/RLS
+  invariants, and new provider error mappings.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
 - `pnpm lint` — passed with zero errors and zero warnings.
-- `pnpm test:backend` — passed; 12 tests, zero failures.
+- `pnpm test:backend` — passed; 23 tests, zero failures.
 - Expo fixture-mode production web export — passed; all 16 routes bundled.
 - Expo normal production web export with non-secret placeholder Supabase values
   — passed; all 16 routes bundled.
@@ -215,6 +256,14 @@
   all 16 routes bundled after the SecureStore migration and shared UI rebuild.
 - Backend Stage 1 TypeScript and lint checks — passed after wiring the typed
   Supabase schema, canonical service contracts, and Edge Function boundary.
+- Backend Stage 2 TypeScript and lint checks — passed after the RPC, cache,
+  queue, sync context, and UI-state integration.
+- `pnpm test:backend` — passed; 23 tests, zero failures.
+- Backend Stage 2 normal and fixture-mode production web exports — passed; all
+  16 routes bundled in both modes.
+- The Stage 2 SQL is statically covered but has not been executed against a
+  local or linked Supabase project in this workspace; live migration, RLS, and
+  concurrent replay verification remain deployment gates.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
   headings, search/plan affordances, state copy, and orbit navigation.
 - Automated screenshot inspection is still unavailable because the workspace
@@ -225,7 +274,8 @@
 
 - Supabase authentication and storage configuration
 - transaction creation and React Query invalidation
-- offline transaction queue and reconnect synchronization
+- offline transaction queue and reconnect synchronization, now user-scoped,
+  idempotent, revision-aware, and failure-visible
 - custom amount pad, calendar, note editor, category editor, and save feedback
 - native App Lock and biometrics, now backed by the operating-system secure
   store rather than general app preferences
@@ -234,21 +284,20 @@
 
 - Backend persistence for workspace, account, connection, privacy, and
   notification settings
-- Stage 2 transaction idempotency, temporary-ID reconciliation, durable retry
-  metadata, explicit sync states, and conflict handling
 - receipt vault, review drafts, Telegram connection UI, and OCR review UI
 - new backend schemas, contracts, Edge Functions, storage policies, bot flows,
   and production hardening described in `PLAN_BACKEND.md`
+- live application of the Stage 2 migrations to development/preview/production
+  Supabase projects and device-level reconnect/concurrency validation
 
 ## Exact next batch
 
-1. Establish standard timestamped Supabase migrations without rewriting or
-   dropping the current transaction and goal rows.
-2. Add idempotency and synchronization metadata, then repair temporary-ID
-   reconciliation, duplicate cache insertion, queued dependencies, retries,
-   and failed-operation visibility.
-3. Add reliability tests, run the complete verification matrix, and push
-   Backend Stage 2 as its own checkpoint.
+1. Apply the Stage 2 migrations to a development Supabase project and run the
+   two-user RLS, duplicate replay, revision conflict, and reconnect matrix.
+2. Begin Backend Stage 3 with additive profiles, personal workspaces,
+   memberships, financial accounts, and ISO currency storage/backfill.
+3. Keep the current single-person workspace UI intact while introducing the
+   backend foundation behind it, then verify and push Stage 3 separately.
 
 ## Backend clarification
 

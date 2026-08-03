@@ -20,8 +20,25 @@ const lastDay = new Date(previewYear, previewMonth, 0).getDate();
 const currentDay = Math.max(1, Math.min(today.getDate(), lastDay));
 const day = (offset: number) => Math.max(1, currentDay - offset);
 
+function previewTransaction(
+  data: TransactionInsert & { id: string },
+): Transaction {
+  const timestamp = new Date().toISOString();
+  return {
+    ...data,
+    created_at: timestamp,
+    deleted_at: null,
+    idempotency_key: null,
+    lifecycle: "confirmed",
+    revision: 1,
+    source: "mobile_app",
+    sync_state: "synced",
+    updated_at: timestamp,
+  };
+}
+
 let previewTransactions: Transaction[] = [
-  {
+  previewTransaction({
     id: "preview-salary",
     user_id: PREVIEW_USER.uid,
     type: "Revenue",
@@ -29,9 +46,8 @@ let previewTransactions: Transaction[] = [
     note: "Monthly salary",
     category_id: "salary",
     transaction_date: localDate(previewYear, previewMonth, day(12)),
-    created_at: new Date().toISOString(),
-  },
-  {
+  }),
+  previewTransaction({
     id: "preview-studio",
     user_id: PREVIEW_USER.uid,
     type: "Expenditure",
@@ -39,9 +55,8 @@ let previewTransactions: Transaction[] = [
     note: "Studio rent",
     category_id: "house",
     transaction_date: localDate(previewYear, previewMonth, day(8)),
-    created_at: new Date().toISOString(),
-  },
-  {
+  }),
+  previewTransaction({
     id: "preview-groceries",
     user_id: PREVIEW_USER.uid,
     type: "Expenditure",
@@ -49,9 +64,8 @@ let previewTransactions: Transaction[] = [
     note: "Market and groceries",
     category_id: "eat",
     transaction_date: localDate(previewYear, previewMonth, day(3)),
-    created_at: new Date().toISOString(),
-  },
-  {
+  }),
+  previewTransaction({
     id: "preview-consulting",
     user_id: PREVIEW_USER.uid,
     type: "Revenue",
@@ -59,9 +73,8 @@ let previewTransactions: Transaction[] = [
     note: "Consulting retainer",
     category_id: "business",
     transaction_date: localDate(previewYear, previewMonth, day(1)),
-    created_at: new Date().toISOString(),
-  },
-  {
+  }),
+  previewTransaction({
     id: "preview-transport",
     user_id: PREVIEW_USER.uid,
     type: "Expenditure",
@@ -69,8 +82,7 @@ let previewTransactions: Transaction[] = [
     note: "City transport",
     category_id: "gasoline",
     transaction_date: localDate(previewYear, previewMonth, currentDay),
-    created_at: new Date().toISOString(),
-  },
+  }),
 ];
 
 export function getPreviewTransactions(year: number, month?: number) {
@@ -88,11 +100,10 @@ export function getPreviewTransactions(year: number, month?: number) {
 export async function createPreviewTransaction(
   data: TransactionInsert,
 ): Promise<Transaction> {
-  const transaction: Transaction = {
+  const transaction = previewTransaction({
     ...data,
     id: `preview-${Date.now()}`,
-    created_at: new Date().toISOString(),
-  };
+  });
   previewTransactions = [transaction, ...previewTransactions];
   return transaction;
 }

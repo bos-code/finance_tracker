@@ -24,8 +24,8 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        <OfflineProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <OfflineProvider>
             <AppLockProvider>
               <AppLockGate>
                 <View style={{ flex: 1 }}>
@@ -42,8 +42,8 @@ export default function RootLayout() {
                     </View>
                 </AppLockGate>
               </AppLockProvider>
-            </AuthProvider>
           </OfflineProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </QueryClientProvider>
   );

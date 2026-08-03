@@ -2,12 +2,12 @@
 
 ## Inventory boundary
 
-The repository contains one manually applied SQL file,
-`supabase/001_create_goals.sql`. There is not yet a standard Supabase
-`migrations/` directory, Storage bucket declaration, Edge Function, seed file,
-or generated database type file from a linked project. This inventory therefore
-describes the schema declared in source control, not unverified production
-state.
+The repository now contains a timestamped current-schema baseline and an
+additive Stage 2 reliability migration under `supabase/migrations/`. The older
+`supabase/001_create_goals.sql` is retained as history and is no longer the
+authoritative installation path. There is still no linked-project schema dump,
+Storage bucket declaration, Edge Function, or seed file. This inventory
+describes source-controlled schema, not unverified production state.
 
 ## Extensions and functions
 
@@ -16,10 +16,12 @@ state.
 | `pgcrypto` | Supplies `gen_random_uuid()` defaults. |
 | `public.handle_row_updated_at()` | Sets `updated_at` before transaction updates. |
 | `public.handle_goal_write()` | Sets `updated_at` and keeps goal status/completion time consistent. |
+| `public.handle_transaction_write()` | Advances transaction revision and maintains update/deletion timestamps. |
+| `public.mutate_transaction(...)` | Authenticated, idempotent create/update/soft-delete boundary with optimistic revision checks. |
 
-Both functions currently run as invoker-context PL/pgSQL functions. A later
-security migration must pin a safe `search_path` before any function receives
-elevated privileges.
+The transaction mutation function is `SECURITY DEFINER`, pins an empty
+`search_path`, checks `auth.uid()` explicitly, and is executable only by the
+authenticated role. Goal helper hardening remains a later migration task.
 
 ## `public.transactions`
 
@@ -32,6 +34,11 @@ elevated privileges.
 | `note` | `text` | Required, defaults to an empty string. |
 | `category_id` | `text` | Required non-blank identifier; no category FK yet. |
 | `transaction_date` | `date` | Required local calendar date. |
+| `idempotency_key` | `text` | Optional on migrated legacy rows; unique per user when present. |
+| `lifecycle` | `text` | Required controlled lifecycle; defaults to `confirmed`. |
+| `source` | `text` | Required controlled source; defaults to `mobile_app`. |
+| `revision` | `bigint` | Positive optimistic-concurrency revision, advanced by trigger. |
+| `deleted_at` | `timestamptz` | Required only when lifecycle is `deleted`. |
 | `created_at` | `timestamptz` | Required UTC timestamp. |
 | `updated_at` | `timestamptz` | Required UTC timestamp, maintained by trigger. |
 
@@ -40,13 +47,24 @@ Indexes:
 - `(user_id, transaction_date desc)`
 - `(user_id, type, transaction_date desc)`
 - `(user_id, category_id, transaction_date desc)`
+- partial `(user_id, transaction_date desc)` for non-deleted rows
+- unique `(user_id, idempotency_key)`
 
-RLS is enabled. Separate `SELECT`, `INSERT`, `UPDATE`, and `DELETE` policies all
-require `auth.uid() = user_id`; update and insert also enforce the owner in
-`WITH CHECK`.
+RLS is enabled and all direct access remains owner-scoped with
+`auth.uid() = user_id`. The Stage 2 client writes through
+`public.mutate_transaction(...)`; owner-only legacy write policies remain for
+an explicit installed-client compatibility window.
 
-Known gaps: no idempotency key, workspace, account, currency, lifecycle, source,
-soft-delete timestamp, revision, or audit trail.
+Known gaps: no workspace, account, explicit transaction currency, or general
+audit trail beyond the mutation journal.
+
+## `public.transaction_mutations`
+
+Server-owned idempotency journal keyed by `(user_id, idempotency_key)`. It stores
+the operation, canonical request payload, resulting transaction ID, and result
+snapshot so an exact retried request returns the first committed result while a
+key reused for different input becomes a conflict. RLS is enabled with no
+direct client policies; only the guarded mutation function accesses it.
 
 ## `public.goals`
 
@@ -103,8 +121,9 @@ contribution table is introduced.
 
 ## Client data paths
 
-- Transactions: direct PostgREST reads/writes, React Query cache, monthly
-  AsyncStorage replica, and an AsyncStorage pending-operation queue.
+- Transactions: direct owner-scoped PostgREST reads, idempotent RPC writes,
+  React Query cache, monthly AsyncStorage replica, and a versioned/user-scoped
+  AsyncStorage pending-operation queue with retry and conflict metadata.
 - Goals: direct PostgREST reads/writes and React Query cache; no offline queue.
 - Authentication/profile: Supabase Auth SDK and user metadata.
 - App Lock: Expo SecureStore on native devices only.

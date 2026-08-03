@@ -36,7 +36,7 @@ export function useTransactions(year: number, month?: number) {
 
 export function useCreateTransaction() {
   const queryClient = useQueryClient();
-  const { isOnline } = useOffline();
+  const { isOnline, refreshPendingCount } = useOffline();
 
   return useMutation({
     mutationFn: (data: TransactionInsert) =>
@@ -54,25 +54,45 @@ export function useCreateTransaction() {
       // Snapshot previous
       const previousTransactions = queryClient.getQueryData<Transaction[]>(queryKey);
 
-      // Optimistically update
-      if (previousTransactions) {
-        // Create an optimistic record
-        const optimisticTx: Transaction = {
-          ...newTx,
-          id: `opt_${Date.now()}`,
-          created_at: new Date().toISOString(),
-        };
-        queryClient.setQueryData<Transaction[]>(queryKey, (old) => [...(old || []), optimisticTx]);
-      }
+      const timestamp = new Date().toISOString();
+      const optimisticId = `opt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const optimisticTx: Transaction = {
+        ...newTx,
+        created_at: timestamp,
+        deleted_at: null,
+        id: optimisticId,
+        idempotency_key: null,
+        lifecycle: "confirmed",
+        revision: 1,
+        source: "mobile_app",
+        sync_state: isOnline ? "syncing" : "queued",
+        updated_at: timestamp,
+      };
+      queryClient.setQueryData<Transaction[]>(queryKey, (old) => [
+        optimisticTx,
+        ...(old || []),
+      ]);
 
-      return { previousTransactions, queryKey };
+      return { optimisticId, previousTransactions, queryKey };
     },
     onError: (err, newTx, context) => {
       if (context?.queryKey) {
         queryClient.setQueryData(context.queryKey, context.previousTransactions);
       }
     },
+    onSuccess: (saved, variables, context) => {
+      if (!context?.queryKey) return;
+      queryClient.setQueryData<Transaction[]>(context.queryKey, (current) => [
+        saved,
+        ...(current ?? []).filter(
+          (transaction) =>
+            transaction.id !== context.optimisticId &&
+            transaction.id !== saved.id,
+        ),
+      ]);
+    },
     onSettled: (data, error, variables, context) => {
+      void refreshPendingCount();
       if (context?.queryKey) {
         queryClient.invalidateQueries({ queryKey: context.queryKey });
       }

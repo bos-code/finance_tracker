@@ -17,14 +17,21 @@ export function LedgerEntryRow({
 }) {
   const category = ALL_CATEGORIES[transaction.category_id];
   const isIncome = transaction.type === "Revenue";
-  const isPending = transaction.id.startsWith("local_");
+  const syncLabel = {
+    conflict: "CONFLICT",
+    failed: "FAILED",
+    local_only: "LOCAL",
+    queued: "QUEUED",
+    synced: "",
+    syncing: "SYNCING",
+  }[transaction.sync_state];
   const dateLabel = new Date(
     `${transaction.transaction_date}T00:00:00`,
   ).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 
   return (
     <Pressable
-      accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, currency)}`}
+      accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, currency)}${syncLabel ? `, sync status ${syncLabel.toLocaleLowerCase()}` : ""}`}
       accessibilityRole={onPress != null ? "button" : undefined}
       disabled={onPress == null}
       onPress={onPress}
@@ -53,7 +60,7 @@ export function LedgerEntryRow({
         </Text>
         <Text style={styles.meta}>
           {category?.label ?? "Other"} · {dateLabel}
-          {isPending ? " · LOCAL" : ""}
+          {syncLabel ? ` · ${syncLabel}` : ""}
         </Text>
       </View>
       <Text

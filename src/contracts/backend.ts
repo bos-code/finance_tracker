@@ -62,7 +62,7 @@ export type EntityId = string;
 
 export type TransactionType = "Expenditure" | "Revenue";
 
-/** Current production row. New lifecycle/source fields are additive migrations. */
+/** Transaction row after the additive Stage 2 reliability migration. */
 export type TransactionRecord = {
   id: EntityId;
   user_id: EntityId;
@@ -71,8 +71,13 @@ export type TransactionRecord = {
   note: string;
   category_id: string;
   transaction_date: ISODateString;
+  idempotency_key: string | null;
+  lifecycle: TransactionLifecycle;
+  source: TransactionSource;
+  revision: number;
+  deleted_at: ISODateTimeString | null;
   created_at: ISODateTimeString;
-  updated_at?: ISODateTimeString;
+  updated_at: ISODateTimeString;
 };
 
 export type TransactionInsert = Pick<
@@ -88,6 +93,11 @@ export type TransactionInsert = Pick<
 export type TransactionUpdate = Partial<
   Omit<TransactionInsert, "user_id">
 >;
+
+export type TransactionView = TransactionRecord & {
+  sync_state: SyncState;
+  sync_error_code?: BackendErrorCode;
+};
 
 export type GoalType = "saving" | "item";
 export type GoalStatus = "active" | "completed";

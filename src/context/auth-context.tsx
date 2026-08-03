@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import {
   supabaseClearLegacyAppLockSettings,
   supabaseSignIn,
@@ -46,38 +47,52 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (UI_PREVIEW_ENABLED) return;
 
-    const syncUserFromSupabase = async (fallbackUser?: any) => {
+    const applyUser = (currentUser: User) => {
+      setUser({
+        uid: currentUser.id,
+        email: currentUser.email || "",
+        fullName: currentUser.user_metadata?.full_name,
+      });
+      useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
+
+      if (
+        currentUser.user_metadata?.app_lock_pin != null ||
+        currentUser.user_metadata?.app_lock_enabled != null
+      ) {
+        void supabaseClearLegacyAppLockSettings().catch(() => {
+          console.warn("[auth] Could not clear legacy app lock metadata.");
+        });
+      }
+    };
+
+    const syncUserFromSupabase = async (fallbackUser?: User | null) => {
+      let localUser = fallbackUser ?? null;
       try {
-        // getSession might return a stale JWT that doesn't include freshly updated metadata.
-        // getUser() guarantees we hit the Supabase server to get the latest `full_name`.
-        const { data: { user: refreshedUser } } = await supabaseClient.auth.getUser();
-        const currentUser = refreshedUser || fallbackUser || null;
-
-        if (currentUser) {
-          setUser({
-            uid: currentUser.id,
-            email: currentUser.email || "",
-            fullName: currentUser.user_metadata?.full_name,
-          });
-
-          useAppStore.getState().hydrateFromMetadata(currentUser.user_metadata);
-
-          // Legacy cleanup: app lock is now device-local, so scrub old remote fields.
-          if (
-            currentUser.user_metadata?.app_lock_pin != null ||
-            currentUser.user_metadata?.app_lock_enabled != null
-          ) {
-            void supabaseClearLegacyAppLockSettings().catch((error) => {
-              console.warn("[auth] Failed to clear legacy app lock metadata:", error);
-            });
-          }
-        } else {
-          setUser(null);
+        if (!localUser) {
+          const { data } = await supabaseClient.auth.getSession();
+          localUser = data.session?.user ?? null;
         }
 
+        // A locally persisted session is enough to unlock this user's isolated
+        // cache and queue while offline. Remote reads still remain protected by
+        // JWT validation and RLS when connectivity returns.
+        if (localUser) {
+          applyUser(localUser);
+          setIsBootstrapping(false);
+        }
+
+        // getUser verifies the JWT and refreshes metadata when the network is
+        // available. Failure does not erase a locally restored offline session.
+        const { data, error } = await supabaseClient.auth.getUser();
+        if (error) throw error;
+        if (data.user) applyUser(data.user);
+        else if (!localUser) setUser(null);
       } catch (error) {
-        console.warn("[auth] Failed to restore session:", error);
-        setUser(null);
+        const status = Number(
+          (error as { status?: number | string } | null)?.status ?? 0,
+        );
+        if (!localUser || status === 401 || status === 403) setUser(null);
+        else console.warn("[auth] Using the last locally restored session.");
       } finally {
         setIsBootstrapping(false);
       }
@@ -85,9 +100,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     void syncUserFromSupabase();
 
-    const { data: authListener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      void syncUserFromSupabase(session?.user);
-    });
+    const { data: authListener } = supabaseClient.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          setIsBootstrapping(false);
+          return;
+        }
+        setTimeout(() => void syncUserFromSupabase(session?.user), 0);
+      },
+    );
 
     return () => {
       authListener.subscription.unsubscribe();

@@ -102,10 +102,7 @@ function buildCalendarDays(year: number, month: number): CalendarDay[] {
 }
 
 function isPendingTransaction(transaction: Transaction) {
-  return (
-    transaction.id.startsWith("local_") ||
-    transaction.id.startsWith("opt_")
-  );
+  return transaction.sync_state !== "synced";
 }
 
 function CalendarGrid({

@@ -83,7 +83,12 @@ export function toBackendError(
     });
   }
 
-  if (details.code === "42P01" || details.code === "PGRST205") {
+  if (
+    details.code === "42883" ||
+    details.code === "42P01" ||
+    details.code === "PGRST202" ||
+    details.code === "PGRST205"
+  ) {
     return new BackendError({
       cause: error,
       code: "BACKEND_NOT_READY",
@@ -91,11 +96,17 @@ export function toBackendError(
     });
   }
 
-  if (details.code === "23505" || details.status === 409) {
+  if (
+    details.code === "23505" ||
+    details.code === "40001" ||
+    details.status === 409
+  ) {
     return new BackendError({ cause: error, code: "CONFLICT" });
   }
 
-  if (["23502", "23503", "23514", "22P02"].includes(details.code)) {
+  if (
+    ["22023", "23502", "23503", "23514", "22P02"].includes(details.code)
+  ) {
     return new BackendError({ cause: error, code: "VALIDATION_FAILED" });
   }
 
@@ -110,7 +121,11 @@ export function toBackendError(
     return new BackendError({ cause: error, code: "PERMISSION_DENIED" });
   }
 
-  if (details.status === 404 || details.code === "PGRST116") {
+  if (
+    details.status === 404 ||
+    details.code === "P0002" ||
+    details.code === "PGRST116"
+  ) {
     return new BackendError({ cause: error, code: "RESOURCE_NOT_FOUND" });
   }
 

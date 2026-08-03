@@ -1,67 +1,188 @@
+import { isOperationDue, nextRetryTime } from "@/features/transactions/offline-queue";
+import { toBackendError } from "@/services/backend/errors";
 import {
   createTransaction,
   deleteTransaction,
   updateTransaction,
 } from "@/services/supabase/transaction-service";
+
 import {
   getPendingOps,
+  remapPendingTransaction,
   removePendingOp,
-  patchCachedMonth,
+  replaceCachedTransaction,
+  setCachedTransactionSyncState,
+  updatePendingOp,
 } from "./offline-store";
 import type { PendingOp } from "./pending-op";
 
-/**
- * Processes the pending operation queue in order (FIFO).
- * Each op is attempted once; on success it is dequeued and the local cache
- * is updated. On failure the op stays for the next sync attempt.
- *
- * Returns { synced, failed } counts.
- */
-export async function syncPendingOps(): Promise<{ synced: number; failed: number }> {
-  const ops = await getPendingOps();
-  let synced = 0;
-  let failed = 0;
+export type SyncResult = {
+  conflicts: number;
+  failed: number;
+  remaining: number;
+  synced: number;
+};
 
-  for (const op of ops) {
-    try {
-      await executeOp(op);
-      await removePendingOp(op.id);
-      synced++;
-    } catch (err) {
-      console.warn(`[sync] op ${op.id} (${op.opType}) failed:`, err);
-      failed++;
-      // Continue — do not block other ops because one failed
-    }
-  }
+const activeSyncs = new Map<string, Promise<SyncResult>>();
 
-  return { synced, failed };
+async function markCacheState(
+  operation: PendingOp,
+  state: "conflict" | "failed" | "syncing",
+  errorCode?: ReturnType<typeof toBackendError>["code"],
+) {
+  const transactionId =
+    operation.opType === "create"
+      ? operation.payload.tempId
+      : operation.payload.transactionId;
+  const transactionDate =
+    operation.opType === "create"
+      ? operation.payload.data.transaction_date
+      : operation.payload.transactionDate;
+  if (!transactionDate) return;
+  await setCachedTransactionSyncState(
+    operation.userId,
+    transactionDate,
+    transactionId,
+    state,
+    errorCode,
+  );
 }
 
-async function executeOp(op: PendingOp): Promise<void> {
-  if (op.opType === "create") {
-    const { tempId, ...insertData } = op.payload;
+async function executeOperation(operation: PendingOp) {
+  if (operation.opType === "create") {
+    const saved = await createTransaction(operation.payload.data, {
+      idempotencyKey: operation.idempotencyKey,
+      isOnline: true,
+      queueOnNetworkFailure: false,
+      source: operation.payload.source,
+    });
 
-    // Create on server — returns the real transaction with Supabase id
-    const saved = await createTransaction(insertData);
+    await remapPendingTransaction(
+      operation.userId,
+      operation.payload.tempId,
+      saved.id,
+    );
+    await replaceCachedTransaction(
+      operation.userId,
+      operation.payload.tempId,
+      operation.payload.data.transaction_date,
+      saved,
+    );
+    return;
+  }
 
-    // Parse year/month from the stored local date string
-    const [year, month] = saved.transaction_date.split("-").map(Number);
-
-    // Swap the temp record out for the real one in the local cache
-    await patchCachedMonth(saved.user_id, year, month, (txs) => {
-      const without = txs.filter((t) => t.id !== tempId);
-      return [...without, saved];
+  if (operation.opType === "delete") {
+    await deleteTransaction(operation.payload.transactionId, {
+      expectedRevision: operation.payload.expectedRevision,
+      idempotencyKey: operation.idempotencyKey,
+      isOnline: true,
+      queueOnNetworkFailure: false,
+      transactionDate: operation.payload.transactionDate,
+      userId: operation.userId,
     });
     return;
   }
 
-  if (op.opType === "delete") {
-    await deleteTransaction(op.payload.transactionId);
-    return;
+  await updateTransaction(
+    operation.payload.transactionId,
+    operation.payload.data,
+    {
+      expectedRevision: operation.payload.expectedRevision,
+      idempotencyKey: operation.idempotencyKey,
+      isOnline: true,
+      queueOnNetworkFailure: false,
+      transactionDate: operation.payload.transactionDate,
+      userId: operation.userId,
+    },
+  );
+}
+
+async function runSync(userId: string, force: boolean): Promise<SyncResult> {
+  const initial = await getPendingOps(userId);
+  const candidateIds = initial
+    .filter((operation) => isOperationDue(operation, Date.now(), force))
+    .map((operation) => operation.id);
+  let conflicts = 0;
+  let failed = 0;
+  let synced = 0;
+
+  for (const operationId of candidateIds) {
+    const operation = (await getPendingOps(userId)).find(
+      (candidate) => candidate.id === operationId,
+    );
+    if (!operation || !isOperationDue(operation, Date.now(), force)) continue;
+
+    const attemptedAt = Date.now();
+    await updatePendingOp(userId, operation.id, (current) => ({
+      ...current,
+      lastAttemptAt: attemptedAt,
+      status: "syncing",
+      updatedAt: attemptedAt,
+    }));
+    await markCacheState(operation, "syncing");
+
+    try {
+      await executeOperation(operation);
+      await removePendingOp(userId, operation.id);
+      synced += 1;
+    } catch (error) {
+      const backendError = toBackendError(error, "TRANSACTION_WRITE_FAILED");
+      const retryCount = operation.retryCount + 1;
+      const status = backendError.code === "CONFLICT" ? "conflict" : "failed";
+      const failedAt = Date.now();
+      const nextRetryAt = backendError.retryable
+        ? nextRetryTime(retryCount, failedAt)
+        : Number.MAX_SAFE_INTEGER;
+
+      await updatePendingOp(userId, operation.id, (current) => ({
+        ...current,
+        lastError: {
+          at: failedAt,
+          code: backendError.code,
+          message: backendError.message,
+        },
+        nextRetryAt,
+        retryCount,
+        status,
+        updatedAt: failedAt,
+      }));
+      await markCacheState(operation, status, backendError.code);
+      if (status === "conflict") conflicts += 1;
+      else failed += 1;
+    }
   }
 
-  if (op.opType === "update") {
-    await updateTransaction(op.payload.transactionId, op.payload.data);
-    return;
+  return {
+    conflicts,
+    failed,
+    remaining: (await getPendingOps(userId)).length,
+    synced,
+  };
+}
+
+/** Drains due operations once. Calls for the same user share one sync flight. */
+export function syncPendingOps(userId: string, force = false) {
+  const active = activeSyncs.get(userId);
+  if (active) return active;
+
+  const sync = runSync(userId, force).finally(() => {
+    if (activeSyncs.get(userId) === sync) activeSyncs.delete(userId);
+  });
+  activeSyncs.set(userId, sync);
+  return sync;
+}
+
+export async function retryFailedOps(userId: string) {
+  const operations = await getPendingOps(userId);
+  for (const operation of operations) {
+    if (operation.status !== "failed") continue;
+    await updatePendingOp(userId, operation.id, (current) => ({
+      ...current,
+      lastError: null,
+      nextRetryAt: 0,
+      status: "queued",
+      updatedAt: Date.now(),
+    }));
   }
+  return syncPendingOps(userId, true);
 }

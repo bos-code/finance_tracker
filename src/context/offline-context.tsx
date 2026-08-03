@@ -1,6 +1,6 @@
 import {
   createContext,
-  PropsWithChildren,
+  type PropsWithChildren,
   useCallback,
   useContext,
   useEffect,
@@ -8,83 +8,148 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNetwork } from "@/hooks/use-network";
-import { getPendingOps } from "@/services/offline/offline-store";
-import { syncPendingOps } from "@/services/offline/sync-service";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { useAuth } from "@/hooks/use-auth";
+import { useNetwork } from "@/hooks/use-network";
+import { getPendingSummary } from "@/services/offline/offline-store";
+import {
+  retryFailedOps,
+  syncPendingOps,
+} from "@/services/offline/sync-service";
 
 type OfflineContextValue = {
-  /** Device is currently online */
+  conflictCount: number;
+  failedCount: number;
   isOnline: boolean;
-  /** Sync is running right now */
   isSyncing: boolean;
-  /** Number of operations queued (shown in the badge) */
-  pendingCount: number;
-  /** Manually refresh the pending count (call after adding an op) */
-  refreshPendingCount: () => Promise<void>;
-  /** True briefly after a successful sync to flash the "Synced" banner */
   justSynced: boolean;
+  pendingCount: number;
+  queuedCount: number;
+  refreshPendingCount: () => Promise<void>;
+  retryFailed: () => Promise<void>;
+  syncNow: () => Promise<void>;
 };
 
-export const OfflineContext = createContext<OfflineContextValue | undefined>(undefined);
+const EMPTY_SUMMARY = {
+  conflict: 0,
+  failed: 0,
+  queued: 0,
+  syncing: 0,
+  total: 0,
+};
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
+export const OfflineContext = createContext<OfflineContextValue | undefined>(
+  undefined,
+);
 
 export function OfflineProvider({ children }: PropsWithChildren) {
+  const { user } = useAuth();
   const { isOnline } = useNetwork();
   const [isSyncing, setIsSyncing] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [justSynced, setJustSynced] = useState(false);
-
-  // Track previous online state to detect reconnection
-  const prevOnlineRef = useRef(isOnline);
+  const syncFlight = useRef<Promise<void> | null>(null);
+  const syncedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshPendingCount = useCallback(async () => {
-    try {
-      const ops = await getPendingOps();
-      setPendingCount(ops.length);
-    } catch (error) {
-      console.warn("[offline] Failed to refresh pending count:", error);
-      setPendingCount(0);
+    if (!user?.uid) {
+      setSummary(EMPTY_SUMMARY);
+      return;
     }
-  }, []);
+    try {
+      setSummary(await getPendingSummary(user.uid));
+    } catch (error) {
+      console.warn("[offline] Could not read the local queue:", error);
+    }
+  }, [user?.uid]);
 
-  // Refresh count on every change (after adds/removes)
+  const runSync = useCallback(
+    async (mode: "due" | "failed" | "force" = "due") => {
+      if (!isOnline || !user?.uid) return;
+      if (syncFlight.current) return syncFlight.current;
+
+      const flight = (async () => {
+        setIsSyncing(true);
+        try {
+          const result =
+            mode === "failed"
+              ? await retryFailedOps(user.uid)
+              : await syncPendingOps(user.uid, mode === "force");
+          await refreshPendingCount();
+          if (result.synced > 0) {
+            setJustSynced(true);
+            if (syncedTimer.current) clearTimeout(syncedTimer.current);
+            syncedTimer.current = setTimeout(() => {
+              setJustSynced(false);
+            }, 2500);
+          }
+        } catch (error) {
+          console.warn("[offline] Could not synchronize local changes:", error);
+          await refreshPendingCount();
+        } finally {
+          setIsSyncing(false);
+        }
+      })();
+
+      syncFlight.current = flight;
+      try {
+        await flight;
+      } finally {
+        if (syncFlight.current === flight) syncFlight.current = null;
+      }
+    },
+    [isOnline, refreshPendingCount, user?.uid],
+  );
+
+  const retryFailed = useCallback(() => runSync("failed"), [runSync]);
+  const syncNow = useCallback(() => runSync("force"), [runSync]);
+
   useEffect(() => {
     void refreshPendingCount();
   }, [refreshPendingCount]);
 
-  // Trigger sync whenever the device comes back online
+  // Restores work after an app restart and drains it after every reconnection.
   useEffect(() => {
-    const wasOffline = !prevOnlineRef.current;
-    prevOnlineRef.current = isOnline;
+    if (isOnline && user?.uid) void runSync("due");
+  }, [isOnline, runSync, user?.uid]);
 
-    if (!isOnline || !wasOffline) return;
+  // Due retries use persisted exponential backoff; this timer merely wakes the
+  // queue and does not reset any retry metadata.
+  useEffect(() => {
+    if (!isOnline || !user?.uid) return;
+    const timer = setInterval(() => void runSync("due"), 30_000);
+    return () => clearInterval(timer);
+  }, [isOnline, runSync, user?.uid]);
 
-    // Just came online — drain the queue
-    const doSync = async () => {
-      setIsSyncing(true);
-      try {
-        const { synced } = await syncPendingOps();
-        await refreshPendingCount();
-        if (synced > 0) {
-          setJustSynced(true);
-          setTimeout(() => setJustSynced(false), 2500);
-        }
-      } catch (error) {
-        console.warn("[offline] Failed to sync pending operations:", error);
-      } finally {
-        setIsSyncing(false);
-      }
-    };
-
-    void doSync();
-  }, [isOnline, refreshPendingCount]);
+  useEffect(
+    () => () => {
+      if (syncedTimer.current) clearTimeout(syncedTimer.current);
+    },
+    [],
+  );
 
   const value = useMemo<OfflineContextValue>(
-    () => ({ isOnline, isSyncing, pendingCount, refreshPendingCount, justSynced }),
-    [isOnline, isSyncing, pendingCount, refreshPendingCount, justSynced]
+    () => ({
+      conflictCount: summary.conflict,
+      failedCount: summary.failed,
+      isOnline,
+      isSyncing,
+      justSynced,
+      pendingCount: summary.total,
+      queuedCount: summary.queued + summary.syncing,
+      refreshPendingCount,
+      retryFailed,
+      syncNow,
+    }),
+    [
+      isOnline,
+      isSyncing,
+      justSynced,
+      refreshPendingCount,
+      retryFailed,
+      summary,
+      syncNow,
+    ],
   );
 
   return (
@@ -92,10 +157,8 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useOffline() {
-  const ctx = useContext(OfflineContext);
-  if (!ctx) throw new Error("useOffline must be used inside OfflineProvider");
-  return ctx;
+  const context = useContext(OfflineContext);
+  if (!context) throw new Error("useOffline must be used inside OfflineProvider");
+  return context;
 }

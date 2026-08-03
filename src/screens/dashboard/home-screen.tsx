@@ -117,7 +117,13 @@ function Metric({
 export function HomeScreen() {
   const { user } = useAuth();
   const currency = useAppStore((state) => state.currency);
-  const { isOnline, pendingCount, refreshPendingCount } = useOffline();
+  const {
+    conflictCount,
+    failedCount,
+    isOnline,
+    pendingCount,
+    refreshPendingCount,
+  } = useOffline();
   const insets = useSafeAreaInsets();
   const now = new Date();
   const year = now.getFullYear();
@@ -254,7 +260,7 @@ export function HomeScreen() {
       });
       await refreshPendingCount();
 
-      const savedLocally = savedTransaction.id.startsWith("local_");
+      const savedLocally = savedTransaction.sync_state !== "synced";
       setFeedback({
         visible: true,
         type: "success",
@@ -362,14 +368,32 @@ export function HomeScreen() {
 
           <View style={styles.syncLine}>
             <MaterialCommunityIcons
-              color={pendingCount > 0 ? palette.warning : palette.textQuiet}
-              name={pendingCount > 0 ? "cloud-sync-outline" : "check-circle-outline"}
+              color={
+                conflictCount > 0
+                  ? palette.expense
+                  : pendingCount > 0
+                    ? palette.warning
+                    : palette.textQuiet
+              }
+              name={
+                conflictCount > 0
+                  ? "alert-octagon-outline"
+                  : failedCount > 0
+                    ? "cloud-alert-outline"
+                    : pendingCount > 0
+                      ? "cloud-sync-outline"
+                      : "check-circle-outline"
+              }
               size={16}
             />
             <Text style={styles.syncText}>
-              {pendingCount > 0
-                ? `${pendingCount} ${pendingCount === 1 ? "entry" : "entries"} waiting to sync`
-                : "Ledger is current"}
+              {conflictCount > 0
+                ? `${conflictCount} ${conflictCount === 1 ? "entry needs" : "entries need"} review`
+                : failedCount > 0
+                  ? `${failedCount} ${failedCount === 1 ? "entry" : "entries"} could not sync`
+                  : pendingCount > 0
+                    ? `${pendingCount} ${pendingCount === 1 ? "entry" : "entries"} waiting to sync`
+                    : "Ledger is current"}
             </Text>
             <View style={styles.syncRule} />
           </View>
@@ -413,7 +437,14 @@ export function HomeScreen() {
               recentTransactions.map((transaction, index) => {
                 const category = ALL_CATEGORIES[transaction.category_id];
                 const isIncome = transaction.type === "Revenue";
-                const isPending = transaction.id.startsWith("local_");
+                const syncLabel = {
+                  conflict: "CONFLICT",
+                  failed: "FAILED",
+                  local_only: "LOCAL",
+                  queued: "QUEUED",
+                  synced: "",
+                  syncing: "SYNCING",
+                }[transaction.sync_state];
                 const dateLabel = new Date(
                   `${transaction.transaction_date}T00:00:00`,
                 ).toLocaleDateString("en-US", {
@@ -458,7 +489,7 @@ export function HomeScreen() {
                       </Text>
                       <Text style={styles.transactionMeta}>
                         {category?.label ?? "Other"} · {dateLabel}
-                        {isPending ? " · LOCAL" : ""}
+                        {syncLabel ? ` · ${syncLabel}` : ""}
                       </Text>
                     </View>
                     <Text
