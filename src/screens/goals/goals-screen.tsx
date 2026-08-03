@@ -1,7 +1,14 @@
-import { LoadingState } from "@/components/feedback/loading-state";
+import { ActionButton } from "@/components/finance/action-button";
+import { FinanceField } from "@/components/finance/finance-field";
+import { FinanceSheet } from "@/components/finance/finance-sheet";
+import { PageHeading } from "@/components/finance/page-heading";
+import { SegmentedControl } from "@/components/finance/segmented-control";
+import { StatePanel } from "@/components/finance/state-panel";
+import { SummaryRail } from "@/components/finance/summary-rail";
 import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
 import { Screen } from "@/components/ui/screen";
+import { SignalThreads } from "@/components/visuals/signal-threads";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useCreateGoal,
@@ -11,23 +18,24 @@ import {
 } from "@/hooks/use-goals";
 import { isMissingGoalsTableError } from "@/services/supabase/goal-service";
 import { CURRENCY_OPTIONS, useAppStore } from "@/store/use-app-store";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import type { Goal, GoalStatus, GoalType } from "@/types/domain/goal";
 import { fromLocalDateString, toLocalDateString } from "@/utils/date";
+import { formatMoney, type DisplayCurrency } from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { type ReactNode, useMemo, useState } from "react";
+import * as Haptics from "expo-haptics";
+import { useMemo, useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type GoalFilter = "all" | "active" | "completed";
 
@@ -52,8 +60,22 @@ type FeedbackState = {
   onPrimaryAction?: () => void;
 };
 
+const EMPTY_GOALS: Goal[] = [];
+
+const FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Complete", value: "completed" },
+] satisfies { label: string; value: GoalFilter }[];
+
+const TYPE_OPTIONS = [
+  { label: "Savings", value: "saving" },
+  { label: "Purchase", value: "item" },
+] satisfies { label: string; value: GoalType }[];
+
 const GOAL_ICON_OPTIONS = [
   "target",
+  "shield-outline",
   "wallet-outline",
   "laptop",
   "airplane",
@@ -61,19 +83,16 @@ const GOAL_ICON_OPTIONS = [
   "car-sports",
   "gift-outline",
   "briefcase-outline",
-  "beach",
   "sofa-outline",
 ] as const;
 
 const GOAL_COLOR_OPTIONS = [
-  "#2563eb",
-  "#7c3aed",
-  "#059669",
-  "#ea580c",
-  "#e11d48",
-  "#0284c7",
-  "#475569",
-  "#db2777",
+  palette.signalMoss,
+  palette.signalViolet,
+  palette.signalCyan,
+  palette.signalAmber,
+  palette.income,
+  palette.expense,
 ] as const;
 
 const QUICK_CONTRIBUTIONS = [25, 50, 100, 250, 500] as const;
@@ -101,7 +120,7 @@ function goalFormFromGoal(goal: Goal): GoalFormState {
     targetDate: goal.target_date
       ? fromLocalDateString(goal.target_date)
       : new Date(),
-    hasTargetDate: !!goal.target_date,
+    hasTargetDate: goal.target_date != null,
     notes: goal.notes ?? "",
     iconName: goal.icon_name,
     color: goal.color,
@@ -114,13 +133,17 @@ function parseCurrencyInput(value: string) {
   return Number.parseFloat(normalized) || 0;
 }
 
+function currencyFor(code: string): DisplayCurrency {
+  return (
+    CURRENCY_OPTIONS.find((option) => option.code === code) ?? {
+      code,
+      symbol: `${code} `,
+    }
+  );
+}
+
 function formatGoalAmount(amount: number, currencyCode: string) {
-  const option = CURRENCY_OPTIONS.find((item) => item.code === currencyCode);
-  const prefix = option?.symbol ?? `${currencyCode} `;
-  return `${prefix}${amount.toLocaleString("en-US", {
-    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatMoney(amount, currencyFor(currencyCode));
 }
 
 function getGoalProgress(goal: Goal) {
@@ -128,471 +151,167 @@ function getGoalProgress(goal: Goal) {
   return Math.max(0, Math.min(goal.saved_amount / goal.target_amount, 1));
 }
 
-function getGoalTypeLabel(goalType: GoalType) {
-  return goalType === "saving" ? "Savings target" : "Item purchase";
-}
-
-function getGoalSubtitle(goal: Goal) {
-  if (goal.goal_type === "item") {
-    return "Track a purchase and build toward owning it.";
-  }
-
-  return "Build up savings with steady contributions.";
-}
-
 function formatGoalDate(date: string | null) {
   if (!date) return "No target date";
-
   return fromLocalDateString(date).toLocaleDateString("en-US", {
-    month: "short",
     day: "numeric",
+    month: "short",
     year: "numeric",
   });
 }
 
-function SheetModal({
-  visible,
-  title,
-  onClose,
-  children,
-}: {
-  visible: boolean;
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <Modal
-      transparent
-      animationType="slide"
-      visible={visible}
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(15,23,42,0.35)",
-          justifyContent: "flex-end",
-        }}
-      >
-        <Pressable style={{ flex: 1 }} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View
-            style={{
-              maxHeight: "88%",
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              backgroundColor: "#ffffff",
-              paddingBottom: Math.max(insets.bottom, 20),
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -6 },
-              shadowOpacity: 0.08,
-              shadowRadius: 16,
-              elevation: 16,
-            }}
-          >
-            <View style={{ alignItems: "center", paddingTop: 12 }}>
-              <View
-                style={{
-                  width: 42,
-                  height: 4,
-                  borderRadius: 999,
-                  backgroundColor: "#cbd5e1",
-                }}
-              />
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 20,
-                paddingTop: 16,
-                paddingBottom: 14,
-                borderBottomWidth: 1,
-                borderBottomColor: "#e2e8f0",
-              }}
-            >
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-                {title}
-              </Text>
-              <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
-                <MaterialCommunityIcons
-                  name="close"
-                  size={22}
-                  color="#64748b"
-                />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ padding: 20, paddingBottom: 8 }}
-            >
-              {children}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
+function compactGoalDate(date: string | null) {
+  if (!date) return "NONE";
+  return fromLocalDateString(date)
+    .toLocaleDateString("en-US", { day: "2-digit", month: "short" })
+    .toLocaleUpperCase();
 }
 
-function SummaryCard({
-  icon,
-  iconColor,
-  iconBackground,
-  label,
-  value,
-  accent,
+function GoalLedgerRow({
+  goal,
+  onAddFunds,
+  onDelete,
+  onEdit,
+  onToggleStatus,
 }: {
-  icon: string;
-  iconColor: string;
-  iconBackground: string;
-  label: string;
-  value: string;
-  accent: string;
-}) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        minWidth: 0,
-        borderRadius: 24,
-        backgroundColor: "#ffffff",
-        padding: 18,
-        borderWidth: 1,
-        borderColor: accent + "18",
-      }}
-    >
-      <View
-        style={{
-          width: 42,
-          height: 42,
-          borderRadius: 14,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: iconBackground,
-          marginBottom: 14,
-        }}
-      >
-        <MaterialCommunityIcons name={icon as any} size={22} color={iconColor} />
-      </View>
-      <Text style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-        {label}
-      </Text>
-      <Text style={{ fontSize: 18, fontWeight: "800", color: "#0f172a" }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function FilterChip({
-  label,
-  active,
-  onPress,
-  activeColor,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  activeColor: string;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={{
-        marginRight: 10,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 999,
-        backgroundColor: active ? activeColor : "#ffffff",
-        borderWidth: 1,
-        borderColor: active ? activeColor : "#dbe3ee",
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 13,
-          fontWeight: "700",
-          color: active ? "#ffffff" : "#475569",
-        }}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function GoalCard(props: {
   goal: Goal;
   onAddFunds: () => void;
+  onDelete: () => void;
   onEdit: () => void;
   onToggleStatus: () => void;
-  onDelete: () => void;
 }) {
-  const { goal, onAddFunds, onDelete, onEdit, onToggleStatus } = props;
   const progress = getGoalProgress(goal);
-  const saved = formatGoalAmount(goal.saved_amount, goal.currency_code);
-  const target = formatGoalAmount(goal.target_amount, goal.currency_code);
   const remaining = Math.max(goal.target_amount - goal.saved_amount, 0);
-  const statusTone =
-    goal.status === "completed"
-      ? { bg: "#dcfce7", text: "#166534", label: "Completed" }
-      : { bg: "#dbeafe", text: "#1d4ed8", label: "Active" };
+  const isComplete = goal.status === "completed";
+  const isOverdue =
+    !isComplete &&
+    goal.target_date != null &&
+    goal.target_date < toLocalDateString(new Date());
+  const statusLabel = isComplete ? "COMPLETE" : isOverdue ? "OVERDUE" : "ACTIVE";
+  const statusColor = isComplete
+    ? palette.income
+    : isOverdue
+      ? palette.expense
+      : palette.textQuiet;
 
   return (
-    <View
-      style={{
-        borderRadius: 28,
-        backgroundColor: "#ffffff",
-        padding: 18,
-        borderWidth: 1,
-        borderColor: "#e2e8f0",
-        marginBottom: 14,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <View style={{ flexDirection: "row", flex: 1, paddingRight: 12 }}>
-          <View
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 18,
-              backgroundColor: goal.color + "20",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: 14,
-            }}
-          >
-            <MaterialCommunityIcons
-              name={goal.icon_name as any}
-              size={24}
-              color={goal.color}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: "#0f172a",
-                marginBottom: 4,
-              }}
-            >
-              {goal.title}
-            </Text>
-            <Text style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
-              {getGoalTypeLabel(goal.goal_type)}
-            </Text>
-            <View
-              style={{
-                alignSelf: "flex-start",
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 999,
-                backgroundColor: statusTone.bg,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: statusTone.text,
-                }}
-              >
-                {statusTone.label}
-              </Text>
-            </View>
-          </View>
-        </View>
-        <Text style={{ fontSize: 12, color: "#94a3b8", fontWeight: "600" }}>
-          {formatGoalDate(goal.target_date)}
-        </Text>
-      </View>
-
-      <Text
-        style={{
-          fontSize: 14,
-          lineHeight: 20,
-          color: "#475569",
-          marginBottom: 16,
-        }}
-      >
-        {goal.notes?.trim() || getGoalSubtitle(goal)}
-      </Text>
-
-      <View style={{ marginBottom: 10 }}>
-        <View
-          style={{
-            height: 10,
-            borderRadius: 999,
-            backgroundColor: "#e2e8f0",
-            overflow: "hidden",
-            marginBottom: 10,
-          }}
-        >
-          <View
-            style={{
-              width: `${Math.max(progress * 100, goal.saved_amount > 0 ? 6 : 0)}%`,
-              height: "100%",
-              borderRadius: 999,
-              backgroundColor: goal.color,
-            }}
-          />
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a" }}>
-            {saved} saved
-          </Text>
-          <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748b" }}>
-            {Math.round(progress * 100)}%
-          </Text>
-        </View>
-        <Text style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-          Target {target}
-          {remaining > 0
-            ? ` • ${formatGoalAmount(remaining, goal.currency_code)} left`
-            : " • Goal reached"}
-        </Text>
-      </View>
-
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          marginTop: 6,
-          marginHorizontal: -4,
-        }}
-      >
-        <TouchableOpacity
-          onPress={onAddFunds}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: 999,
-            backgroundColor: goal.color,
-            marginHorizontal: 4,
-            marginTop: 8,
-          }}
-        >
-          <MaterialCommunityIcons name="plus" size={16} color="#ffffff" />
-          <Text
-            style={{
-              marginLeft: 6,
-              fontSize: 13,
-              fontWeight: "700",
-              color: "#ffffff",
-            }}
-          >
-            Add funds
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={onEdit}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: 999,
-            backgroundColor: "#eff6ff",
-            marginHorizontal: 4,
-            marginTop: 8,
-          }}
-        >
-          <MaterialCommunityIcons name="pencil-outline" size={15} color="#2563eb" />
-          <Text
-            style={{
-              marginLeft: 6,
-              fontSize: 13,
-              fontWeight: "700",
-              color: "#2563eb",
-            }}
-          >
-            Edit
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={onToggleStatus}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: 999,
-            backgroundColor: "#f8fafc",
-            marginHorizontal: 4,
-            marginTop: 8,
-            borderWidth: 1,
-            borderColor: "#e2e8f0",
-          }}
-        >
+    <View style={styles.goalRow}>
+      <View style={[styles.goalSignal, { backgroundColor: goal.color }]} />
+      <View style={styles.goalTopline}>
+        <View style={styles.goalIcon}>
           <MaterialCommunityIcons
-            name={goal.status === "completed" ? "backup-restore" : "check-circle-outline"}
-            size={15}
-            color="#334155"
+            color={palette.textMuted}
+            name={goal.icon_name as never}
+            size={19}
           />
-          <Text
-            style={{
-              marginLeft: 6,
-              fontSize: 13,
-              fontWeight: "700",
-              color: "#334155",
-            }}
-          >
-            {goal.status === "completed" ? "Reopen" : "Complete"}
+        </View>
+        <View style={styles.goalTitleGroup}>
+          <Text numberOfLines={1} style={styles.goalTitle}>
+            {goal.title}
           </Text>
-        </TouchableOpacity>
+          <Text style={[styles.goalStatus, { color: statusColor }]}>
+            {statusLabel} / {goal.goal_type === "saving" ? "SAVINGS" : "PURCHASE"}
+          </Text>
+        </View>
+        <View style={styles.goalDateGroup}>
+          <Text style={styles.goalDateLabel}>TARGET</Text>
+          <Text style={styles.goalDate}>{compactGoalDate(goal.target_date)}</Text>
+        </View>
+      </View>
 
-        <TouchableOpacity
-          onPress={onDelete}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: 999,
-            backgroundColor: "#fff1f2",
-            marginHorizontal: 4,
-            marginTop: 8,
-          }}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={15} color="#e11d48" />
-          <Text
-            style={{
-              marginLeft: 6,
-              fontSize: 13,
-              fontWeight: "700",
-              color: "#e11d48",
-            }}
-          >
-            Delete
+      {goal.notes ? (
+        <Text numberOfLines={2} style={styles.goalNotes}>
+          {goal.notes}
+        </Text>
+      ) : null}
+
+      <View style={styles.goalAmounts}>
+        <View>
+          <Text style={styles.amountLabel}>RESERVED</Text>
+          <Text style={styles.amountValue}>
+            {formatGoalAmount(goal.saved_amount, goal.currency_code)}
           </Text>
-        </TouchableOpacity>
+        </View>
+        <View style={styles.goalAmountRight}>
+          <Text style={styles.amountLabel}>TARGET</Text>
+          <Text style={styles.amountValue}>
+            {formatGoalAmount(goal.target_amount, goal.currency_code)}
+          </Text>
+        </View>
+      </View>
+
+      <View
+        accessibilityLabel={`${Math.round(progress * 100)} percent funded`}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ max: 100, min: 0, now: Math.round(progress * 100) }}
+        style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressValue,
+            {
+              backgroundColor: goal.color,
+              width: `${Math.max(progress * 100, goal.saved_amount > 0 ? 1 : 0)}%`,
+            },
+          ]}
+        />
+      </View>
+      <View style={styles.progressMeta}>
+        <Text style={styles.progressPercent}>{Math.round(progress * 100)}%</Text>
+        <Text style={styles.progressRemaining}>
+          {remaining > 0
+            ? `${formatGoalAmount(remaining, goal.currency_code)} remaining`
+            : "Target funded"}
+        </Text>
+      </View>
+
+      <View style={styles.goalActions}>
+        {!isComplete ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onAddFunds}
+            style={({ pressed }) => [
+              styles.goalPrimaryAction,
+              { opacity: pressed ? 0.62 : 1 },
+            ]}>
+            <MaterialCommunityIcons color={palette.black} name="plus" size={15} />
+            <Text style={styles.goalPrimaryActionText}>Add funds</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onEdit}
+          style={({ pressed }) => [
+            styles.goalTextAction,
+            { opacity: pressed ? 0.56 : 1 },
+          ]}>
+          <Text style={styles.goalTextActionLabel}>Edit</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onToggleStatus}
+          style={({ pressed }) => [
+            styles.goalTextAction,
+            { opacity: pressed ? 0.56 : 1 },
+          ]}>
+          <Text style={styles.goalTextActionLabel}>
+            {isComplete ? "Reopen" : "Complete"}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`Delete ${goal.title}`}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onDelete}
+          style={({ pressed }) => [
+            styles.goalDeleteAction,
+            { opacity: pressed ? 0.5 : 1 },
+          ]}>
+          <MaterialCommunityIcons
+            color={palette.textQuiet}
+            name="trash-can-outline"
+            size={16}
+          />
+        </Pressable>
       </View>
     </View>
   );
@@ -600,12 +319,9 @@ function GoalCard(props: {
 
 export function GoalsScreen() {
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
-  const theme = useAppStore((state) => state.theme);
   const currency = useAppStore((state) => state.currency);
-  const primary = theme.primary;
-
-  const { data: goals = [], error, isLoading, refetch } = useGoals();
+  const goalsQuery = useGoals();
+  const goals = goalsQuery.data ?? EMPTY_GOALS;
   const createGoalMutation = useCreateGoal();
   const updateGoalMutation = useUpdateGoal();
   const deleteGoalMutation = useDeleteGoal();
@@ -626,35 +342,34 @@ export function GoalsScreen() {
     message: "",
   });
 
-  const filteredGoals = useMemo(() => {
-    if (filter === "all") return goals;
-    return goals.filter((goal) => goal.status === filter);
-  }, [filter, goals]);
-
+  const filteredGoals = useMemo(
+    () =>
+      filter === "all"
+        ? goals
+        : goals.filter((goal) => goal.status === filter),
+    [filter, goals],
+  );
   const activeGoals = useMemo(
     () => goals.filter((goal) => goal.status === "active"),
     [goals],
   );
-
-  const totalSaved = useMemo(
-    () => goals.reduce((sum, goal) => sum + goal.saved_amount, 0),
-    [goals],
+  const completedGoals = goals.length - activeGoals.length;
+  const selectedCurrencySaved = useMemo(
+    () =>
+      goals
+        .filter((goal) => goal.currency_code === currency.code)
+        .reduce((sum, goal) => sum + goal.saved_amount, 0),
+    [currency.code, goals],
   );
-
-  const nearestGoal = useMemo(() => {
-    return [...activeGoals]
-      .filter((goal) => !!goal.target_date)
-      .sort((left, right) => {
-        if (!left.target_date || !right.target_date) return 0;
-        return left.target_date.localeCompare(right.target_date);
-      })[0];
-  }, [activeGoals]);
-
-  const goalCountLabel = `${activeGoals.length} active`;
-  const savedTotalLabel = formatGoalAmount(totalSaved, currency.code);
-  const closestLabel = nearestGoal?.target_date
-    ? nearestGoal.title
-    : "Set your first date";
+  const nearestGoal = useMemo(
+    () =>
+      [...activeGoals]
+        .filter((goal) => goal.target_date != null)
+        .sort((first, second) =>
+          (first.target_date ?? "").localeCompare(second.target_date ?? ""),
+        )[0],
+    [activeGoals],
+  );
 
   const goalSheetBusy =
     createGoalMutation.isPending || updateGoalMutation.isPending;
@@ -674,6 +389,7 @@ export function GoalsScreen() {
     setForm(defaultGoalForm());
     setFormError("");
     setGoalSheetOpen(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const openEditGoal = (goal: Goal) => {
@@ -706,12 +422,7 @@ export function GoalsScreen() {
   };
 
   const showErrorFeedback = (title: string, message: string) => {
-    setFeedback({
-      visible: true,
-      type: "error",
-      title,
-      message,
-    });
+    setFeedback({ visible: true, type: "error", title, message });
   };
 
   const handleSaveGoal = async () => {
@@ -728,12 +439,10 @@ export function GoalsScreen() {
       setFormError("Give this goal a name so it is easy to recognize.");
       return;
     }
-
     if (!targetAmount || targetAmount <= 0) {
       setFormError("Set a valid target amount greater than zero.");
       return;
     }
-
     if (savedAmount < 0) {
       setFormError("Saved amount cannot be negative.");
       return;
@@ -741,14 +450,15 @@ export function GoalsScreen() {
 
     const nextStatus: GoalStatus =
       savedAmount >= targetAmount ? "completed" : "active";
-
     const payload = {
       title,
       goal_type: form.goalType,
       target_amount: targetAmount,
       saved_amount: savedAmount,
-      currency_code: currency.code,
-      target_date: form.hasTargetDate ? toLocalDateString(form.targetDate) : null,
+      currency_code: editingGoal?.currency_code ?? currency.code,
+      target_date: form.hasTargetDate
+        ? toLocalDateString(form.targetDate)
+        : null,
       notes: form.notes.trim() || null,
       icon_name: form.iconName,
       color: form.color,
@@ -761,6 +471,7 @@ export function GoalsScreen() {
 
     try {
       setFormError("");
+      const wasEditing = editingGoal != null;
       const savedGoal = editingGoal
         ? await updateGoalMutation.mutateAsync({
             id: editingGoal.id,
@@ -775,16 +486,16 @@ export function GoalsScreen() {
       setFeedback({
         visible: true,
         type: "success",
-        title: editingGoal ? "Goal updated" : "Goal created",
-        message: editingGoal
-          ? "Your goal details were updated."
-          : "Your new goal is ready for contributions.",
+        title: wasEditing ? "Goal updated" : "Goal created",
+        message: wasEditing
+          ? "Your plan now reflects the new details."
+          : "Your new plan is ready for contributions.",
         primaryActionLabel:
-          !editingGoal && savedGoal.status === "active"
+          !wasEditing && savedGoal.status === "active"
             ? "Add first funds"
             : undefined,
         onPrimaryAction:
-          !editingGoal && savedGoal.status === "active"
+          !wasEditing && savedGoal.status === "active"
             ? () => {
                 dismissFeedback();
                 openContribution(savedGoal);
@@ -792,19 +503,17 @@ export function GoalsScreen() {
             : undefined,
       });
     } catch (saveError) {
-      const message =
+      setFormError(
         saveError instanceof Error
           ? saveError.message
-          : "We could not save this goal right now.";
-      setFormError(message);
+          : "We could not save this goal right now.",
+      );
     }
   };
 
   const handleContribution = async () => {
     if (!selectedGoal) return;
-
     const amount = parseCurrencyInput(contributionAmount);
-
     if (!amount || amount <= 0) {
       setContributionError("Enter an amount greater than zero.");
       return;
@@ -812,7 +521,9 @@ export function GoalsScreen() {
 
     const updatedSavedAmount = selectedGoal.saved_amount + amount;
     const nextStatus: GoalStatus =
-      updatedSavedAmount >= selectedGoal.target_amount ? "completed" : "active";
+      updatedSavedAmount >= selectedGoal.target_amount
+        ? "completed"
+        : "active";
 
     try {
       setContributionError("");
@@ -827,12 +538,11 @@ export function GoalsScreen() {
               : null,
         },
       });
-
       closeContributionSheet();
       setFeedback({
         visible: true,
         type: "success",
-        title: nextStatus === "completed" ? "Goal completed" : "Funds added",
+        title: nextStatus === "completed" ? "Goal funded" : "Funds added",
         message:
           nextStatus === "completed"
             ? `${selectedGoal.title} has reached its target.`
@@ -850,23 +560,22 @@ export function GoalsScreen() {
   const handleToggleStatus = async (goal: Goal) => {
     const nextStatus: GoalStatus =
       goal.status === "completed" ? "active" : "completed";
-
     try {
       await updateGoalMutation.mutateAsync({
         id: goal.id,
         payload: {
           status: nextStatus,
-          completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
+          completed_at:
+            nextStatus === "completed" ? new Date().toISOString() : null,
         },
       });
-
       setFeedback({
         visible: true,
         type: "success",
-        title: nextStatus === "completed" ? "Goal marked complete" : "Goal reopened",
+        title: nextStatus === "completed" ? "Goal completed" : "Goal reopened",
         message:
           nextStatus === "completed"
-            ? `${goal.title} is now marked as complete.`
+            ? `${goal.title} is now marked complete.`
             : `${goal.title} is active again.`,
       });
     } catch (saveError) {
@@ -911,874 +620,392 @@ export function GoalsScreen() {
     );
   };
 
-  const renderErrorState = () => {
-    const missingTable = isMissingGoalsTableError(error);
-
-    return (
-      <View
-        style={{
-          borderRadius: 28,
-          backgroundColor: "#ffffff",
-          padding: 24,
-          borderWidth: 1,
-          borderColor: missingTable ? "#fecaca" : "#e2e8f0",
-          alignItems: "center",
-        }}
-      >
-        <View
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: 22,
-            backgroundColor: missingTable ? "#fff1f2" : "#eff6ff",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 16,
-          }}
-        >
-          <MaterialCommunityIcons
-            name={missingTable ? "database-alert-outline" : "alert-circle-outline"}
-            size={28}
-            color={missingTable ? "#e11d48" : primary}
-          />
-        </View>
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: "800",
-            color: "#0f172a",
-            textAlign: "center",
-            marginBottom: 8,
-          }}
-        >
-          {missingTable ? "Goals table not found" : "Could not load goals"}
-        </Text>
-        <Text
-          style={{
-            fontSize: 14,
-            lineHeight: 21,
-            color: "#64748b",
-            textAlign: "center",
-            marginBottom: 18,
-          }}
-        >
-          {missingTable
-            ? "Run the Goals SQL migration, then refresh this tab to start saving toward new targets."
-            : "Try refreshing again. If the problem persists, check your database connection and policies."}
-        </Text>
-        <TouchableOpacity
-          onPress={() => refetch()}
-          style={{
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-            borderRadius: 999,
-            backgroundColor: primary,
-          }}
-        >
-          <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 14 }}>
-            Retry
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
+  const missingGoalsTable = isMissingGoalsTableError(goalsQuery.error);
 
   return (
-    <Screen>
+    <Screen backgroundColor={palette.canvas} className="px-0">
+      <SignalThreads intensity="quiet" />
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingTop: 12,
-          paddingBottom: 132 + insets.bottom,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 22,
-          }}
-        >
-          <View style={{ flex: 1, paddingRight: 16 }}>
-            <Text
-              style={{
-                fontSize: 28,
-                fontWeight: "800",
-                color: "#0f172a",
-                marginBottom: 8,
-              }}
-            >
-              Goals
-            </Text>
-            <Text style={{ fontSize: 14, lineHeight: 21, color: "#475569" }}>
-              Save for a target, a big item, or the next milestone you want to
-              reach.
-            </Text>
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="automatic"
+        refreshControl={
+          <RefreshControl
+            colors={[palette.textMuted]}
+            onRefresh={() => void goalsQuery.refetch()}
+            refreshing={goalsQuery.isRefetching}
+            tintColor={palette.textMuted}
+          />
+        }
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.headingRow}>
+          <View style={styles.headingCopy}>
+            <PageHeading
+              description="Give future money a deliberate destination, then move each plan forward without noise."
+              eyebrow="PLAN / PERSONAL"
+              title="Goals"
+            />
           </View>
-          <TouchableOpacity
+          <Pressable
+            accessibilityLabel="Create goal"
+            accessibilityRole="button"
             onPress={openCreateGoal}
-            style={{
-              width: 54,
-              height: 54,
-              borderRadius: 20,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: primary,
-            }}
-          >
-            <MaterialCommunityIcons name="plus" size={26} color="#ffffff" />
-          </TouchableOpacity>
+            style={({ pressed }) => [
+              styles.addButton,
+              { opacity: pressed ? 0.62 : 1 },
+            ]}>
+            <MaterialCommunityIcons color={palette.black} name="plus" size={20} />
+          </Pressable>
         </View>
 
-        <View
-          style={{
-            borderRadius: 30,
-            backgroundColor: primary,
-            padding: 24,
-            marginBottom: 18,
-          }}
-        >
+        <View style={styles.reservePanel}>
+          <View style={styles.reserveThread} />
+          <Text style={styles.reserveLabel}>RESERVED CAPITAL / {currency.code}</Text>
           <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "700",
-              color: "rgba(255,255,255,0.76)",
-              marginBottom: 8,
-            }}
-          >
-            Goal planner
+            accessibilityLabel={`Reserved in ${currency.code}, ${formatMoney(selectedCurrencySaved, currency)}`}
+            adjustsFontSizeToFit
+            numberOfLines={1}
+            style={styles.reserveAmount}>
+            {formatMoney(selectedCurrencySaved, currency)}
           </Text>
-          <Text
-            style={{
-              fontSize: 24,
-              fontWeight: "800",
-              color: "#ffffff",
-              marginBottom: 10,
-            }}
-          >
-            Keep every savings plan in one place
-          </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              lineHeight: 21,
-              color: "rgba(255,255,255,0.88)",
-            }}
-          >
-            Create a focused target, add progress quickly, and mark it complete
-            when you are there.
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: "row", marginBottom: 12 }}>
-          <View style={{ flex: 1, marginRight: 6 }}>
-            <SummaryCard
-              icon="target"
-              iconColor={primary}
-              iconBackground={primary + "14"}
-              label="Open goals"
-              value={goalCountLabel}
-              accent={primary}
-            />
-          </View>
-          <View style={{ flex: 1, marginLeft: 6 }}>
-            <SummaryCard
-              icon="wallet-outline"
-              iconColor="#059669"
-              iconBackground="#dcfce7"
-              label="Saved so far"
-              value={savedTotalLabel}
-              accent="#059669"
-            />
+          <View style={styles.reserveMeta}>
+            <Text style={styles.reserveMetaText}>
+              Across {goals.filter((goal) => goal.currency_code === currency.code).length} {currency.code} {goals.filter((goal) => goal.currency_code === currency.code).length === 1 ? "plan" : "plans"}
+            </Text>
+            <View style={styles.reserveMetaRule} />
+            <Text style={styles.reserveMetaText}>
+              {nearestGoal ? `Next · ${nearestGoal.title}` : "No dated target"}
+            </Text>
           </View>
         </View>
 
-        <View style={{ marginBottom: 20 }}>
-          <SummaryCard
-            icon="calendar-clock-outline"
-            iconColor="#7c3aed"
-            iconBackground="#ede9fe"
-            label="Closest target"
-            value={closestLabel}
-            accent="#7c3aed"
+        <SummaryRail
+          items={[
+            { label: "ACTIVE", value: String(activeGoals.length) },
+            { label: "COMPLETE", value: String(completedGoals) },
+            {
+              label: "NEXT DATE",
+              value: compactGoalDate(nearestGoal?.target_date ?? null),
+            },
+          ]}
+        />
+
+        <View style={styles.filterWrap}>
+          <SegmentedControl
+            accessibilityLabel="Goal filter"
+            onChange={(value) => {
+              setFilter(value);
+              void Haptics.selectionAsync();
+            }}
+            options={FILTER_OPTIONS}
+            value={filter}
           />
         </View>
 
-        <View style={{ marginBottom: 16 }}>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "800",
-              color: "#0f172a",
-              marginBottom: 12,
-            }}
-          >
-            Filter goals
+        <View style={styles.listHeader}>
+          <Text style={styles.listHeaderText}>PLAN LEDGER</Text>
+          <View style={styles.listHeaderRule} />
+          <Text style={styles.listHeaderCount}>
+            {filteredGoals.length.toString().padStart(2, "0")}
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <FilterChip
-              label="All"
-              active={filter === "all"}
-              onPress={() => setFilter("all")}
-              activeColor={primary}
-            />
-            <FilterChip
-              label="Active"
-              active={filter === "active"}
-              onPress={() => setFilter("active")}
-              activeColor={primary}
-            />
-            <FilterChip
-              label="Completed"
-              active={filter === "completed"}
-              onPress={() => setFilter("completed")}
-              activeColor={primary}
-            />
-          </ScrollView>
         </View>
 
-        {error ? (
-          renderErrorState()
-        ) : isLoading ? (
-          <LoadingState label="Loading your goals" />
+        {goalsQuery.isLoading ? (
+          <StatePanel
+            description="Reading your active and completed plans."
+            loading
+            title="Opening plan ledger"
+          />
+        ) : goalsQuery.isError ? (
+          <StatePanel
+            actionLabel="Retry"
+            description={
+              missingGoalsTable
+                ? "The Goals database migration is not installed in this environment."
+                : "Your saved plans are untouched. Try loading them again."
+            }
+            onAction={() => void goalsQuery.refetch()}
+            title={missingGoalsTable ? "Goals need setup" : "Goals unavailable"}
+          />
         ) : goals.length === 0 ? (
-          <View
-            style={{
-              borderRadius: 30,
-              backgroundColor: "#ffffff",
-              padding: 24,
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-              alignItems: "center",
-            }}
-          >
-            <View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 24,
-                backgroundColor: primary + "18",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 16,
-              }}
-            >
-              <MaterialCommunityIcons
-                name="target"
-                size={32}
-                color={primary}
-              />
-            </View>
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "800",
-                color: "#0f172a",
-                marginBottom: 8,
-              }}
-            >
-              Start your first goal
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                lineHeight: 21,
-                color: "#64748b",
-                textAlign: "center",
-                marginBottom: 18,
-              }}
-            >
-              Track a savings target, a travel plan, or an item you want to buy
-              without losing sight of your progress.
-            </Text>
-            <TouchableOpacity
-              onPress={openCreateGoal}
-              style={{
-                paddingHorizontal: 20,
-                paddingVertical: 12,
-                borderRadius: 999,
-                backgroundColor: primary,
-              }}
-            >
-              <Text style={{ color: "#ffffff", fontWeight: "700", fontSize: 14 }}>
-                Create a goal
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <StatePanel
+            actionLabel="Create goal"
+            description="Define a target amount and build toward it one contribution at a time."
+            onAction={openCreateGoal}
+            title="Start the first plan"
+          />
         ) : filteredGoals.length === 0 ? (
-          <View
-            style={{
-              borderRadius: 28,
-              backgroundColor: "#ffffff",
-              padding: 22,
-              borderWidth: 1,
-              borderColor: "#e2e8f0",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: "#0f172a",
-                marginBottom: 8,
-              }}
-            >
-              No goals in this filter
-            </Text>
-            <Text style={{ fontSize: 14, lineHeight: 21, color: "#64748b" }}>
-              Switch filters or add a new goal to keep your plans moving.
-            </Text>
-          </View>
+          <StatePanel
+            description="Choose another filter or create a new plan."
+            title="No goals in this view"
+          />
         ) : (
-          filteredGoals.map((goal) => (
-            <GoalCard
-              key={goal.id}
-              goal={goal}
-              onAddFunds={() => openContribution(goal)}
-              onEdit={() => openEditGoal(goal)}
-              onToggleStatus={() => handleToggleStatus(goal)}
-              onDelete={() => handleDeleteGoal(goal)}
-            />
-          ))
+          <View style={styles.goalLedger}>
+            {filteredGoals.map((goal) => (
+              <GoalLedgerRow
+                goal={goal}
+                key={goal.id}
+                onAddFunds={() => openContribution(goal)}
+                onDelete={() => handleDeleteGoal(goal)}
+                onEdit={() => openEditGoal(goal)}
+                onToggleStatus={() => void handleToggleStatus(goal)}
+              />
+            ))}
+          </View>
         )}
       </ScrollView>
 
-      <SheetModal
-        visible={goalSheetOpen}
-        title={editingGoal ? "Edit goal" : "Create goal"}
+      <FinanceSheet
+        description="Amounts keep the goal's original currency when editing."
         onClose={closeGoalSheet}
-      >
-        <View
-          style={{
-            borderRadius: 24,
-            backgroundColor: form.color + "12",
-            padding: 18,
-            marginBottom: 20,
-            borderWidth: 1,
-            borderColor: form.color + "20",
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 18,
-                backgroundColor: "#ffffff",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: 14,
-              }}
-            >
-              <MaterialCommunityIcons
-                name={form.iconName as any}
-                size={24}
-                color={form.color}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "800",
-                  color: "#0f172a",
-                  marginBottom: 4,
-                }}
-              >
-                {form.title.trim() || "New goal"}
-              </Text>
-              <Text style={{ fontSize: 13, color: "#475569" }}>
-                {form.goalType === "saving"
-                  ? "Steady saving target"
-                  : "Item purchase plan"}
-              </Text>
-            </View>
+        title={editingGoal ? "Edit goal" : "Create goal"}
+        visible={goalSheetOpen}>
+        <View style={styles.formPreview}>
+          <View style={[styles.formPreviewThread, { backgroundColor: form.color }]} />
+          <View style={styles.formPreviewIcon}>
+            <MaterialCommunityIcons
+              color={palette.textMuted}
+              name={form.iconName as never}
+              size={19}
+            />
           </View>
-          <Text style={{ fontSize: 14, color: "#334155" }}>
-            {form.targetAmount
-              ? `Target ${formatGoalAmount(parseCurrencyInput(form.targetAmount), currency.code)}`
-              : "Set a target amount to begin"}
-          </Text>
-        </View>
-
-        <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 12 }}>
-          Goal type
-        </Text>
-        <View style={{ flexDirection: "row", marginBottom: 20 }}>
-          {(["saving", "item"] as GoalType[]).map((goalType, index) => {
-            const active = form.goalType === goalType;
-            return (
-              <TouchableOpacity
-                key={goalType}
-                onPress={() =>
-                    setForm((current) => ({
-                      ...current,
-                      goalType,
-                      iconName:
-                        goalType === "saving"
-                          ? GOAL_ICON_OPTIONS[0]
-                          : GOAL_ICON_OPTIONS[2],
-                    }))
-                }
-                style={{
-                  flex: 1,
-                  borderRadius: 22,
-                  padding: 16,
-                  backgroundColor: active ? primary : "#f8fafc",
-                  borderWidth: 1,
-                  borderColor: active ? primary : "#dbe3ee",
-                  marginLeft: index === 1 ? 8 : 0,
-                  marginRight: index === 0 ? 8 : 0,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "800",
-                    color: active ? "#ffffff" : "#0f172a",
-                    marginBottom: 4,
-                  }}
-                >
-                  {goalType === "saving" ? "Savings target" : "Item purchase"}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    lineHeight: 18,
-                    color: active ? "rgba(255,255,255,0.82)" : "#64748b",
-                  }}
-                >
-                  {goalType === "saving"
-                    ? "Track how much you want to put aside."
-                    : "Save toward a specific thing you want."}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 10 }}>
-          Details
-        </Text>
-        <TextInput
-          value={form.title}
-          onChangeText={(title) => setForm((current) => ({ ...current, title }))}
-          placeholder="Goal title"
-          placeholderTextColor="#94a3b8"
-          style={{
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: "#dbe3ee",
-            backgroundColor: "#ffffff",
-            paddingHorizontal: 16,
-            paddingVertical: 15,
-            fontSize: 15,
-            color: "#0f172a",
-            marginBottom: 12,
-          }}
-        />
-        <View style={{ flexDirection: "row", marginBottom: 12 }}>
-          <View style={{ flex: 1, marginRight: 6 }}>
-            <Text style={{ fontSize: 13, color: "#475569", marginBottom: 8 }}>
-              Target amount
+          <View style={styles.formPreviewCopy}>
+            <Text style={styles.formPreviewTitle}>
+              {form.title.trim() || "Untitled plan"}
             </Text>
-            <TextInput
-              value={form.targetAmount}
+            <Text style={styles.formPreviewMeta}>
+              {form.targetAmount
+                ? `TARGET ${formatGoalAmount(
+                    parseCurrencyInput(form.targetAmount),
+                    editingGoal?.currency_code ?? currency.code,
+                  )}`
+                : `TARGET / ${editingGoal?.currency_code ?? currency.code}`}
+            </Text>
+          </View>
+        </View>
+
+        <SegmentedControl
+          accessibilityLabel="Goal type"
+          onChange={(goalType) =>
+            setForm((current) => ({
+              ...current,
+              goalType,
+              iconName: goalType === "saving" ? "target" : "laptop",
+            }))
+          }
+          options={TYPE_OPTIONS}
+          value={form.goalType}
+        />
+
+        <FinanceField
+          autoCapitalize="sentences"
+          label="Goal title"
+          onChangeText={(title) => setForm((current) => ({ ...current, title }))}
+          placeholder="Emergency reserve"
+          value={form.title}
+        />
+
+        <View style={styles.amountFields}>
+          <View style={styles.amountField}>
+            <FinanceField
+              keyboardType="decimal-pad"
+              label="Target amount"
               onChangeText={(targetAmount) =>
                 setForm((current) => ({ ...current, targetAmount }))
               }
               placeholder="0.00"
-              placeholderTextColor="#94a3b8"
-              keyboardType="decimal-pad"
-              style={{
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "#dbe3ee",
-                backgroundColor: "#ffffff",
-                paddingHorizontal: 16,
-                paddingVertical: 15,
-                fontSize: 15,
-                color: "#0f172a",
-              }}
+              value={form.targetAmount}
             />
           </View>
-          <View style={{ flex: 1, marginLeft: 6 }}>
-            <Text style={{ fontSize: 13, color: "#475569", marginBottom: 8 }}>
-              Already saved
-            </Text>
-            <TextInput
-              value={form.savedAmount}
+          <View style={styles.amountField}>
+            <FinanceField
+              keyboardType="decimal-pad"
+              label="Already reserved"
               onChangeText={(savedAmount) =>
                 setForm((current) => ({ ...current, savedAmount }))
               }
               placeholder="0.00"
-              placeholderTextColor="#94a3b8"
-              keyboardType="decimal-pad"
-              style={{
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "#dbe3ee",
-                backgroundColor: "#ffffff",
-                paddingHorizontal: 16,
-                paddingVertical: 15,
-                fontSize: 15,
-                color: "#0f172a",
-              }}
+              value={form.savedAmount}
             />
           </View>
         </View>
 
-        <View
-          style={{
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: "#dbe3ee",
-            backgroundColor: "#ffffff",
-            padding: 16,
-            marginBottom: 14,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 12,
-            }}
-          >
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: "#0f172a", marginBottom: 4 }}>
-                Target date
-              </Text>
-              <Text style={{ fontSize: 13, color: "#64748b" }}>
-                {form.hasTargetDate
-                  ? formatGoalDate(toLocalDateString(form.targetDate))
-                  : "Optional"}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setCalendarOpen(true)}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                borderRadius: 999,
-                backgroundColor: "#eff6ff",
-              }}
-            >
-              <Text style={{ color: "#2563eb", fontWeight: "700", fontSize: 13 }}>
-                Pick date
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            onPress={() =>
-              setForm((current) => ({
-                ...current,
-                hasTargetDate: !current.hasTargetDate,
-              }))
-            }
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text style={{ fontSize: 13, color: "#475569" }}>
-              {form.hasTargetDate ? "Remove target date" : "Use a target date"}
+        <View style={styles.dateControl}>
+          <View style={styles.dateCopy}>
+            <Text style={styles.controlLabel}>TARGET DATE</Text>
+            <Text style={styles.controlValue}>
+              {form.hasTargetDate
+                ? formatGoalDate(toLocalDateString(form.targetDate))
+                : "No deadline"}
             </Text>
+          </View>
+          {form.hasTargetDate ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                setForm((current) => ({ ...current, hasTargetDate: false }))
+              }
+              style={styles.controlTextButton}>
+              <Text style={styles.controlTextButtonLabel}>Remove</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setCalendarOpen(true)}
+            style={styles.controlIconButton}>
             <MaterialCommunityIcons
-              name={form.hasTargetDate ? "toggle-switch" : "toggle-switch-off-outline"}
-              size={34}
-              color={form.hasTargetDate ? primary : "#94a3b8"}
+              color={palette.textMuted}
+              name="calendar-blank-outline"
+              size={18}
             />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
-        <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 10 }}>
-          Icon
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 18 }}>
-          {GOAL_ICON_OPTIONS.map((iconName) => {
-            const active = form.iconName === iconName;
-            return (
-              <TouchableOpacity
-                key={iconName}
-                onPress={() =>
-                  setForm((current) => ({ ...current, iconName }))
-                }
-                style={{
-                  width: "18%",
-                  aspectRatio: 1,
-                  borderRadius: 18,
-                  backgroundColor: active ? form.color : "#f8fafc",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: "2%",
-                  marginBottom: 10,
-                  borderWidth: 1,
-                  borderColor: active ? form.color : "#e2e8f0",
-                }}
-              >
-                <MaterialCommunityIcons
-                  name={iconName as any}
-                  size={22}
-                  color={active ? "#ffffff" : "#475569"}
-                />
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.pickerGroup}>
+          <Text style={styles.controlLabel}>MARK</Text>
+          <View style={styles.iconGrid}>
+            {GOAL_ICON_OPTIONS.map((iconName) => {
+              const selected = form.iconName === iconName;
+              return (
+                <Pressable
+                  accessibilityLabel={`Goal icon ${iconName}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={iconName}
+                  onPress={() =>
+                    setForm((current) => ({ ...current, iconName }))
+                  }
+                  style={[
+                    styles.iconOption,
+                    selected ? styles.iconOptionSelected : null,
+                  ]}>
+                  <MaterialCommunityIcons
+                    color={selected ? palette.black : palette.textMuted}
+                    name={iconName as never}
+                    size={19}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
-        <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 10 }}>
-          Accent color
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 18 }}>
-          {GOAL_COLOR_OPTIONS.map((color) => {
-            const active = form.color === color;
-            return (
-              <TouchableOpacity
-                key={color}
-                onPress={() =>
-                  setForm((current) => ({ ...current, color }))
-                }
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 14,
-                  backgroundColor: color,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 10,
-                  marginBottom: 10,
-                  borderWidth: active ? 3 : 0,
-                  borderColor: "#0f172a",
-                }}
-              >
-                {active ? (
-                  <MaterialCommunityIcons name="check" size={18} color="#ffffff" />
-                ) : null}
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.pickerGroup}>
+          <Text style={styles.controlLabel}>SIGNAL THREAD</Text>
+          <View style={styles.signalOptions}>
+            {GOAL_COLOR_OPTIONS.map((color) => {
+              const selected = form.color === color;
+              return (
+                <Pressable
+                  accessibilityLabel="Goal signal color"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={color}
+                  onPress={() => setForm((current) => ({ ...current, color }))}
+                  style={[
+                    styles.signalOption,
+                    selected ? styles.signalOptionSelected : null,
+                  ]}>
+                  <View style={[styles.signalOptionLine, { backgroundColor: color }]} />
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
-        <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 10 }}>
-          Notes
-        </Text>
-        <TextInput
-          value={form.notes}
-          onChangeText={(notes) => setForm((current) => ({ ...current, notes }))}
-          placeholder="What is this goal for?"
-          placeholderTextColor="#94a3b8"
+        <FinanceField
+          label="Notes"
           multiline
-          textAlignVertical="top"
-          style={{
-            minHeight: 104,
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: "#dbe3ee",
-            backgroundColor: "#ffffff",
-            paddingHorizontal: 16,
-            paddingVertical: 15,
-            fontSize: 15,
-            color: "#0f172a",
-            marginBottom: 10,
-          }}
+          onChangeText={(notes) => setForm((current) => ({ ...current, notes }))}
+          placeholder="What is this plan protecting or enabling?"
+          value={form.notes}
         />
 
-        {formError ? (
-          <Text style={{ color: "#e11d48", fontSize: 13, marginBottom: 12 }}>
-            {formError}
-          </Text>
-        ) : null}
+        {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+        <ActionButton
+          label={editingGoal ? "Update goal" : "Create goal"}
+          loading={goalSheetBusy}
+          onPress={() => void handleSaveGoal()}
+        />
+      </FinanceSheet>
 
-        <TouchableOpacity
-          onPress={handleSaveGoal}
-          disabled={goalSheetBusy}
-          style={{
-            borderRadius: 18,
-            backgroundColor: goalSheetBusy ? "#94a3b8" : primary,
-            paddingVertical: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            marginTop: 6,
-          }}
-        >
-          <Text style={{ color: "#ffffff", fontSize: 15, fontWeight: "800" }}>
-            {goalSheetBusy
-              ? "Saving..."
-              : editingGoal
-                ? "Update goal"
-                : "Create goal"}
-          </Text>
-        </TouchableOpacity>
-      </SheetModal>
-
-      <SheetModal
-        visible={contributeSheetOpen}
-        title="Add to goal"
+      <FinanceSheet
+        description="The amount is added to the goal's current reserved total."
         onClose={closeContributionSheet}
-      >
+        title="Add to goal"
+        visible={contributeSheetOpen}>
         {selectedGoal ? (
           <>
-            <View
-              style={{
-                borderRadius: 24,
-                backgroundColor: selectedGoal.color + "12",
-                padding: 18,
-                marginBottom: 20,
-                borderWidth: 1,
-                borderColor: selectedGoal.color + "20",
-              }}
-            >
+            <View style={styles.contributionSummary}>
               <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 12,
-                }}
-              >
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 16,
-                    backgroundColor: "#ffffff",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 14,
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name={selectedGoal.icon_name as any}
-                    size={22}
-                    color={selectedGoal.color}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontWeight: "800",
-                      color: "#0f172a",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {selectedGoal.title}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: "#475569" }}>
-                    {formatGoalAmount(selectedGoal.saved_amount, selectedGoal.currency_code)}
-                    {" / "}
-                    {formatGoalAmount(selectedGoal.target_amount, selectedGoal.currency_code)}
-                  </Text>
-                </View>
+                style={[
+                  styles.contributionThread,
+                  { backgroundColor: selectedGoal.color },
+                ]}
+              />
+              <View style={styles.contributionCopy}>
+                <Text style={styles.contributionTitle}>{selectedGoal.title}</Text>
+                <Text style={styles.contributionMeta}>
+                  {formatGoalAmount(
+                    selectedGoal.saved_amount,
+                    selectedGoal.currency_code,
+                  )} {" / "}
+                  {formatGoalAmount(
+                    selectedGoal.target_amount,
+                    selectedGoal.currency_code,
+                  )}
+                </Text>
               </View>
-              <Text style={{ fontSize: 14, color: "#334155" }}>
-                Add a contribution to move this goal forward.
-              </Text>
             </View>
 
-            <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 10 }}>
-              Quick amounts
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 18 }}>
-              {QUICK_CONTRIBUTIONS.map((amount) => (
-                <TouchableOpacity
-                  key={amount}
-                  onPress={() => setContributionAmount(String(amount))}
-                  style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    borderRadius: 999,
-                    backgroundColor: "#f8fafc",
-                    borderWidth: 1,
-                    borderColor: "#dbe3ee",
-                    marginRight: 10,
-                    marginBottom: 10,
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155" }}>
-                    {formatGoalAmount(amount, selectedGoal.currency_code)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.pickerGroup}>
+              <Text style={styles.controlLabel}>QUICK AMOUNTS</Text>
+              <ScrollView
+                contentContainerStyle={styles.quickAmounts}
+                horizontal
+                showsHorizontalScrollIndicator={false}>
+                {QUICK_CONTRIBUTIONS.map((amount) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={amount}
+                    onPress={() => setContributionAmount(String(amount))}
+                    style={styles.quickAmount}>
+                    <Text style={styles.quickAmountText}>
+                      {formatGoalAmount(amount, selectedGoal.currency_code)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
 
-            <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a", marginBottom: 10 }}>
-              Amount
-            </Text>
-            <TextInput
-              value={contributionAmount}
+            <FinanceField
+              error={contributionError || undefined}
+              keyboardType="decimal-pad"
+              label="Contribution"
               onChangeText={setContributionAmount}
               placeholder="0.00"
-              placeholderTextColor="#94a3b8"
-              keyboardType="decimal-pad"
-              style={{
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "#dbe3ee",
-                backgroundColor: "#ffffff",
-                paddingHorizontal: 16,
-                paddingVertical: 15,
-                fontSize: 15,
-                color: "#0f172a",
-                marginBottom: 12,
-              }}
+              value={contributionAmount}
             />
-
-            {contributionError ? (
-              <Text style={{ color: "#e11d48", fontSize: 13, marginBottom: 12 }}>
-                {contributionError}
-              </Text>
-            ) : null}
-
-            <TouchableOpacity
-              onPress={handleContribution}
-              disabled={contributionBusy}
-              style={{
-                borderRadius: 18,
-                backgroundColor: contributionBusy ? "#94a3b8" : selectedGoal.color,
-                paddingVertical: 16,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: "#ffffff", fontSize: 15, fontWeight: "800" }}>
-                {contributionBusy ? "Adding..." : "Add contribution"}
-              </Text>
-            </TouchableOpacity>
+            <ActionButton
+              label="Add contribution"
+              loading={contributionBusy}
+              onPress={() => void handleContribution()}
+            />
           </>
         ) : null}
-      </SheetModal>
+      </FinanceSheet>
 
       <Modal
-        transparent
         animationType="fade"
-        visible={calendarOpen}
-        statusBarTranslucent
         onRequestClose={() => setCalendarOpen(false)}
-      >
+        statusBarTranslucent
+        transparent
+        visible={calendarOpen}>
         <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(15,23,42,0.35)",
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 18,
-          }}
           onPress={() => setCalendarOpen(false)}
-        >
-          <Pressable onPress={() => null}>
+          style={styles.calendarScrim}>
+          <Pressable onPress={() => undefined}>
             <CustomCalendar
-              selectedDate={form.targetDate}
+              onClose={() => setCalendarOpen(false)}
               onSelectDate={(targetDate) =>
                 setForm((current) => ({
                   ...current,
@@ -1786,21 +1013,360 @@ export function GoalsScreen() {
                   hasTargetDate: true,
                 }))
               }
-              onClose={() => setCalendarOpen(false)}
+              selectedDate={form.targetDate}
             />
           </Pressable>
         </Pressable>
       </Modal>
 
       <SaveFeedback
-        visible={feedback.visible}
-        type={feedback.type}
-        title={feedback.title}
         message={feedback.message}
-        primaryActionLabel={feedback.primaryActionLabel}
-        onPrimaryAction={feedback.onPrimaryAction}
         onDone={dismissFeedback}
+        onPrimaryAction={feedback.onPrimaryAction}
+        primaryActionLabel={feedback.primaryActionLabel}
+        title={feedback.title}
+        type={feedback.type}
+        visible={feedback.visible}
       />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    alignSelf: "center",
+    maxWidth: 720,
+    paddingBottom: 150,
+    paddingHorizontal: 20,
+    width: "100%",
+  },
+  headingRow: { alignItems: "center", flexDirection: "row" },
+  headingCopy: { flex: 1 },
+  addButton: {
+    alignItems: "center",
+    backgroundColor: palette.text,
+    borderRadius: 14,
+    height: 46,
+    justifyContent: "center",
+    marginLeft: 16,
+    width: 46,
+  },
+  reservePanel: {
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    minHeight: 176,
+    paddingBottom: 24,
+  },
+  reserveThread: {
+    backgroundColor: palette.signalViolet,
+    height: 1,
+    marginBottom: 18,
+    width: 72,
+  },
+  reserveLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.8,
+  },
+  reserveAmount: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 42,
+    letterSpacing: -1,
+    marginTop: 9,
+  },
+  reserveMeta: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 17,
+  },
+  reserveMetaText: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 10,
+  },
+  reserveMetaRule: { backgroundColor: palette.lineStrong, height: 1, width: 18 },
+  filterWrap: { marginTop: 12 },
+  listHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 72,
+  },
+  listHeaderText: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+    letterSpacing: 0.9,
+  },
+  listHeaderRule: { backgroundColor: palette.line, flex: 1, height: 1 },
+  listHeaderCount: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+  },
+  goalLedger: { borderTopColor: palette.line, borderTopWidth: 1 },
+  goalRow: {
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    paddingBottom: 22,
+    paddingLeft: 14,
+    paddingTop: 22,
+    position: "relative",
+  },
+  goalSignal: { bottom: 22, left: 0, position: "absolute", top: 22, width: 1 },
+  goalTopline: { alignItems: "center", flexDirection: "row" },
+  goalIcon: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 13,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    marginRight: 12,
+    width: 40,
+  },
+  goalTitleGroup: { flex: 1, gap: 5, marginRight: 10 },
+  goalTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 20,
+  },
+  goalStatus: {
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    letterSpacing: 0.55,
+  },
+  goalDateGroup: { alignItems: "flex-end", gap: 5 },
+  goalDateLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+  },
+  goalDate: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+  },
+  goalNotes: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 14,
+    maxWidth: 420,
+  },
+  goalAmounts: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+  },
+  goalAmountRight: { alignItems: "flex-end" },
+  amountLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    letterSpacing: 0.55,
+    marginBottom: 5,
+  },
+  amountValue: {
+    color: palette.text,
+    fontFamily: fonts.ledger,
+    fontSize: 11,
+  },
+  progressTrack: {
+    backgroundColor: palette.line,
+    height: 2,
+    marginTop: 15,
+    overflow: "hidden",
+  },
+  progressValue: { height: 2 },
+  progressMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  progressPercent: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+  },
+  progressRemaining: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 9,
+  },
+  goalActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 15,
+    marginTop: 18,
+  },
+  goalPrimaryAction: {
+    alignItems: "center",
+    backgroundColor: palette.text,
+    borderRadius: 12,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 38,
+    paddingHorizontal: 13,
+  },
+  goalPrimaryActionText: {
+    color: palette.black,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  goalTextAction: { minHeight: 38, justifyContent: "center" },
+  goalTextActionLabel: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  goalDeleteAction: { marginLeft: "auto", padding: 8 },
+  formPreview: {
+    alignItems: "center",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    paddingBottom: 18,
+    position: "relative",
+  },
+  formPreviewThread: { bottom: 18, left: 0, position: "absolute", top: 0, width: 1 },
+  formPreviewIcon: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 13,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    marginLeft: 14,
+    marginRight: 12,
+    width: 42,
+  },
+  formPreviewCopy: { flex: 1, gap: 5 },
+  formPreviewTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 19,
+  },
+  formPreviewMeta: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    letterSpacing: 0.4,
+  },
+  amountFields: { flexDirection: "row", gap: 16 },
+  amountField: { flex: 1 },
+  dateControl: {
+    alignItems: "center",
+    borderBottomColor: palette.lineStrong,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    minHeight: 64,
+  },
+  dateCopy: { flex: 1, gap: 6 },
+  controlLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.75,
+  },
+  controlValue: {
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 13,
+  },
+  controlTextButton: { padding: 10 },
+  controlTextButtonLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  controlIconButton: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 11,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+  },
+  pickerGroup: { gap: 11 },
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  iconOption: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  iconOptionSelected: {
+    backgroundColor: palette.text,
+    borderColor: palette.text,
+  },
+  signalOptions: { flexDirection: "row", gap: 8 },
+  signalOption: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 11,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  signalOptionSelected: { borderColor: palette.textMuted },
+  signalOptionLine: { height: 1, width: 22 },
+  formError: {
+    color: palette.expense,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  contributionSummary: {
+    alignItems: "stretch",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    paddingBottom: 18,
+  },
+  contributionThread: { marginRight: 14, width: 1 },
+  contributionCopy: { flex: 1, gap: 6 },
+  contributionTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 21,
+  },
+  contributionMeta: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+  },
+  quickAmounts: { gap: 8 },
+  quickAmount: {
+    borderColor: palette.line,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 38,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  quickAmountText: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+  },
+  calendarScrim: {
+    alignItems: "center",
+    backgroundColor: withAlpha(palette.black, 0.82),
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+});

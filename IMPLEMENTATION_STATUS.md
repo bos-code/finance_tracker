@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 2 — shared finance primitives, Ledger, and Insights
+**Batch:** 3A — Goals and shared dark form primitives
 
 **Branch:** `master`
 
@@ -79,17 +79,37 @@
 - Limited category color to a three-pixel distribution rail and one-pixel row
   signals.
 
+### Goals and forms
+
+- Rebuilt Goals as a vertical plan ledger with restrained one-pixel identity
+  signals and two-pixel progress rails.
+- Preserved create, edit, contribute, complete, reopen, and confirmed-delete
+  behavior.
+- Added active/completed filters, dated and undated states, overdue status,
+  exact progress, remaining amount, pull-to-refresh, retry, and empty states.
+- Stopped summing unlike currencies: the headline reserved-capital figure is
+  explicitly scoped to the currently selected currency, while each goal keeps
+  and displays its own original currency.
+- Added realistic mutable goal fixtures so create/update/contribute/delete can
+  be reviewed without a live Goals table.
+- Added shared Obsidian Thread primitives for bottom sheets, labeled fields,
+  and primary/quiet/destructive actions.
+- Rebuilt the goal editor and contribution sheet with the shared dark form
+  system; goal color is limited to a thin thread and progress signal.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
 - `pnpm lint` — passed with zero errors and six pre-existing warnings in legacy
-  category editor, calendar, feedback, and password files; Batch 2 adds no
-  warnings.
+  category editor, calendar, feedback, and password files; the redesign batches
+  add no warnings.
 - Expo fixture-mode production web export — passed; all 16 routes bundled.
 - Expo normal production web export with non-secret placeholder Supabase values
   — passed; all 16 routes bundled.
-- Static fixture output contains the expected Ledger/Insights route headings,
-  search affordance, entry count, and orbit navigation.
+- Goals fixture-mode and normal production exports after the Goals redesign —
+  passed; all 16 routes bundled.
+- Static fixture output contains the expected Ledger, Insights, and Goals route
+  headings, search/plan affordances, state copy, and orbit navigation.
 - Automated screenshot inspection is still unavailable because the workspace
   blocks the browser verifier's local daemon socket. This is an environment
   limitation and is not counted as a visual pass.
@@ -105,7 +125,6 @@
 ## Not yet redesigned or implemented
 
 - onboarding and authentication
-- Goals content and goal detail/edit flows
 - Profile, workspace, account, currency, connection, privacy, notification, and
   app-lock settings
 - shared calendar, category-editor, number-pad, save-feedback, and app-lock
@@ -116,14 +135,14 @@
 
 ## Exact next batch
 
-1. Redesign Goals as a vertical plan ledger while preserving current goal CRUD.
-2. Redesign Profile and settings around workspace, accounts, currency,
+1. Redesign Profile and settings around workspace, accounts, currency,
    connections, privacy, notifications, and app lock.
-3. Redesign onboarding/auth entry and shared sheets so the whole reachable
+2. Redesign onboarding/auth entry and shared sheets so the whole reachable
    frontend speaks the Obsidian Thread system.
-4. Re-run TypeScript, lint, both production exports, and visual verification if
+3. Re-run TypeScript, lint, both production exports, and visual verification if
    the environment permits it.
-5. Commit and push the verified frontend batch before beginning backend Stage 1.
+4. Commit and push each verified frontend batch before beginning backend Stage
+   1.
 
 ## Backend clarification
 
