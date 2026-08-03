@@ -5,6 +5,7 @@ import * as LocalAuthentication from "expo-local-authentication";
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
+import { UI_PREVIEW_ENABLED } from "@/config/runtime";
 
 type AppLockContextValue = {
   enabled: boolean;
@@ -68,7 +69,9 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   const [locked, setLocked] = useState(false);
   const [isBiometricsSupported, setIsBiometricsSupported] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState("Biometrics");
-  const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
+  const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(
+    UI_PREVIEW_ENABLED,
+  );
 
   const appStateRef = useRef(AppState.currentState);
   const skipNextAutoLockRef = useRef(false);

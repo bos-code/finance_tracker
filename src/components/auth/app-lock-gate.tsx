@@ -4,6 +4,7 @@ import { useAppStore } from "@/store/use-app-store";
 import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { AppLockScreen } from "./app-lock-screen";
+import { palette } from "@/theme/colors";
 
 export function AppLockGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -12,7 +13,7 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
 
   if (user && !isReady) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: palette.canvas }}>
         <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );

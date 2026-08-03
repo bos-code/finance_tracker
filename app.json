@@ -8,20 +8,20 @@
     "splash": {
       "image": "./src/assets/icons/onboard.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1d4ed8"
+      "backgroundColor": "#080D0C"
     },
     "scheme": "financetracker",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "package": "com.anonymous.financetracker",
       "splash": {
-        "backgroundColor": "#1d4ed8"
+        "backgroundColor": "#080D0C"
       },
       "adaptiveIcon": {
-        "backgroundColor": "#1d4ed8",
+        "backgroundColor": "#080D0C",
         "foregroundImage": "./src/assets/icons/favicon.png"
       },
       "edgeToEdgeEnabled": true,
@@ -30,7 +30,7 @@
     "web": {
       "output": "static",
       "favicon": "./src/assets/icons/favicon.png",
-      "backgroundColor": "#1d4ed8"
+      "backgroundColor": "#080D0C"
     },
     "plugins": [
       "expo-router",
@@ -40,7 +40,7 @@
           "image": "./src/assets/icons/onboard.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#1d4ed8"
+          "backgroundColor": "#080D0C"
         }
       ]
     ],

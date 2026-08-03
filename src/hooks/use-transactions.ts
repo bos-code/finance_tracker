@@ -7,6 +7,11 @@ import {
 } from "@/services/supabase/transaction-service";
 import { useAuth } from "@/hooks/use-auth";
 import { useOffline } from "@/context/offline-context";
+import { UI_PREVIEW_ENABLED } from "@/config/runtime";
+import {
+  createPreviewTransaction,
+  getPreviewTransactions,
+} from "@/fixtures/preview-data";
 
 export const transactionKeys = {
   all: ["transactions"] as const,
@@ -20,8 +25,11 @@ export function useTransactions(year: number, month?: number) {
 
   return useQuery({
     queryKey: transactionKeys.month(user?.uid || "", year, month),
-    queryFn: () => getTransactionsByMonth(user?.uid || "", year, month, isOnline),
-    enabled: !!user?.uid,
+    queryFn: () =>
+      UI_PREVIEW_ENABLED
+        ? Promise.resolve(getPreviewTransactions(year, month))
+        : getTransactionsByMonth(user?.uid || "", year, month, isOnline),
+    enabled: UI_PREVIEW_ENABLED || !!user?.uid,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
@@ -31,7 +39,10 @@ export function useCreateTransaction() {
   const { isOnline } = useOffline();
 
   return useMutation({
-    mutationFn: (data: TransactionInsert) => createTransaction(data, isOnline),
+    mutationFn: (data: TransactionInsert) =>
+      UI_PREVIEW_ENABLED
+        ? createPreviewTransaction(data)
+        : createTransaction(data, isOnline),
     onMutate: async (newTx) => {
       // Parse date for query key
       const [year, month] = newTx.transaction_date.split("-").map(Number);

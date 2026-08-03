@@ -1,0 +1,4 @@
+allowBuilds:
+  # unrs-resolver's optional native postinstall is not required for Expo lint,
+  # type checking, or web preview. Keep dependency scripts explicitly denied.
+  unrs-resolver: false

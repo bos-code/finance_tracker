@@ -3,6 +3,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { Redirect } from "expo-router";
 import React, { PropsWithChildren } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { palette } from "@/theme/colors";
 
 /**
  * AuthGate — single authoritative component for auth-state-dependent routing.
@@ -36,7 +37,7 @@ export function AuthGate({ children, protected: isProtected, redirect }: AuthGat
 
   if (isBootstrapping) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: palette.canvas }}>
         <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );

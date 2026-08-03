@@ -95,6 +95,15 @@ Notes:
 - `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` are required at startup
 - `EXPO_PUBLIC_TRANSACTIONS_TABLE` and `EXPO_PUBLIC_GOALS_TABLE` can be either `table_name` or `public.table_name`
 
+### UI preview mode
+
+The redesigned frontend can run against local fixtures while backend stages are
+still in progress. Copy `.env.preview.example` to `.env.local`, then start the
+app normally. Preview mode uses a mock signed-in user and realistic monthly
+transactions; it does not write to Supabase.
+
+Do not enable `EXPO_PUBLIC_UI_PREVIEW` in a production build.
+
 ### 3. Set up Supabase
 
 Run the SQL in [supabase/001_create_goals.sql](supabase/001_create_goals.sql) inside the Supabase SQL Editor.
@@ -165,3 +174,12 @@ The repo includes EAS build profiles in [eas.json](eas.json):
 - React Query handles remote caching and mutation invalidation
 
 There is no automated test suite configured in this repo yet, so `pnpm lint` is the main built-in verification step today.
+
+## Implementation Plans
+
+- `PLAN_FRONTEND.md` defines the complete frontend stages, reachable states,
+  adapter boundaries, and backend dependencies.
+- `PLAN_BACKEND.md` defines the matching Supabase/Postgres, Edge Function,
+  Telegram, receipt, parser, realtime, and security stages.
+- `IMPLEMENTATION_STATUS.md` records the latest pushed checkpoint and exact next
+  batch.

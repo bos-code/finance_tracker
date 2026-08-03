@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
+import { UI_PREVIEW_ENABLED } from "@/config/runtime";
+import { supabaseUpdateUserSettings } from "@/services/supabase/auth-service";
+
+const serverStorage = {
+  getItem: async () => null,
+  removeItem: async () => undefined,
+  setItem: async () => undefined,
+};
 
 // ─── Theme Types & Presets (Migrated from theme-context.tsx) ──────────────────
 
@@ -15,6 +24,8 @@ export type ThemeConfig = {
 };
 
 export const SOLID_PRESETS = [
+  { id: "graphite", color: "#F2F2F0", label: "Graphite" },
+  { id: "amber",    color: "#D99A61", label: "Amber thread" },
   { id: "blue",     color: "#1d4ed8", label: "Ocean" },
   { id: "indigo",   color: "#4f46e5", label: "Indigo" },
   { id: "violet",   color: "#7c3aed", label: "Violet" },
@@ -30,6 +41,7 @@ export const SOLID_PRESETS = [
 ];
 
 export const GRADIENT_PRESETS: ThemeGradient[] = [
+  { id: "obsidian", colors: ["#111111", "#40403C"] },
   { id: "ocean",    colors: ["#1d4ed8", "#0ea5e9"] },
   { id: "aurora",   colors: ["#4f46e5", "#ec4899"] },
   { id: "sunset",   colors: ["#ea580c", "#f59e0b"] },
@@ -55,6 +67,7 @@ export type CurrencyOption = {
 };
 
 export const CURRENCY_OPTIONS: CurrencyOption[] = [
+  { id: "ngn", label: "NGN (₦)", symbol: "₦", code: "NGN" },
   { id: "usd", label: "USD ($)", symbol: "$", code: "USD" },
   { id: "eur", label: "EUR (€)", symbol: "€", code: "EUR" },
   { id: "gbp", label: "GBP (£)", symbol: "£", code: "GBP" },
@@ -63,7 +76,7 @@ export const CURRENCY_OPTIONS: CurrencyOption[] = [
   { id: "vnd", label: "VND (₫)", symbol: "₫", code: "VND" },
 ];
 
-export const DEFAULT_CURRENCY = CURRENCY_OPTIONS[0];
+export const DEFAULT_CURRENCY = CURRENCY_OPTIONS[1];
 
 export function formatAmount(amount: number, currency: CurrencyOption): string {
   return `${currency.symbol}${amount.toLocaleString("en-US")}`;
@@ -113,13 +126,12 @@ export const useAppStore = create<AppStoreState>()(
       appLockPin: null,
       appLockOwnerUserId: null,
       appLockUseBiometrics: false,
-      hasHydrated: false,
+      hasHydrated: UI_PREVIEW_ENABLED,
 
       // Actions
       setTheme: async (theme, userId) => {
         set({ theme });
         if (userId) {
-          const { supabaseUpdateUserSettings } = require("@/services/supabase/auth-service");
           const preset = SOLID_PRESETS.find(p => p.color === theme.primary);
           await supabaseUpdateUserSettings({ theme: preset?.id || theme.primary });
         }
@@ -127,7 +139,6 @@ export const useAppStore = create<AppStoreState>()(
       setCurrency: async (currency, userId) => {
         set({ currency });
         if (userId) {
-          const { supabaseUpdateUserSettings } = require("@/services/supabase/auth-service");
           await supabaseUpdateUserSettings({ currency: currency.id });
         }
       },
@@ -163,7 +174,11 @@ export const useAppStore = create<AppStoreState>()(
     }),
     {
       name: "finance-tracker-app-store",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() =>
+        Platform.OS === "web" && typeof window === "undefined"
+          ? serverStorage
+          : AsyncStorage,
+      ),
       partialize: (state) => ({
         theme: state.theme,
         currency: state.currency,

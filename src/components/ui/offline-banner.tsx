@@ -1,14 +1,14 @@
 import { useOffline } from "@/context/offline-context";
 import { useAppStore } from "@/store/use-app-store";
+import { palette } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
-  withSpring,
   withTiming,
-  runOnJS,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,6 +25,7 @@ export function OfflineBanner() {
   const { isOnline, isSyncing, pendingCount, justSynced } = useOffline();
   const theme = useAppStore((s) => s.theme);
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
 
   const visible = !isOnline || isSyncing || justSynced;
 
@@ -33,13 +34,17 @@ export function OfflineBanner() {
 
   useEffect(() => {
     if (visible) {
-      translateY.value = withSpring(0, { damping: 18, stiffness: 180 });
-      opacity.value = withTiming(1, { duration: 200 });
+      translateY.value = withTiming(0, {
+        duration: reduceMotion ? 0 : 180,
+      });
+      opacity.value = withTiming(1, { duration: reduceMotion ? 0 : 140 });
     } else {
-      translateY.value = withTiming(-80, { duration: 300 });
-      opacity.value = withTiming(0, { duration: 200 });
+      translateY.value = withTiming(-80, {
+        duration: reduceMotion ? 0 : 220,
+      });
+      opacity.value = withTiming(0, { duration: reduceMotion ? 0 : 140 });
     }
-  }, [visible]);
+  }, [opacity, reduceMotion, translateY, visible]);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -47,13 +52,12 @@ export function OfflineBanner() {
   }));
 
   // Determine what to show
-  const { bg, icon, iconColor, message } = (() => {
-    if (justSynced) return { bg: "#16a34a", icon: "check-circle-outline", iconColor: "#fff", message: "Synced successfully" };
-    if (isSyncing) return { bg: theme.primary, icon: "sync", iconColor: "#fff", message: `Syncing ${pendingCount} change${pendingCount !== 1 ? "s" : ""}…` };
+  const { icon, message, signal } = (() => {
+    if (justSynced) return { icon: "check-circle-outline", signal: palette.income, message: "Synced successfully" };
+    if (isSyncing) return { icon: "sync", signal: theme.primary, message: `Syncing ${pendingCount} change${pendingCount !== 1 ? "s" : ""}…` };
     return {
-      bg: "#b45309",
       icon: "wifi-off",
-      iconColor: "#fff",
+      signal: palette.warning,
       message: pendingCount > 0
         ? `Offline — ${pendingCount} change${pendingCount !== 1 ? "s" : ""} queued`
         : "No connection — read-only mode",
@@ -76,17 +80,15 @@ export function OfflineBanner() {
           flexDirection: "row",
           alignItems: "center",
           gap: 10,
-          backgroundColor: bg,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          elevation: 10,
+          backgroundColor: palette.surfaceRaised,
+          borderBottomColor: palette.lineStrong,
+          borderBottomWidth: 1,
         },
       ]}
     >
-      <MaterialCommunityIcons name={icon as any} size={18} color={iconColor} />
-      <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13, flex: 1 }}>
+      <View style={{ alignSelf: "stretch", backgroundColor: signal, width: 2 }} />
+      <MaterialCommunityIcons name={icon as any} size={18} color={signal} />
+      <Text style={{ color: palette.text, fontWeight: "700", fontSize: 13, flex: 1 }}>
         {message}
       </Text>
     </Animated.View>

@@ -1,4 +1,5 @@
 import { FloatingTabBar } from "@/components/navigation/floating-tab-bar";
+import { palette } from "@/theme/colors";
 import { Tabs } from "expo-router";
 
 export function BottomTabs() {
@@ -7,7 +8,7 @@ export function BottomTabs() {
       screenOptions={{
         headerShown: false,
         sceneStyle: {
-          backgroundColor: "#f4f6f9",
+          backgroundColor: palette.canvas,
         },
       }}
       tabBar={(props) => <FloatingTabBar {...props} />}
@@ -21,7 +22,7 @@ export function BottomTabs() {
       <Tabs.Screen
         name="calender/index"
         options={{
-          title: "Calendar",
+          title: "Ledger",
         }}
       />
       <Tabs.Screen
@@ -33,7 +34,7 @@ export function BottomTabs() {
       <Tabs.Screen
         name="chartpie/index"
         options={{
-          title: "Stats",
+          title: "Insights",
         }}
       />
       <Tabs.Screen

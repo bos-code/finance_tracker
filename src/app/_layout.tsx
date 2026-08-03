@@ -5,14 +5,22 @@ import { OfflineProvider } from "@/context/offline-context";
 import { OfflineBanner } from "@/components/ui/offline-banner";
 import { Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { View } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import "@/theme/global.css";
 
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
@@ -21,6 +29,7 @@ export default function RootLayout() {
             <AppLockProvider>
               <AppLockGate>
                 <View style={{ flex: 1 }}>
+                      <StatusBar style="light" />
                       <Stack
                         initialRouteName="onboarding"
                         screenOptions={{ headerShown: false }}>

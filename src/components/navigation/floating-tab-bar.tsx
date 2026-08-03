@@ -1,14 +1,18 @@
-import { useAppStore } from "@/store/use-app-store";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
+  Extrapolation,
+  interpolate,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,14 +24,14 @@ type TabMeta = {
 
 const TAB_META: Record<string, TabMeta> = {
   "home/index": {
-    icon: "view-dashboard-outline",
-    activeIcon: "view-dashboard",
+    icon: "home-variant-outline",
+    activeIcon: "home-variant",
     fallbackLabel: "Home",
   },
   "calender/index": {
-    icon: "calendar-month-outline",
-    activeIcon: "calendar-month",
-    fallbackLabel: "Calendar",
+    icon: "book-open-page-variant-outline",
+    activeIcon: "book-open-page-variant",
+    fallbackLabel: "Ledger",
   },
   "goals/index": {
     icon: "target",
@@ -35,37 +39,20 @@ const TAB_META: Record<string, TabMeta> = {
     fallbackLabel: "Goals",
   },
   "chartpie/index": {
-    icon: "chart-donut",
-    activeIcon: "chart-donut-variant",
-    fallbackLabel: "Stats",
+    icon: "chart-timeline-variant-shimmer",
+    activeIcon: "chart-timeline-variant",
+    fallbackLabel: "Insights",
   },
   "user/index": {
-    icon: "account-circle-outline",
-    activeIcon: "account-circle",
+    icon: "account-outline",
+    activeIcon: "account",
     fallbackLabel: "Profile",
   },
 };
 
-const SPRING_CONFIG = {
-  damping: 18,
-  stiffness: 220,
-  mass: 0.8,
-};
-
-function withAlpha(hexColor: string, alpha: number) {
-  const hex = hexColor.replace("#", "");
-
-  if (hex.length !== 6) {
-    return hexColor;
-  }
-
-  const value = Number.parseInt(hex, 16);
-  const r = (value >> 16) & 255;
-  const g = (value >> 8) & 255;
-  const b = value & 255;
-
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+const ARC_INPUT = [0, 1, 2, 3, 4];
+const ARC_OUTPUT = [4, -2, -6, -2, 4];
+const ORBIT_SIZE = 48;
 
 function resolveLabel(routeName: string, title?: string) {
   if (title?.trim()) return title;
@@ -79,7 +66,6 @@ function TabBarItem({
   activeIcon,
   onLongPress,
   onPress,
-  primary,
 }: {
   focused: boolean;
   label: string;
@@ -87,72 +73,34 @@ function TabBarItem({
   activeIcon: string;
   onLongPress: () => void;
   onPress: () => void;
-  primary: string;
 }) {
-  const lift = useSharedValue(focused ? 1 : 0);
-
-  useEffect(() => {
-    lift.value = withSpring(focused ? 1 : 0, SPRING_CONFIG);
-  }, [focused, lift]);
-
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: -4 * lift.value },
-      { scale: 0.985 + 0.03 * lift.value },
-    ],
-  }));
-
-  const labelStyle = useAnimatedStyle(() => ({
-    opacity: 0.72 + 0.28 * lift.value,
-    transform: [{ translateY: 2 - 2 * lift.value }],
-  }));
-
   return (
     <Pressable
+      accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ selected: focused }}
+      hitSlop={6}
       onLongPress={onLongPress}
       onPress={onPress}
-      style={styles.tabButton}
-    >
-      <Animated.View style={[styles.itemInner, containerStyle]}>
-        <View
-          style={[
-            styles.iconWrap,
-            focused
-              ? {
-                  backgroundColor: primary,
-                  borderColor: withAlpha(primary, 0.2),
-                  shadowColor: primary,
-                  shadowOpacity: 0.3,
-                  elevation: 6,
-                }
-              : {
-                  backgroundColor: "rgba(255,255,255,0.78)",
-                  borderColor: "rgba(148,163,184,0.16)",
-                  shadowOpacity: 0.08,
-                  elevation: 2,
-                },
-          ]}
-        >
-          <MaterialCommunityIcons
-            color={focused ? "#ffffff" : primary}
-            name={(focused ? activeIcon : icon) as any}
-            size={20}
-          />
-        </View>
-
-        <Animated.Text
+      style={({ pressed }) => [
+        styles.tabButton,
+        { opacity: pressed ? 0.68 : 1 },
+      ]}>
+      <View style={styles.itemInner}>
+        <MaterialCommunityIcons
+          color={focused ? palette.canvas : palette.textQuiet}
+          name={(focused ? activeIcon : icon) as never}
+          size={21}
+        />
+        <Text
           numberOfLines={1}
           style={[
             styles.label,
-            { color: focused ? "#0f172a" : "#64748b" },
-            labelStyle,
-          ]}
-        >
+            { color: focused ? palette.text : palette.textQuiet },
+          ]}>
           {label}
-        </Animated.Text>
-      </Animated.View>
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -162,141 +110,100 @@ export function FloatingTabBar({
   navigation,
   state,
 }: BottomTabBarProps) {
-  const theme = useAppStore((store) => store.theme);
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const [layoutWidth, setLayoutWidth] = useState(0);
   const position = useSharedValue(state.index);
-  const primary = theme.primary;
-  const secondary = theme.gradient.colors[1];
   const slotWidth = layoutWidth > 0 ? layoutWidth / state.routes.length : 0;
-  const indicatorWidth = slotWidth > 0 ? Math.max(slotWidth - 10, 56) : 0;
 
   useEffect(() => {
-    position.value = withSpring(state.index, SPRING_CONFIG);
-  }, [position, state.index]);
+    position.value = reduceMotion
+      ? withTiming(state.index, { duration: 0 })
+      : withSpring(state.index, {
+          damping: 40,
+          stiffness: 500,
+          mass: 1,
+        });
+  }, [position, reduceMotion, state.index]);
 
-  const indicatorStyle = useAnimatedStyle(() => ({
-    opacity: indicatorWidth ? 1 : 0,
-    width: indicatorWidth,
-    transform: [{ translateX: 5 + position.value * slotWidth }],
-  }));
+  const orbitStyle = useAnimatedStyle(() => {
+    const arcY = interpolate(
+      position.value,
+      ARC_INPUT,
+      ARC_OUTPUT,
+      Extrapolation.CLAMP,
+    );
 
-  const chrome = (
-    <>
-      <View
-        style={[
-          styles.chromeGlow,
-          { backgroundColor: withAlpha(secondary, 0.11) },
-        ]}
-      />
-
-      <View
-        onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
-        style={styles.row}
-      >
-        <Animated.View
-          style={[
-            styles.activePill,
-            {
-              backgroundColor: "rgba(255,255,255,0.92)",
-              borderColor: withAlpha(primary, 0.16),
-              shadowColor: primary,
-            },
-            indicatorStyle,
-          ]}
-        >
-          <View
-            style={[
-              styles.activePillGlow,
-              { backgroundColor: withAlpha(secondary, 0.12) },
-            ]}
-          />
-          <View
-            style={[
-              styles.activePillAccent,
-              { backgroundColor: primary },
-            ]}
-          />
-        </Animated.View>
-
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const meta = TAB_META[route.name];
-          const focused = state.index === index;
-          const label = resolveLabel(
-            route.name,
-            typeof options.title === "string" ? options.title : undefined,
-          );
-
-          const onPress = () => {
-            const event = navigation.emit({
-              canPreventDefault: true,
-              target: route.key,
-              type: "tabPress",
-            });
-
-            if (focused || event.defaultPrevented) {
-              return;
-            }
-
-            void Haptics.selectionAsync();
-            navigation.navigate(route.name);
-          };
-
-          const onLongPress = () => {
-            navigation.emit({
-              target: route.key,
-              type: "tabLongPress",
-            });
-          };
-
-          return (
-            <TabBarItem
-              activeIcon={meta?.activeIcon ?? "checkbox-marked-circle"}
-              focused={focused}
-              icon={meta?.icon ?? "checkbox-blank-circle-outline"}
-              key={route.key}
-              label={label}
-              onLongPress={onLongPress}
-              onPress={onPress}
-              primary={primary}
-            />
-          );
-        })}
-      </View>
-    </>
-  );
+    return {
+      opacity: layoutWidth > 0 ? 1 : 0,
+      transform: [
+        {
+          translateX:
+            position.value * slotWidth + (slotWidth - ORBIT_SIZE) / 2,
+        },
+        { translateY: arcY },
+      ],
+    };
+  });
 
   return (
     <View
       pointerEvents="box-none"
       style={[
         styles.wrapper,
-        { paddingBottom: Math.max(insets.bottom, 12) },
-      ]}
-    >
-      <View
-        style={[
-          styles.shell,
-          {
-            borderColor: withAlpha(primary, 0.16),
-            shadowColor: primary,
-          },
-        ]}
-      >
-        {Platform.OS === "ios" ? (
-          <BlurView
-            intensity={70}
-            style={styles.blur}
-            tint="light"
-          >
-            {chrome}
-          </BlurView>
-        ) : (
-          <View style={[styles.blur, styles.androidFallback]}>
-            {chrome}
-          </View>
-        )}
+        { paddingBottom: Math.max(insets.bottom, 10) },
+      ]}>
+      <View style={styles.shell}>
+        <View style={styles.architecturalRule} />
+        <View
+          onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
+          style={styles.row}>
+          <Animated.View style={[styles.activeOrbit, orbitStyle]}>
+            <View style={styles.orbitInset} />
+          </Animated.View>
+
+          {state.routes.map((route, index) => {
+            const { options } = descriptors[route.key];
+            const meta = TAB_META[route.name];
+            const focused = state.index === index;
+            const label = resolveLabel(
+              route.name,
+              typeof options.title === "string" ? options.title : undefined,
+            );
+
+            const onPress = () => {
+              const event = navigation.emit({
+                canPreventDefault: true,
+                target: route.key,
+                type: "tabPress",
+              });
+
+              if (focused || event.defaultPrevented) return;
+
+              void Haptics.selectionAsync();
+              navigation.navigate(route.name);
+            };
+
+            const onLongPress = () => {
+              navigation.emit({
+                target: route.key,
+                type: "tabLongPress",
+              });
+            };
+
+            return (
+              <TabBarItem
+                activeIcon={meta?.activeIcon ?? "checkbox-marked-circle"}
+                focused={focused}
+                icon={meta?.icon ?? "checkbox-blank-circle-outline"}
+                key={route.key}
+                label={label}
+                onLongPress={onLongPress}
+                onPress={onPress}
+              />
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -306,94 +213,73 @@ const styles = StyleSheet.create({
   wrapper: {
     bottom: 0,
     left: 0,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     position: "absolute",
     right: 0,
   },
   shell: {
-    borderRadius: 30,
+    backgroundColor: withAlpha(palette.navigation, 0.98),
+    borderColor: palette.line,
+    borderCurve: "continuous",
+    borderRadius: 24,
     borderWidth: 1,
     overflow: "hidden",
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
   },
-  blur: {
-    backgroundColor: "rgba(248,250,252,0.82)",
-    minHeight: 82,
-    overflow: "hidden",
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-    position: "relative",
-  },
-  androidFallback: {
-    backgroundColor: "rgba(248,250,252,0.96)",
-  },
-  chromeGlow: {
-    borderRadius: 999,
-    height: 110,
+  architecturalRule: {
+    backgroundColor: palette.lineStrong,
+    height: 1,
+    left: 28,
+    opacity: 0.55,
     position: "absolute",
-    right: -16,
-    top: -46,
-    width: 110,
+    right: 28,
+    top: 13,
   },
   row: {
     alignItems: "center",
     flexDirection: "row",
+    minHeight: 78,
+    paddingHorizontal: 4,
+    paddingTop: 5,
     position: "relative",
   },
-  activePill: {
-    borderRadius: 24,
+  activeOrbit: {
+    alignItems: "center",
+    backgroundColor: palette.text,
+    borderColor: palette.signalViolet,
+    borderCurve: "continuous",
+    borderRadius: ORBIT_SIZE / 2,
     borderWidth: 1,
-    bottom: 4,
-    left: 0,
+    height: ORBIT_SIZE,
+    justifyContent: "center",
+    left: 4,
     position: "absolute",
-    top: 4,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
+    top: 7,
+    width: ORBIT_SIZE,
   },
-  activePillGlow: {
-    borderRadius: 999,
-    height: 58,
-    position: "absolute",
-    right: -12,
-    top: -22,
-    width: 58,
-  },
-  activePillAccent: {
-    borderRadius: 999,
-    height: 4,
-    left: 18,
-    position: "absolute",
-    top: 10,
-    width: 28,
+  orbitInset: {
+    borderColor: withAlpha(palette.canvas, 0.24),
+    borderRadius: 17,
+    borderWidth: 1,
+    height: 34,
+    width: 34,
   },
   tabButton: {
     flex: 1,
+    minWidth: 52,
     zIndex: 1,
   },
   itemInner: {
     alignItems: "center",
+    gap: 11,
     justifyContent: "center",
-    minHeight: 66,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-  },
-  iconWrap: {
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    width: 38,
+    minHeight: 68,
+    paddingHorizontal: 2,
+    paddingTop: 6,
   },
   label: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-    marginTop: 7,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.25,
   },
 });

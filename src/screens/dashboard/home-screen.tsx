@@ -3,695 +3,1308 @@ import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
 import { Screen } from "@/components/ui/screen";
 import { UnifiedNumpad } from "@/components/ui/unified-numpad";
+import { SignalThreads } from "@/components/visuals/signal-threads";
 import {
+  ALL_CATEGORIES,
   EXPENDITURE_CATEGORIES,
   REVENUE_CATEGORIES,
   type Category,
 } from "@/constants/categories";
 import { useOffline } from "@/context/offline-context";
 import { useAuth } from "@/hooks/use-auth";
-import { useCreateTransaction } from "@/hooks/use-transactions";
+import {
+  useCreateTransaction,
+  useTransactions,
+} from "@/hooks/use-transactions";
 import { ROUTES } from "@/navigation/route-names";
+import { calcMonthSummary } from "@/services/supabase/transaction-service";
 import { useAppStore } from "@/store/use-app-store";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { toLocalDateString } from "@/utils/date";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type TransactionType = "Expenditure" | "Revenue";
+type DrawerType = "none" | "amount" | "date" | "note" | "category";
+
+const TYPE_OPTIONS: {
+  label: string;
+  value: TransactionType;
+}[] = [
+  { label: "Outflow", value: "Expenditure" },
+  { label: "Income", value: "Revenue" },
+];
+
+function formatMoney(
+  value: number,
+  currency: { code: string; symbol: string },
+) {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      currency: currency.code,
+      currencyDisplay: "narrowSymbol",
+      maximumFractionDigits: 2,
+      minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+      style: "currency",
+    }).format(value);
+  } catch {
+    return `${currency.symbol}${value.toLocaleString("en-US")}`;
+  }
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function SectionHeading({
+  action,
+  label,
+  onAction,
+}: {
+  action?: string;
+  label: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.sectionHeading}>
+      <View style={styles.sectionTitleRow}>
+        <View style={styles.sectionIndex} />
+        <Text style={styles.sectionTitle}>{label}</Text>
+      </View>
+      {action != null && action.length > 0 && onAction != null ? (
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onAction}
+          style={({ pressed }) => ({ opacity: pressed ? 0.58 : 1 })}>
+          <Text style={styles.sectionAction}>{action}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function Metric({
+  amount,
+  label,
+  tone,
+}: {
+  amount: string;
+  label: string;
+  tone: "income" | "expense";
+}) {
+  return (
+    <View style={styles.metric}>
+      <View
+        style={[
+          styles.metricSignal,
+          {
+            backgroundColor:
+              tone === "income" ? palette.income : palette.expense,
+          },
+        ]}
+      />
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue}>{amount}</Text>
+    </View>
+  );
+}
 
 export function HomeScreen() {
   const { user } = useAuth();
-  const theme = useAppStore((s) => s.theme);
-  const currency = useAppStore((s) => s.currency);
+  const currency = useAppStore((state) => state.currency);
   const { isOnline, pendingCount, refreshPendingCount } = useOffline();
-  const primary = theme.primary;
   const insets = useSafeAreaInsets();
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const {
+    data: transactions = [],
+    isError: transactionsFailed,
+    isLoading: transactionsLoading,
+    refetch: refetchTransactions,
+  } = useTransactions(year, month);
+  const { mutateAsync: createTx, isPending: isSubmitting } =
+    useCreateTransaction();
 
-  // ── Transaction type ─────────────────────────────────────────────
   const [type, setType] = useState<TransactionType>("Expenditure");
-
-  // ── Per-type custom category lists (in-memory edits) ─────────────
   const [expCategories, setExpCategories] = useState<Category[]>(
     EXPENDITURE_CATEGORIES,
   );
-  const [revCategories, setRevCategories] =
-    useState<Category[]>(REVENUE_CATEGORIES);
-
-  const activeCategories =
-    type === "Expenditure" ? expCategories : revCategories;
-  const setActiveCategories =
-    type === "Expenditure" ? setExpCategories : setRevCategories;
-
-  // ── Form state ───────────────────────────────────────────────────
+  const [revCategories, setRevCategories] = useState<Category[]>(
+    REVENUE_CATEGORIES,
+  );
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [categoryId, setCategoryId] = useState(expCategories[0].id);
+  const [categoryId, setCategoryId] = useState(expCategories[0]?.id ?? "");
   const [date, setDate] = useState(new Date());
-  const selectedCategory = activeCategories.find((c) => c.id === categoryId);
-
-  // ── UI drawers ──────────────────────────────────────────────────
-  type DrawerType = "none" | "amount" | "date" | "note" | "category";
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>("none");
-
-  const closeDrawer = useCallback(() => setActiveDrawer("none"), []);
-  const openDrawer = useCallback((d: DrawerType) => {
-    Keyboard.dismiss();
-    setActiveDrawer(d);
-    if (Platform.OS === "ios")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
-
-  const formatSaveError = useCallback((error: unknown) => {
-    if (!error) return "Could not save transaction.";
-    if (typeof error === "string") return error;
-    if (typeof error === "object") {
-      const anyError = error as any;
-      const message = anyError?.message || anyError?.error_description;
-      const details = anyError?.details;
-      const hint = anyError?.hint;
-      const code = anyError?.code;
-      const extra = [details, hint, code].filter(Boolean).join(" • ");
-      if (message && extra) return `${message} (${extra})`;
-      if (message) return String(message);
-    }
-    return "Could not save transaction.";
-  }, []);
-
-  // ── Save feedback ────────────────────────────────────────────────
   const [feedback, setFeedback] = useState<{
     visible: boolean;
     type: "success" | "error";
     title?: string;
     message: string;
-  }>({
-    visible: false,
-    type: "success",
-    message: "",
-  });
+  }>({ visible: false, type: "success", message: "" });
 
-  // ── Switch type ──────────────────────────────────────────────────
+  const activeCategories =
+    type === "Expenditure" ? expCategories : revCategories;
+  const setActiveCategories =
+    type === "Expenditure" ? setExpCategories : setRevCategories;
+  const selectedCategory = activeCategories.find(
+    (category) => category.id === categoryId,
+  );
+  const summary = useMemo(
+    () => calcMonthSummary(transactions),
+    [transactions],
+  );
+  const recentTransactions = useMemo(
+    () =>
+      [...transactions]
+        .sort((first, second) =>
+          `${second.transaction_date}-${second.created_at}`.localeCompare(
+            `${first.transaction_date}-${first.created_at}`,
+          ),
+        )
+        .slice(0, 4),
+    [transactions],
+  );
+  const firstName = user?.fullName?.trim().split(/\s+/)[0] || "there";
+  const monthLabel = now.toLocaleDateString("en-US", { month: "long" });
+
+  const closeDrawer = useCallback(() => setActiveDrawer("none"), []);
+  const openDrawer = useCallback((drawer: DrawerType) => {
+    Keyboard.dismiss();
+    setActiveDrawer(drawer);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
   const switchType = useCallback(
-    (newType: TransactionType) => {
-      setType(newType);
-      const cats = newType === "Expenditure" ? expCategories : revCategories;
-      if (cats.length > 0) {
-        setCategoryId(cats[0].id);
-      } else {
-        setCategoryId("");
-      }
-      setAmount("");
+    (nextType: TransactionType) => {
+      setType(nextType);
+      const categories =
+        nextType === "Expenditure" ? expCategories : revCategories;
+      setCategoryId(categories[0]?.id ?? "");
+      void Haptics.selectionAsync();
     },
     [expCategories, revCategories],
   );
 
-  // ── Keypad handlers ──────────────────────────────────────────────
-  const handleKeypadPress = (key: string) => {
-    let raw = amount.replace(/[^0-9.]/g, "");
-    if (key === "." && raw.includes(".")) return;
-    raw += key;
-    if (raw === "" || raw === ".") {
-      setAmount(raw);
-      return;
+  const formatSaveError = useCallback((error: unknown) => {
+    if (!error) return "The transaction could not be saved.";
+    if (typeof error === "string") return error;
+    if (typeof error === "object") {
+      const candidate = error as {
+        message?: string;
+        error_description?: string;
+      };
+      return (
+        candidate.message ??
+        candidate.error_description ??
+        "The transaction could not be saved."
+      );
     }
-    const parts = raw.split(".");
-    const int = parseInt(parts[0] || "0", 10).toLocaleString("en-US");
-    setAmount(parts.length > 1 ? `${int}.${parts[1]}` : int);
-  };
-
-  const handleKeypadBackspace = () => {
-    let raw = amount.replace(/[^0-9.]/g, "");
-    if (!raw.length) return;
-    raw = raw.slice(0, -1);
-    if (!raw) {
-      setAmount("");
-      return;
-    }
-    const parts = raw.split(".");
-    const int = parseInt(parts[0] || "0", 10).toLocaleString("en-US");
-    setAmount(parts.length > 1 ? `${int}.${parts[1]}` : int);
-  };
-
-  // ── Save ─────────────────────────────────────────────────────────
-  const { mutateAsync: createTx, isPending: isSubmitting } =
-    useCreateTransaction();
+    return "The transaction could not be saved.";
+  }, []);
 
   const handleSave = async () => {
     if (!user) {
       setFeedback({
         visible: true,
         type: "error",
-        title: "Failed",
-        message: "Sign in to save transactions.",
+        title: "Sign in required",
+        message: "Sign in before recording a transaction.",
       });
       return;
     }
-    const rawAmount = parseFloat(amount.replace(/[^0-9.]/g, ""));
+
+    const rawAmount = Number.parseFloat(amount.replace(/[^0-9.]/g, ""));
     if (!rawAmount || rawAmount <= 0) {
       setFeedback({
         visible: true,
         type: "error",
-        title: "Failed",
-        message: "Enter a valid amount greater than 0.",
+        title: "Check the amount",
+        message: "Enter an amount greater than zero.",
       });
       return;
     }
-    if (!categoryId) {
+
+    if (!categoryId || !selectedCategory) {
       setFeedback({
         visible: true,
         type: "error",
-        title: "Failed",
-        message: "Select a category before saving.",
+        title: "Choose a category",
+        message: "Every ledger entry needs a category.",
       });
       return;
     }
-    const categoriesForType =
-      type === "Expenditure" ? expCategories : revCategories;
-    if (!categoriesForType.some((c) => c.id === categoryId)) {
-      setFeedback({
-        visible: true,
-        type: "error",
-        title: "Failed",
-        message: "Selected category is no longer available.",
-      });
-      return;
-    }
+
     try {
       closeDrawer();
-      const savedTx = await createTx({
+      const savedTransaction = await createTx({
         user_id: user.uid,
         type,
         amount: rawAmount,
-        note,
+        note: note.trim(),
         category_id: categoryId,
         transaction_date: toLocalDateString(date),
       });
-      // Refresh pending badge after offline save
       await refreshPendingCount();
-      const savedLocally =
-        typeof savedTx?.id === "string" && savedTx.id.startsWith("local_");
-      const msg = isOnline && !savedLocally
-        ? `${type} saved successfully.`
-        : `${type} saved locally — will sync when online.`;
+
+      const savedLocally = savedTransaction.id.startsWith("local_");
       setFeedback({
         visible: true,
         type: "success",
-        title: `${type} saved`,
-        message: msg,
+        title: type === "Revenue" ? "Income recorded" : "Outflow recorded",
+        message:
+          isOnline && !savedLocally
+            ? "The entry is now in your ledger."
+            : "Saved on this device. It will sync when you reconnect.",
       });
       setAmount("");
       setNote("");
       setDate(new Date());
-    } catch (err: any) {
+    } catch (error) {
       setFeedback({
         visible: true,
         type: "error",
-        title: "Failed",
-        message: formatSaveError(err),
+        title: "Save failed",
+        message: formatSaveError(error),
       });
     }
   };
 
   const viewTransactions = useCallback(() => {
-    setFeedback((f) => ({ ...f, visible: false }));
-    router.push(ROUTES.TABS_CALENDAR as any);
+    setFeedback((current) => ({ ...current, visible: false }));
+    router.push(ROUTES.TABS_CALENDAR as never);
   }, []);
 
-  // ── Currency symbol ──────────────────────────────────────────────
-  const symbol = type === "Expenditure" ? "$" : "D";
-
   return (
-    <Screen className="px-0 bg-[#f4f6f9]">
+    <Screen backgroundColor={palette.canvas} className="px-0">
+      <SignalThreads intensity="visible" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1">
+        style={styles.fill}>
         <ScrollView
-          className="flex-1 px-4 pt-2"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom:
-              activeDrawer === "amount" || activeDrawer === "note" ? 420 : 160,
-          }}>
-          {/* ── Type toggle ──────────────────────────────────────── */}
-          <View
-            style={{
-              flexDirection: "row",
-              borderRadius: 16,
-              backgroundColor: primary + "20",
-              padding: 4,
-              marginTop: 8,
-              marginBottom: 32,
-            }}>
-            {(["Expenditure", "Revenue"] as TransactionType[]).map((t) => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => switchType(t)}
-                style={{
-                  flex: 1,
-                  borderRadius: 12,
-                  paddingVertical: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: type === t ? primary : "transparent",
-                }}>
-                <Text
-                  style={{
-                    fontWeight: "600",
-                    fontSize: 15,
-                    color: type === t ? "#fff" : primary,
-                  }}>
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <View style={styles.brandMark}>
+              <MaterialCommunityIcons
+                color={palette.text}
+                name="finance"
+                size={20}
+              />
+            </View>
+            <View style={styles.headerCopy}>
+              <Text style={styles.eyebrow}>FINANCE TRACKER / PERSONAL</Text>
+              <Text style={styles.greeting}>
+                {getGreeting()}, {firstName}.
+              </Text>
+            </View>
+            <View
+              accessibilityLabel={isOnline ? "All systems online" : "Offline"}
+              accessibilityRole="text"
+              style={styles.networkStatus}>
+              <View
+                style={[
+                  styles.networkDot,
+                  {
+                    backgroundColor: isOnline
+                      ? palette.income
+                      : palette.warning,
+                  },
+                ]}
+              />
+              <Text style={styles.networkText}>
+                {isOnline ? "LIVE" : "LOCAL"}
+              </Text>
+            </View>
           </View>
 
-          {/* ── Form fields ──────────────────────────────────────── */}
-          <View className="gap-5">
-            {/* Time */}
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[16px] font-bold text-slate-900 w-24">
-                Time
-              </Text>
-              <TouchableOpacity
-                onPress={() => openDrawer("date")}
-                className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 h-[52px]">
-                <MaterialCommunityIcons
-                  name="calendar-month-outline"
-                  size={24}
-                  color={primary}
-                />
-                <Text className="font-semibold text-[15px] text-slate-900">
-                  {date.toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </Text>
-                <MaterialCommunityIcons
-                  name="chevron-down"
-                  size={24}
-                  color={primary}
-                />
-              </TouchableOpacity>
+          <View style={styles.hero}>
+            <View style={styles.heroRail} />
+            <View style={styles.heroTopline}>
+              <Text style={styles.heroLabel}>NET POSITION / {monthLabel}</Text>
+              <Text style={styles.heroCode}>{currency.code}</Text>
             </View>
-
-            {/* Amount */}
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[16px] font-bold text-slate-900 w-24">
-                Amount
-              </Text>
-              <TouchableOpacity
-                onPress={() => openDrawer("amount")}
-                activeOpacity={0.7}
-                className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
-                <Text
-                  className={`flex-1 font-semibold text-[15px] mr-2 text-right ${amount ? "text-slate-900" : "text-[#94a3b8]"}`}>
-                  {amount || "0"}
-                </Text>
-                <Text className="font-bold text-[18px] text-[#94a3b8] ml-2">
-                  {currency.symbol}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Note */}
-            <TouchableOpacity
-              onPress={() => openDrawer("note")}
-              activeOpacity={0.7}
-              className="flex-row items-center justify-between">
-              <Text className="text-[16px] font-bold text-slate-900 w-24">
-                Note
-              </Text>
-              <View className="flex-1 flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 h-[52px]">
-                <Text
-                  className={`flex-1 font-semibold text-[15px] text-center ${note ? "text-slate-900" : "text-[#94a3b8]"}`}>
-                  {note || "Enter notes"}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* ── Categories ───────────────────────────────────────── */}
-          <View className="mt-8 mb-4 flex-row items-center justify-between">
-            <Text className="text-[16px] font-bold text-slate-900">
-              Category
+            <Text
+              accessibilityLabel={`Net position ${formatMoney(summary.remaining, currency)}`}
+              adjustsFontSizeToFit
+              numberOfLines={1}
+              style={styles.balance}>
+              {formatMoney(summary.remaining, currency)}
             </Text>
-            <TouchableOpacity onPress={() => openDrawer("category")}>
-              <Text style={{ fontSize: 15, fontWeight: "700", color: primary }}>
-                Edit
-              </Text>
-            </TouchableOpacity>
+            <Text style={styles.balanceCaption}>
+              Income minus outflow for the current month
+            </Text>
+
+            <View style={styles.metricsRow}>
+              <Metric
+                amount={formatMoney(summary.totalRevenue, currency)}
+                label="INCOME"
+                tone="income"
+              />
+              <View style={styles.metricDivider} />
+              <Metric
+                amount={formatMoney(summary.totalExpenditure, currency)}
+                label="OUTFLOW"
+                tone="expense"
+              />
+            </View>
           </View>
 
-          {/* ── Save button ────────────────────────────────────────── */}
-          {activeCategories.length === 0 ? (
-            <View className="rounded-3xl border border-dashed border-gray-300 bg-white px-4 py-5">
-              <Text className="text-center text-[14px] font-medium text-slate-500">
-                No categories available for this transaction type.
-              </Text>
-            </View>
-          ) : (
-            <>
-              <View className="mb-4 flex-row items-center rounded-3xl border border-gray-200 bg-white px-4 py-4">
-                <View
-                  className="mr-3 h-12 w-12 items-center justify-center rounded-2xl"
-                  style={{
-                    backgroundColor:
-                      (selectedCategory?.color ?? primary) + "20",
-                  }}>
-                  <MaterialCommunityIcons
-                    name={(selectedCategory?.icon as any) ?? "shape-outline"}
-                    size={24}
-                    color={selectedCategory?.color ?? primary}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-[12px] font-bold uppercase tracking-[1px] text-slate-400">
-                    Selected category
-                  </Text>
-                  <Text className="mt-1 text-[16px] font-bold text-slate-900">
-                    {selectedCategory?.label ?? "Select a category"}
-                  </Text>
-                </View>
+          <View style={styles.syncLine}>
+            <MaterialCommunityIcons
+              color={pendingCount > 0 ? palette.warning : palette.textQuiet}
+              name={pendingCount > 0 ? "cloud-sync-outline" : "check-circle-outline"}
+              size={16}
+            />
+            <Text style={styles.syncText}>
+              {pendingCount > 0
+                ? `${pendingCount} ${pendingCount === 1 ? "entry" : "entries"} waiting to sync`
+                : "Ledger is current"}
+            </Text>
+            <View style={styles.syncRule} />
+          </View>
+
+          <SectionHeading
+            action="Open ledger"
+            label="Recent movement"
+            onAction={viewTransactions}
+          />
+
+          <View style={styles.ledger}>
+            {transactionsLoading ? (
+              <View style={styles.stateRow}>
+                <ActivityIndicator color={palette.textMuted} size="small" />
+                <Text style={styles.stateText}>Reading your ledger…</Text>
+              </View>
+            ) : transactionsFailed ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void refetchTransactions()}
+                style={({ pressed }) => [
+                  styles.stateRow,
+                  { opacity: pressed ? 0.62 : 1 },
+                ]}>
+                <MaterialCommunityIcons
+                  color={palette.warning}
+                  name="refresh"
+                  size={18}
+                />
+                <Text style={styles.stateText}>Could not read entries. Tap to retry.</Text>
+              </Pressable>
+            ) : recentTransactions.length === 0 ? (
+              <View style={styles.emptyLedger}>
+                <Text style={styles.emptyTitle}>Your ledger opens here.</Text>
+                <Text style={styles.emptyBody}>
+                  Record the first income or outflow below. Offline entries are
+                  safe on this device until they can sync.
+                </Text>
+              </View>
+            ) : (
+              recentTransactions.map((transaction, index) => {
+                const category = ALL_CATEGORIES[transaction.category_id];
+                const isIncome = transaction.type === "Revenue";
+                const isPending = transaction.id.startsWith("local_");
+                const dateLabel = new Date(
+                  `${transaction.transaction_date}T00:00:00`,
+                ).toLocaleDateString("en-US", {
+                  day: "numeric",
+                  month: "short",
+                });
+
+                return (
+                  <Pressable
+                    accessibilityHint="Opens the ledger"
+                    accessibilityLabel={`${transaction.note || category?.label || "Transaction"}, ${formatMoney(transaction.amount, currency)}`}
+                    accessibilityRole="button"
+                    key={transaction.id}
+                    onPress={viewTransactions}
+                    style={({ pressed }) => [
+                      styles.ledgerRow,
+                      index === recentTransactions.length - 1
+                        ? styles.ledgerRowLast
+                        : null,
+                      { opacity: pressed ? 0.62 : 1 },
+                    ]}>
+                    <View
+                      style={[
+                        styles.transactionSignal,
+                        {
+                          backgroundColor: isIncome
+                            ? palette.income
+                            : palette.expense,
+                        },
+                      ]}
+                    />
+                    <View style={styles.transactionIcon}>
+                      <MaterialCommunityIcons
+                        color={palette.textMuted}
+                        name={(category?.icon ?? "circle-outline") as never}
+                        size={18}
+                      />
+                    </View>
+                    <View style={styles.transactionCopy}>
+                      <Text numberOfLines={1} style={styles.transactionName}>
+                        {transaction.note || category?.label || "Unlabelled entry"}
+                      </Text>
+                      <Text style={styles.transactionMeta}>
+                        {category?.label ?? "Other"} · {dateLabel}
+                        {isPending ? " · LOCAL" : ""}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.transactionAmount,
+                        {
+                          color: isIncome ? palette.income : palette.text,
+                        },
+                      ]}>
+                      {isIncome ? "+" : "−"}
+                      {formatMoney(transaction.amount, currency)}
+                    </Text>
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+
+          <View style={styles.captureSection}>
+            <SectionHeading label="Record movement" />
+            <View style={styles.composer}>
+              <View style={styles.composerThreads}>
+                <View style={[styles.composerThread, styles.threadAmber]} />
+                <View style={[styles.composerThread, styles.threadViolet]} />
+                <View style={[styles.composerThread, styles.threadCyan]} />
               </View>
 
-              <View className="mb-2 flex-row flex-wrap justify-between">
-                {activeCategories.map((category) => {
-                  const isSelected = category.id === categoryId;
+              <View style={styles.typeSwitch}>
+                {TYPE_OPTIONS.map((option) => {
+                  const selected = type === option.value;
                   return (
-                    <TouchableOpacity
-                      key={category.id}
-                      activeOpacity={0.85}
-                      onPress={() => setCategoryId(category.id)}
-                      className="mb-3 rounded-2xl border px-3 py-3"
-                      style={{
-                        width: "48%",
-                        backgroundColor: isSelected
-                          ? category.color + "14"
-                          : "#ffffff",
-                        borderColor: isSelected
-                          ? category.color + "66"
-                          : "#e5e7eb",
-                      }}>
-                      <View className="flex-row items-center">
-                        <View
-                          className="mr-3 h-10 w-10 items-center justify-center rounded-2xl"
-                          style={{ backgroundColor: category.color + "20" }}>
-                          <MaterialCommunityIcons
-                            name={category.icon as any}
-                            size={20}
-                            color={category.color}
-                          />
-                        </View>
-                        <View className="flex-1">
-                          <Text
-                            numberOfLines={1}
-                            className="text-[14px] font-bold text-slate-900">
-                            {category.label}
-                          </Text>
-                          <Text
-                            className="mt-1 text-[12px] font-semibold"
-                            style={{
-                              color: isSelected ? category.color : "#94a3b8",
-                            }}>
-                            {isSelected ? "Selected" : "Tap to choose"}
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={option.value}
+                      onPress={() => switchType(option.value)}
+                      style={({ pressed }) => [
+                        styles.typeOption,
+                        selected ? styles.typeOptionActive : null,
+                        { opacity: pressed ? 0.62 : 1 },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.typeLabel,
+                          selected ? styles.typeLabelActive : null,
+                        ]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
                   );
                 })}
               </View>
-            </>
-          )}
 
-          <View className="mt-4 mb-10">
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={isSubmitting}
-              style={{
-                width: "100%",
-                borderRadius: 20,
-                height: 60,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: isSubmitting ? primary + "80" : primary,
-                shadowColor: primary,
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.3,
-                shadowRadius: 15,
-                elevation: 12,
-              }}>
-              <Text className="text-white font-bold text-[17px] tracking-wide">
-                {isSubmitting ? "Processing…" : `Save ${type} Transaction`}
-              </Text>
-            </TouchableOpacity>
+              <Pressable
+                accessibilityHint="Opens the number pad"
+                accessibilityLabel={`Amount, ${amount || "not entered"}`}
+                accessibilityRole="button"
+                onPress={() => openDrawer("amount")}
+                style={({ pressed }) => [
+                  styles.amountField,
+                  { opacity: pressed ? 0.64 : 1 },
+                ]}>
+                <Text style={styles.amountCurrency}>{currency.symbol}</Text>
+                <Text
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                  style={[
+                    styles.amountInput,
+                    !amount ? styles.amountPlaceholder : null,
+                  ]}>
+                  {amount || "0"}
+                </Text>
+                <MaterialCommunityIcons
+                  color={palette.textQuiet}
+                  name="dialpad"
+                  size={19}
+                />
+              </Pressable>
+
+              <View style={styles.detailsLedger}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => openDrawer("date")}
+                  style={({ pressed }) => [
+                    styles.detailRow,
+                    { opacity: pressed ? 0.64 : 1 },
+                  ]}>
+                  <Text style={styles.detailLabel}>DATE</Text>
+                  <Text style={styles.detailValue}>
+                    {date.toLocaleDateString("en-US", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </Text>
+                  <MaterialCommunityIcons
+                    color={palette.textQuiet}
+                    name="chevron-right"
+                    size={18}
+                  />
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => openDrawer("note")}
+                  style={({ pressed }) => [
+                    styles.detailRow,
+                    { opacity: pressed ? 0.64 : 1 },
+                  ]}>
+                  <Text style={styles.detailLabel}>NOTE</Text>
+                  <Text numberOfLines={1} style={styles.detailValue}>
+                    {note || "Add context"}
+                  </Text>
+                  <MaterialCommunityIcons
+                    color={palette.textQuiet}
+                    name="chevron-right"
+                    size={18}
+                  />
+                </Pressable>
+              </View>
+
+              <View style={styles.categoryHeader}>
+                <Text style={styles.detailLabel}>CATEGORY</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => openDrawer("category")}>
+                  <Text style={styles.editLabel}>Edit</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView
+                contentContainerStyle={styles.categoryList}
+                horizontal
+                showsHorizontalScrollIndicator={false}>
+                {activeCategories.map((category) => {
+                  const selected = category.id === categoryId;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={category.id}
+                      onPress={() => {
+                        setCategoryId(category.id);
+                        void Haptics.selectionAsync();
+                      }}
+                      style={({ pressed }) => [
+                        styles.categoryChip,
+                        selected ? styles.categoryChipActive : null,
+                        { opacity: pressed ? 0.64 : 1 },
+                      ]}>
+                      <View
+                        style={[
+                          styles.categorySignal,
+                          { backgroundColor: category.color },
+                        ]}
+                      />
+                      <MaterialCommunityIcons
+                        color={selected ? palette.text : palette.textQuiet}
+                        name={category.icon as never}
+                        size={17}
+                      />
+                      <Text
+                        style={[
+                          styles.categoryLabel,
+                          selected ? styles.categoryLabelActive : null,
+                        ]}>
+                        {category.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={isSubmitting}
+                onPress={() => void handleSave()}
+                style={({ pressed }) => [
+                  styles.saveButton,
+                  isSubmitting ? styles.saveButtonDisabled : null,
+                  { opacity: pressed ? 0.76 : 1 },
+                ]}>
+                {isSubmitting ? (
+                  <ActivityIndicator color={palette.canvas} size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.saveButtonText}>
+                      Record {type === "Revenue" ? "income" : "outflow"}
+                    </Text>
+                    <MaterialCommunityIcons
+                      color={palette.canvas}
+                      name="arrow-top-right"
+                      size={19}
+                    />
+                  </>
+                )}
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Calendar modal ────────────────────────────────────────── */}
-      <Modal visible={activeDrawer === "date"} transparent animationType="fade">
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={closeDrawer}
-          className="flex-1 bg-black/40 justify-center px-4">
-          <TouchableOpacity activeOpacity={1}>
+      <Modal
+        animationType="fade"
+        onRequestClose={closeDrawer}
+        transparent
+        visible={activeDrawer === "date"}>
+        <View style={styles.centeredModal}>
+          <Pressable
+            accessibilityLabel="Close calendar"
+            accessibilityRole="button"
+            onPress={closeDrawer}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.calendarShell}>
             <CustomCalendar
-              selectedDate={date}
-              onSelectDate={(newDate) => setDate(newDate)}
               onClose={closeDrawer}
+              onSelectDate={setDate}
+              selectedDate={date}
             />
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
-      {/* ── Custom keypad ─────────────────────────────────────────── */}
-      {activeDrawer === "amount" && (
-        <Modal
-          visible
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-          onRequestClose={closeDrawer}>
-          <View style={{ flex: 1, justifyContent: "flex-end" }}>
-            {/* Backdrop overlay (covers tab bar too) */}
-            <Pressable
-              onPress={closeDrawer}
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 0,
-                backgroundColor: "rgba(10,18,40,0.35)",
-              }}
-            />
-            <View
-              className="rounded-t-3xl bg-[#f0f3fa]"
-              style={{
-                paddingBottom: Math.max(insets.bottom, 20),
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 10,
-                elevation: 20,
-              }}>
-              <UnifiedNumpad
-                value={amount}
-                onChange={(val) => {
-                  // Re-apply localization formatting
-                  let raw = val.replace(/[^0-9.]/g, "");
-                  if (raw === "" || raw === ".") {
-                    setAmount(raw);
-                    return;
-                  }
-                  const parts = raw.split(".");
-                  const int = parseInt(parts[0] || "0", 10).toLocaleString(
-                    "en-US",
-                  );
-                  setAmount(parts.length > 1 ? `${int}.${parts[1]}` : int);
-                }}
-                mode="amount"
-                onDone={closeDrawer}
-              />
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* ── Note Input Modal (Pop up) ───────────────────────────── */}
       <Modal
-        visible={activeDrawer === "note"}
+        animationType="fade"
+        onRequestClose={closeDrawer}
+        statusBarTranslucent
         transparent
+        visible={activeDrawer === "amount"}>
+        <View style={styles.bottomModal}>
+          <Pressable
+            accessibilityLabel="Close number pad"
+            accessibilityRole="button"
+            onPress={closeDrawer}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              styles.numberPadShell,
+              { paddingBottom: Math.max(insets.bottom, 20) },
+            ]}>
+            <UnifiedNumpad
+              mode="amount"
+              onChange={(value) => {
+                const raw = value.replace(/[^0-9.]/g, "");
+                if (raw === "" || raw === ".") {
+                  setAmount(raw);
+                  return;
+                }
+                const parts = raw.split(".");
+                const integer = Number.parseInt(
+                  parts[0] || "0",
+                  10,
+                ).toLocaleString("en-US");
+                setAmount(
+                  parts.length > 1 ? `${integer}.${parts[1]}` : integer,
+                );
+              }}
+              onDone={closeDrawer}
+              value={amount}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         animationType="slide"
-        statusBarTranslucent>
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: "rgba(10,18,40,0.4)" }}
-          activeOpacity={1}
-          onPress={closeDrawer}
-        />
+        onRequestClose={closeDrawer}
+        statusBarTranslucent
+        transparent
+        visible={activeDrawer === "note"}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
+          style={styles.bottomModal}>
+          <Pressable
+            accessibilityLabel="Close note editor"
+            accessibilityRole="button"
+            onPress={closeDrawer}
+            style={StyleSheet.absoluteFill}
+          />
           <View
-            className="rounded-t-[32px] bg-white"
-            style={{
-              paddingBottom: Math.max(insets.bottom, 24),
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -10 },
-              shadowOpacity: 0.15,
-              shadowRadius: 20,
-              elevation: 40,
-            }}>
-            <View
-              style={{
-                alignItems: "center",
-                paddingTop: 12,
-                paddingBottom: 8,
-              }}>
-              <View
-                style={{
-                  width: 40,
-                  height: 4,
-                  borderRadius: 99,
-                  backgroundColor: "#e2e8f0",
-                }}
-              />
-            </View>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 24,
-                paddingBottom: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: "#f1f5f9",
-              }}>
-              <Text
-                style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-                Add Note
-              </Text>
-              <TouchableOpacity onPress={closeDrawer} style={{ padding: 4 }}>
+            style={[
+              styles.noteSheet,
+              { paddingBottom: Math.max(insets.bottom, 24) },
+            ]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetEyebrow}>LEDGER CONTEXT</Text>
+                <Text style={styles.sheetTitle}>Add a note</Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={closeDrawer}>
                 <MaterialCommunityIcons
+                  color={palette.textMuted}
                   name="close"
                   size={22}
-                  color="#94a3b8"
                 />
-              </TouchableOpacity>
+              </Pressable>
             </View>
-
-            <View style={{ padding: 20 }}>
-              <View
-                style={{
-                  backgroundColor: "#f8fafc",
-                  borderRadius: 20,
-                  borderWidth: 1.5,
-                  borderColor: "#f1f5f9",
-                  padding: 16,
-                  minHeight: 140,
-                }}>
-                <TextInput
-                  autoFocus
-                  value={note}
-                  onChangeText={setNote}
-                  placeholder="What was this for? (e.g. Groceries at Whole Foods)"
-                  placeholderTextColor="#94a3b8"
-                  multiline
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "600",
-                    color: "#0f172a",
-                    textAlignVertical: "top",
-                    flex: 1,
-                  }}
-                />
-              </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success,
-                  );
-                  closeDrawer();
-                }}
-                style={{
-                  backgroundColor: primary,
-                  borderRadius: 18,
-                  height: 56,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginTop: 20,
-                  shadowColor: primary,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 8,
-                  elevation: 5,
-                }}>
-                <Text
-                  style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-                  Confirm Note
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TextInput
+              autoFocus
+              multiline
+              onChangeText={setNote}
+              placeholder="What should future you remember about this entry?"
+              placeholderTextColor={palette.textQuiet}
+              selectionColor={palette.text}
+              style={styles.noteInput}
+              textAlignVertical="top"
+              value={note}
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={closeDrawer}
+              style={({ pressed }) => [
+                styles.sheetConfirm,
+                { opacity: pressed ? 0.74 : 1 },
+              ]}>
+              <Text style={styles.sheetConfirmText}>Keep note</Text>
+            </Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Save feedback ─────────────────────────────────────────── */}
       <SaveFeedback
-        visible={feedback.visible}
-        type={feedback.type}
-        title={feedback.title}
         message={feedback.message}
-        onDone={() => setFeedback((f) => ({ ...f, visible: false }))}
-        primaryActionLabel={
-          feedback.type === "success" ? "View transactions" : undefined
+        onDone={() =>
+          setFeedback((current) => ({ ...current, visible: false }))
         }
         onPrimaryAction={
           feedback.type === "success" ? viewTransactions : undefined
         }
+        primaryActionLabel={
+          feedback.type === "success" ? "Open ledger" : undefined
+        }
+        title={feedback.title}
+        type={feedback.type}
+        visible={feedback.visible}
       />
 
-      {/* ── Category editor ───────────────────────────────────────── */}
       <CategoryEditor
-        visible={activeDrawer === "category"}
         categories={activeCategories}
+        onClose={closeDrawer}
         onSave={(updated) => {
           setActiveCategories(updated);
-          if (updated.length === 0) {
-            setCategoryId("");
-            setFeedback({
-              visible: true,
-              type: "error",
-              title: "No categories",
-              message: "Add at least one category to save transactions.",
-            });
-            return;
-          }
           setCategoryId((current) =>
-            updated.some((c) => c.id === current) ? current : updated[0].id,
+            updated.some((category) => category.id === current)
+              ? current
+              : (updated[0]?.id ?? ""),
           );
         }}
-        onClose={closeDrawer}
+        visible={activeDrawer === "category"}
       />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  scrollContent: {
+    paddingBottom: 150,
+    paddingHorizontal: 20,
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    paddingBottom: 22,
+    paddingTop: 10,
+  },
+  brandMark: {
+    alignItems: "center",
+    borderColor: palette.lineStrong,
+    borderCurve: "continuous",
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  headerCopy: { flex: 1, gap: 3 },
+  eyebrow: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+  greeting: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 18,
+  },
+  networkStatus: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  networkDot: { borderRadius: 3, height: 5, width: 5 },
+  networkText: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+    letterSpacing: 0.8,
+  },
+  hero: {
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    minHeight: 274,
+    overflow: "hidden",
+    paddingBottom: 28,
+    paddingLeft: 22,
+    paddingTop: 22,
+    position: "relative",
+  },
+  heroRail: {
+    backgroundColor: palette.text,
+    bottom: 28,
+    left: 0,
+    opacity: 0.82,
+    position: "absolute",
+    top: 22,
+    width: 2,
+  },
+  heroTopline: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  heroLabel: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 10,
+    letterSpacing: 1.15,
+  },
+  heroCode: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 10,
+    letterSpacing: 1.15,
+  },
+  balance: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 44,
+    letterSpacing: -1.6,
+    marginTop: 30,
+  },
+  balanceCaption: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    marginTop: 7,
+  },
+  metricsRow: {
+    alignItems: "stretch",
+    flexDirection: "row",
+    marginTop: 35,
+  },
+  metric: { flex: 1, gap: 5, paddingRight: 16, position: "relative" },
+  metricSignal: {
+    height: 1,
+    left: 0,
+    position: "absolute",
+    top: -10,
+    width: 42,
+  },
+  metricLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  metricValue: {
+    color: palette.text,
+    fontFamily: fonts.ledger,
+    fontSize: 13,
+  },
+  metricDivider: {
+    backgroundColor: palette.line,
+    marginRight: 18,
+    width: 1,
+  },
+  syncLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 17,
+  },
+  syncText: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 11,
+  },
+  syncRule: { backgroundColor: palette.line, flex: 1, height: 1 },
+  sectionHeading: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 13,
+    marginTop: 18,
+  },
+  sectionTitleRow: { alignItems: "center", flexDirection: "row", gap: 9 },
+  sectionIndex: {
+    backgroundColor: palette.signalViolet,
+    height: 4,
+    transform: [{ rotate: "45deg" }],
+    width: 4,
+  },
+  sectionTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 20,
+  },
+  sectionAction: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  ledger: {
+    borderColor: palette.line,
+    borderCurve: "continuous",
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  ledgerRow: {
+    alignItems: "center",
+    backgroundColor: withAlpha(palette.surface, 0.88),
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    minHeight: 72,
+    paddingHorizontal: 14,
+    position: "relative",
+  },
+  ledgerRowLast: { borderBottomWidth: 0 },
+  transactionSignal: { height: 28, marginRight: 11, width: 1 },
+  transactionIcon: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: "center",
+    marginRight: 11,
+    width: 36,
+  },
+  transactionCopy: { flex: 1, gap: 4, marginRight: 8 },
+  transactionName: {
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  transactionMeta: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.35,
+  },
+  transactionAmount: {
+    fontFamily: fonts.ledger,
+    fontSize: 11,
+    textAlign: "right",
+  },
+  stateRow: {
+    alignItems: "center",
+    backgroundColor: palette.surface,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "center",
+    minHeight: 92,
+    padding: 18,
+  },
+  stateText: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  emptyLedger: { backgroundColor: palette.surface, gap: 7, padding: 20 },
+  emptyTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 17,
+  },
+  emptyBody: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  captureSection: { marginTop: 18 },
+  composer: {
+    backgroundColor: palette.surface,
+    borderColor: palette.lineStrong,
+    borderCurve: "continuous",
+    borderRadius: 26,
+    borderWidth: 1,
+    overflow: "hidden",
+    padding: 16,
+    position: "relative",
+  },
+  composerThreads: {
+    height: 5,
+    left: 18,
+    overflow: "hidden",
+    position: "absolute",
+    right: 18,
+    top: 0,
+  },
+  composerThread: { height: 1, position: "absolute", width: "58%" },
+  threadAmber: { backgroundColor: palette.signalAmber, left: 0, top: 0 },
+  threadViolet: {
+    backgroundColor: palette.signalViolet,
+    left: "34%",
+    top: 2,
+  },
+  threadCyan: { backgroundColor: palette.signalCyan, right: 0, top: 4 },
+  typeSwitch: {
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  typeOption: {
+    alignItems: "center",
+    borderBottomColor: "transparent",
+    borderBottomWidth: 1,
+    flex: 1,
+    paddingVertical: 14,
+  },
+  typeOptionActive: { borderBottomColor: palette.text },
+  typeLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  typeLabelActive: { color: palette.text },
+  amountField: {
+    alignItems: "center",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 94,
+    paddingHorizontal: 4,
+  },
+  amountCurrency: {
+    color: palette.textMuted,
+    fontFamily: fonts.display,
+    fontSize: 24,
+  },
+  amountInput: {
+    color: palette.text,
+    flex: 1,
+    fontFamily: fonts.display,
+    fontSize: 39,
+    letterSpacing: -1,
+  },
+  amountPlaceholder: { color: palette.textQuiet },
+  detailsLedger: { borderBottomColor: palette.line, borderBottomWidth: 1 },
+  detailRow: {
+    alignItems: "center",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 50,
+    paddingHorizontal: 4,
+  },
+  detailLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 9,
+    letterSpacing: 1,
+    width: 76,
+  },
+  detailValue: {
+    color: palette.textMuted,
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    textAlign: "right",
+  },
+  categoryHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    paddingTop: 16,
+  },
+  editLabel: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  categoryList: { gap: 8, paddingBottom: 18, paddingTop: 12 },
+  categoryChip: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderCurve: "continuous",
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    minHeight: 40,
+    overflow: "hidden",
+    paddingHorizontal: 11,
+    position: "relative",
+  },
+  categoryChipActive: {
+    backgroundColor: palette.surfaceRaised,
+    borderColor: palette.textMuted,
+  },
+  categorySignal: { bottom: 0, left: 0, position: "absolute", top: 0, width: 2 },
+  categoryLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  categoryLabelActive: { color: palette.text },
+  saveButton: {
+    alignItems: "center",
+    backgroundColor: palette.text,
+    borderCurve: "continuous",
+    borderRadius: 16,
+    flexDirection: "row",
+    gap: 9,
+    height: 54,
+    justifyContent: "center",
+  },
+  saveButtonDisabled: { opacity: 0.52 },
+  saveButtonText: {
+    color: palette.canvas,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  centeredModal: {
+    backgroundColor: withAlpha(palette.black, 0.78),
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  calendarShell: { zIndex: 1 },
+  bottomModal: {
+    backgroundColor: withAlpha(palette.black, 0.68),
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  numberPadShell: {
+    backgroundColor: palette.surfaceRaised,
+    borderTopColor: palette.lineStrong,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    overflow: "hidden",
+  },
+  noteSheet: {
+    backgroundColor: palette.surface,
+    borderTopColor: palette.lineStrong,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    gap: 18,
+    paddingHorizontal: 20,
+    paddingTop: 11,
+    zIndex: 1,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    backgroundColor: palette.lineStrong,
+    borderRadius: 3,
+    height: 4,
+    width: 38,
+  },
+  sheetHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  sheetEyebrow: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 1,
+  },
+  sheetTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 23,
+    marginTop: 3,
+  },
+  noteInput: {
+    backgroundColor: palette.canvasRaised,
+    borderColor: palette.line,
+    borderCurve: "continuous",
+    borderRadius: 16,
+    borderWidth: 1,
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    minHeight: 132,
+    padding: 15,
+  },
+  sheetConfirm: {
+    alignItems: "center",
+    backgroundColor: palette.text,
+    borderRadius: 15,
+    height: 52,
+    justifyContent: "center",
+  },
+  sheetConfirmText: {
+    color: palette.canvas,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+});

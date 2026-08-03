@@ -10,6 +10,8 @@ import {
 } from "@/services/supabase/auth-service";
 import { supabaseClient } from "@/services/supabase/supabase-client";
 import { useAppStore } from "@/store/use-app-store";
+import { UI_PREVIEW_ENABLED } from "@/config/runtime";
+import { PREVIEW_USER } from "@/fixtures/preview-data";
 
 type UserSession = {
   uid: string;
@@ -30,10 +32,16 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [user, setUser] = useState<UserSession | null>(null);
-  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [user, setUser] = useState<UserSession | null>(() =>
+    UI_PREVIEW_ENABLED ? PREVIEW_USER : null,
+  );
+  const [isBootstrapping, setIsBootstrapping] = useState(
+    !UI_PREVIEW_ENABLED,
+  );
 
   useEffect(() => {
+    if (UI_PREVIEW_ENABLED) return;
+
     const syncUserFromSupabase = async (fallbackUser?: any) => {
       try {
         // getSession might return a stale JWT that doesn't include freshly updated metadata.
@@ -83,10 +91,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (UI_PREVIEW_ENABLED) {
+      setUser({ ...PREVIEW_USER, email });
+      return;
+    }
     await supabaseSignIn(email, password);
   }, []);
 
   const signUp = useCallback(async (fullName: string, email: string, password: string) => {
+    if (UI_PREVIEW_ENABLED) {
+      setUser({ uid: PREVIEW_USER.uid, email, fullName });
+      return;
+    }
     // Pass full_name inside signUp options so it's atomic — avoids a separate
     // updateUser call that can fail if email-confirmation hasn't established a
     // session yet.
@@ -94,6 +110,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (UI_PREVIEW_ENABLED) {
+      setUser(null);
+      return;
+    }
     await supabaseSignOut();
   }, []);
 
