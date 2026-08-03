@@ -1,32 +1,38 @@
-import Constants from "expo-constants";
+import type { ApiResult } from "@/contracts/backend";
+import { BackendError, toBackendError } from "@/services/backend/errors";
+import { supabaseClient } from "@/services/supabase/supabase-client";
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
-type RequestConfig = {
-  method?: HttpMethod;
-  body?: unknown;
-  headers?: Record<string, string>;
-};
-
-const baseUrl =
-  Constants.expoConfig?.extra?.apiBaseUrl ?? "https://example.api.company.com";
-
-export async function httpClient<TResponse>(
-  path: string,
-  config: RequestConfig = {},
+/**
+ * Typed boundary for trusted Supabase Edge Functions.
+ *
+ * The Supabase SDK supplies the current bearer token and project URL. Edge
+ * Functions return the canonical ApiResult envelope, so no screen needs to
+ * understand FunctionsHttpError or provider response bodies.
+ */
+export async function invokeEdgeFunction<TResponse>(
+  functionName: string,
+  body?: Record<string, unknown>,
 ): Promise<TResponse> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: config.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(config.headers ?? {}),
-    },
-    body: config.body ? JSON.stringify(config.body) : undefined,
-  });
+  const { data, error } = await supabaseClient.functions.invoke<
+    ApiResult<TResponse>
+  >(functionName, { body });
 
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+  if (error) throw toBackendError(error);
+  if (!data) {
+    throw new BackendError({
+      code: "INTERNAL_ERROR",
+      message: "The service returned no response. Please try again.",
+      retryable: true,
+    });
+  }
+  if (!data.ok) {
+    throw new BackendError({
+      code: data.error.code,
+      fieldErrors: data.error.field_errors,
+      message: data.error.message,
+      retryable: data.error.retryable,
+    });
   }
 
-  return (await response.json()) as TResponse;
+  return data.data;
 }

@@ -1,4 +1,7 @@
-import type { TransactionInsert } from "@/services/supabase/transaction-service";
+import type {
+  TransactionInsert,
+  TransactionUpdate,
+} from "@/contracts/backend";
 
 // ─── Pending operation union type ────────────────────────────────────────────
 
@@ -19,7 +22,7 @@ export type PendingDelete = {
 export type PendingUpdate = {
   id: string;           // same as the transaction ID being updated
   opType: "update";
-  payload: { transactionId: string; data: Partial<TransactionInsert> };
+  payload: { transactionId: string; data: TransactionUpdate };
   createdAt: number;
 };
 

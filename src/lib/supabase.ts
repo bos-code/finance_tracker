@@ -2,15 +2,12 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import type { Database } from '@/contracts/database';
+import { getSupabaseRuntimeConfig } from '@/config/runtime';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
+const { anonKey, url } = getSupabaseRuntimeConfig();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase configuration in environment variables");
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(url, anonKey, {
   auth: {
     storage:
       Platform.OS === 'web' && typeof window === 'undefined'

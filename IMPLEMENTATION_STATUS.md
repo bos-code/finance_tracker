@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 5 — secure App Lock and shared capture surfaces
+**Batch:** 6 — backend audit, contracts, and foundation
 
 **Branch:** `master`
 
@@ -164,10 +164,43 @@
 - Added accessibility state and labels to calendar dates, category choices,
   colour and icon choices, month navigation, and keypad actions.
 
+### Backend Stage 1 — audit and contracts
+
+- Fixed the backend architecture as Supabase PostgreSQL, Auth, Storage,
+  Realtime, and feature-first TypeScript Edge Functions; H2 is not part of the
+  existing or target system.
+- Added a backend architecture record, exact current database inventory,
+  stable error-code catalogue, and additive migration/rollback playbook under
+  `docs/backend/`.
+- Added canonical TypeScript contracts for current transactions and goals plus
+  planned users, workspaces, categories, accounts, currencies, attachments,
+  drafts, bot connections, AI usage, lifecycle states, sources, and sync states.
+- Added a typed current-schema Supabase `Database` contract and wired it into
+  the shared client.
+- Centralized validated runtime environment selection for local, development,
+  preview, and production; added a safe `.env.example` and documented that
+  service-role/provider secrets must remain server-only.
+- Replaced the unused hard-coded example HTTP endpoint with a typed Supabase
+  Edge Function boundary that consumes the canonical success/error envelope
+  and automatically uses the current Supabase session.
+- Added `BackendError` normalization for network, schema, validation,
+  authentication, permission, not-found, conflict, and rate-limit failures.
+- Wired transaction and goal services to canonical contracts and safe errors.
+- Stopped treating a missing transactions table as a successful offline save.
+- Stopped converting database/schema read failures into an empty transaction
+  list; only a genuine network failure may use an already-present monthly
+  cache.
+- Moved transaction analytics into a feature-owned pure module so the same
+  calculations are directly testable.
+- Added a zero-dependency Node backend test command with 12 baseline tests for
+  contracts, API envelopes, error normalization, SQL/RLS invariants, and
+  transaction analytics.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
 - `pnpm lint` — passed with zero errors and zero warnings.
+- `pnpm test:backend` — passed; 12 tests, zero failures.
 - Expo fixture-mode production web export — passed; all 16 routes bundled.
 - Expo normal production web export with non-secret placeholder Supabase values
   — passed; all 16 routes bundled.
@@ -180,6 +213,8 @@
   static fixture output.
 - Security/shared-surface fixture-mode and normal production exports — passed;
   all 16 routes bundled after the SecureStore migration and shared UI rebuild.
+- Backend Stage 1 TypeScript and lint checks — passed after wiring the typed
+  Supabase schema, canonical service contracts, and Edge Function boundary.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
   headings, search/plan affordances, state copy, and orbit navigation.
 - Automated screenshot inspection is still unavailable because the workspace
@@ -199,19 +234,21 @@
 
 - Backend persistence for workspace, account, connection, privacy, and
   notification settings
+- Stage 2 transaction idempotency, temporary-ID reconciliation, durable retry
+  metadata, explicit sync states, and conflict handling
 - receipt vault, review drafts, Telegram connection UI, and OCR review UI
 - new backend schemas, contracts, Edge Functions, storage policies, bot flows,
   and production hardening described in `PLAN_BACKEND.md`
 
 ## Exact next batch
 
-1. Begin Backend Stage 1 by inventorying the current Supabase migrations, Edge
-   Functions, client models, and environment contracts against
-   `PLAN_BACKEND.md`.
-2. Add the authoritative database/API contract without breaking the existing
-   transaction flow, then verify local types and migrations.
-3. Commit and push the verified backend-contract batch before moving to
-   transaction reliability and idempotency.
+1. Establish standard timestamped Supabase migrations without rewriting or
+   dropping the current transaction and goal rows.
+2. Add idempotency and synchronization metadata, then repair temporary-ID
+   reconciliation, duplicate cache insertion, queued dependencies, retries,
+   and failed-operation visibility.
+3. Add reliability tests, run the complete verification matrix, and push
+   Backend Stage 2 as its own checkpoint.
 
 ## Backend clarification
 

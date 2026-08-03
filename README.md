@@ -2,18 +2,21 @@
 
 A mobile-first personal finance app built with Expo, React Native, and Supabase.
 
-This project includes authenticated budgeting flows, offline-first transaction entry, savings goals, monthly analytics, and profile-level security features like PIN and biometric app lock.
+This project includes authenticated ledger flows, offline-first transaction
+entry, savings goals, evidence-based analytics, and device security through a
+secure PIN and optional biometrics.
 
 ## What the App Does
 
 - Sign up, sign in, sign out, and reset passwords with Supabase Auth
 - Capture `Revenue` and `Expenditure` transactions with category, note, amount, and date
-- Browse transactions by day and month in the calendar view
-- View monthly summaries and category breakdowns on the stats screen
+- Browse, search, and filter transactions in list or calendar mode
+- View monthly/yearly cashflow trends and category breakdowns
 - Create and manage savings or item-based goals
 - Queue transaction changes offline and sync them automatically when the device reconnects
-- Customize theme and currency locally from the profile screen
-- Protect the app with a 4-digit PIN and optional biometrics
+- Choose the display currency from the profile control center
+- Protect the native app with a SecureStore-backed 4-digit PIN and optional
+  biometrics
 
 ## Tech Stack
 
@@ -26,6 +29,7 @@ This project includes authenticated budgeting flows, offline-first transaction e
 - `Zustand`
 - `AsyncStorage`
 - `expo-local-authentication`
+- `expo-secure-store`
 - `expo-image-picker`
 
 ## App Structure
@@ -45,6 +49,8 @@ src/
     navigation/
     ui/
   context/                  Auth, offline, and app-lock providers
+  contracts/                Canonical backend and current database contracts
+  features/                 Feature-owned domain logic
   hooks/                    Shared hooks for auth, goals, transactions, network
   services/
     api/
@@ -57,15 +63,17 @@ src/
   assets/                   Fonts and icons
 supabase/
   001_create_goals.sql      Transactions + goals schema, triggers, and RLS
+docs/backend/               Architecture, inventory, errors, and migrations
+tests/backend/              Executable contract, SQL, error, and analytics tests
 ```
 
 ## Main Screens
 
 - `Home`: create income and expense transactions
-- `Calendar`: inspect day-by-day activity and monthly totals
+- `Ledger`: inspect, search, and filter all financial movement
 - `Goals`: track savings targets and item purchase goals
-- `Stats`: review revenue, expenditure, and category distribution
-- `Profile`: manage name, theme, currency, password, and app lock
+- `Insights`: review real trends, comparisons, and category distribution
+- `Profile`: manage identity, currency, privacy readiness, password, and app lock
 
 ## Getting Started
 
@@ -84,16 +92,18 @@ Create a `.env` file in the project root:
 ```env
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_KEY=your_supabase_anon_key
-
-# Optional table overrides
-EXPO_PUBLIC_TRANSACTIONS_TABLE=transactions
-EXPO_PUBLIC_GOALS_TABLE=goals
+EXPO_PUBLIC_APP_ENV=local
+EXPO_PUBLIC_UI_PREVIEW=0
 ```
 
 Notes:
 
-- `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` are required at startup
-- `EXPO_PUBLIC_TRANSACTIONS_TABLE` and `EXPO_PUBLIC_GOALS_TABLE` can be either `table_name` or `public.table_name`
+- `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` are required at startup.
+- `EXPO_PUBLIC_APP_ENV` must be `local`, `development`, `preview`, or
+  `production`.
+- The canonical client tables are `public.transactions` and `public.goals`.
+- Never expose a service-role, Telegram, webhook, or AI secret through an
+  `EXPO_PUBLIC_*` variable.
 
 ### UI preview mode
 
@@ -114,6 +124,11 @@ That migration creates:
 - `public.goals`
 - update triggers for timestamps and goal completion state
 - row-level security policies scoped to the authenticated user
+
+The current SQL file predates a standard Supabase migration directory. Read
+[the migration playbook](docs/backend/MIGRATION_PLAYBOOK.md) before changing a
+deployed schema; Backend Stage 2 will establish timestamped migrations without
+dropping current rows.
 
 ### 4. Add the password reset redirect
 
@@ -137,6 +152,7 @@ Useful commands:
 pnpm android
 pnpm web
 pnpm lint
+pnpm test:backend
 ```
 
 `pnpm ios` is available in `package.json`, but it requires macOS.
@@ -157,7 +173,9 @@ Goals are currently fetched and written directly through Supabase and do not use
 
 - Transaction dates are stored as local `YYYY-MM-DD` strings to avoid UTC date-shift bugs
 - Goal completion timestamps are managed by the database trigger
-- Some account and preference fields are hydrated from Supabase Auth user metadata
+- Some profile preferences are still hydrated from Supabase Auth user metadata
+- Database/provider errors are normalized and are never returned as an empty
+  transaction list
 
 ## Build Profiles
 
@@ -169,11 +187,12 @@ The repo includes EAS build profiles in [eas.json](eas.json):
 
 ## Current Quality Bar
 
-- TypeScript is enabled across the app
+- TypeScript is enabled across the app and Supabase uses a current-schema type
+  contract
 - ESLint is configured through Expo
 - React Query handles remote caching and mutation invalidation
-
-There is no automated test suite configured in this repo yet, so `pnpm lint` is the main built-in verification step today.
+- The zero-dependency Node test suite covers canonical contracts, safe errors,
+  current SQL/RLS invariants, and transaction analytics
 
 ## Implementation Plans
 
@@ -183,3 +202,5 @@ There is no automated test suite configured in this repo yet, so `pnpm lint` is 
   Telegram, receipt, parser, realtime, and security stages.
 - `IMPLEMENTATION_STATUS.md` records the latest pushed checkpoint and exact next
   batch.
+- `docs/backend/ARCHITECTURE.md` and `docs/backend/DATABASE_INVENTORY.md` define
+  the implemented backend baseline.
