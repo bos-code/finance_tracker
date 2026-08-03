@@ -10,6 +10,12 @@ type ProviderErrorShape = {
 };
 
 const FRIENDLY_MESSAGES: Record<BackendErrorCode, string> = {
+  ATTACHMENT_DELETE_FAILED:
+    "The private receipt could not be removed. Please try again.",
+  ATTACHMENT_READ_FAILED:
+    "Private receipts could not be loaded. Please try again.",
+  ATTACHMENT_UPLOAD_FAILED:
+    "The transaction was kept, but its receipt could not be uploaded.",
   AUTHENTICATION_REQUIRED: "Please sign in and try again.",
   BACKEND_NOT_READY: "Finance data is not ready yet. Please try again shortly.",
   CONFLICT: "That change conflicts with a newer record. Refresh and try again.",

@@ -4,8 +4,8 @@
 
 Timestamped migrations now live under `supabase/migrations/`. The baseline
 captures the previously manual transaction/goal schema; the following
-migrations add transaction reliability and the workspace/account/currency
-foundation without dropping existing IDs or rows. This
+migrations add transaction reliability, the workspace/account/currency
+foundation, and private receipt storage without dropping existing IDs or rows. This
 workspace is not linked to a Supabase project and has no local Supabase CLI or
 Postgres runtime, so repository checks are static; apply and integration-test
 the migrations in development before production.
@@ -84,6 +84,29 @@ PostgreSQL schema rollback is not assumed to be a blind down migration.
    retain the older-client compatibility policies until the minimum-version
    cutover is measured and approved.
 
+## Stage 4 private receipt sequence
+
+1. Apply `20260803000400_secure_receipt_storage.sql` only after Stage 3 is
+   verified; confirm the private bucket reports `public = false`, the 10 MB
+   ceiling, and exactly the four allowed MIME types.
+2. With two authenticated users, create a transaction and attachment metadata
+   for user A. Verify user B cannot list the row, upload to A's path, read the
+   object, create a signed URL, update state, or delete the object/metadata.
+3. Exercise PDF/JPEG/PNG/WebP upload, 10 MB + 1 byte rejection, PDF page 26
+   rejection, duplicate hash rejection, interrupted upload retry, and a
+   60-second viewing link. Treat client MIME/magic-byte checking as defense in
+   depth; uploaded documents remain untrusted private content.
+4. Verify a receipt failure leaves the already-created transaction intact.
+   Verify deletion removes the Storage object before the guarded RPC accepts
+   metadata deletion.
+5. Deploy `receipt-orphan-cleanup`, set a strong server-only cleanup secret,
+   invoke it manually against synthetic stale/current rows, and confirm it
+   processes no more than 100 stale rows without deleting current or uploaded
+   receipts.
+6. Schedule cleanup daily only after the two-user and deletion-order matrix
+   passes in development, then promote the migration, function, secrets, and
+   app build together through preview.
+
 ## Verification checklist
 
 - [ ] Migration applies to an empty local Postgres database.
@@ -91,6 +114,9 @@ PostgreSQL schema rollback is not assumed to be a blind down migration.
 - [ ] Row counts and primary keys are unchanged unless explicitly expected.
 - [ ] Two-user RLS isolation tests pass for every operation.
 - [ ] Duplicate idempotency-key tests return one financial record.
+- [ ] Private receipt object/metadata isolation passes with two users.
+- [ ] Retry, duplicate, signed-link expiry, deletion order, and orphan cleanup
+      pass against development Storage.
 - [x] App TypeScript, backend tests, lint, and production export pass.
 - [ ] Recovery query or forward-fix SQL is reviewed before deployment.
 - [ ] Commit and remote tree are verified before beginning the next stage.

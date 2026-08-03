@@ -3,6 +3,7 @@ import type {
   FinancialAccountContract,
   GoalRecord,
   ProfileContract,
+  TransactionAttachmentContract,
   TransactionInsert,
   TransactionRecord,
   TransactionSource,
@@ -84,6 +85,19 @@ type TransactionMutationRow = {
   created_at: string;
 };
 
+type TransactionAttachmentDatabaseInsert = Omit<
+  TransactionAttachmentContract,
+  | "created_at"
+  | "updated_at"
+  | "uploaded_at"
+  | "processing_status"
+> & {
+  created_at?: string;
+  updated_at?: string;
+  uploaded_at?: string | null;
+  processing_status?: TransactionAttachmentContract["processing_status"];
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -144,6 +158,12 @@ export type Database = {
         Update: Partial<TransactionMutationRow>;
         Relationships: [];
       };
+      transaction_attachments: {
+        Row: TransactionAttachmentContract;
+        Insert: TransactionAttachmentDatabaseInsert;
+        Update: Partial<TransactionAttachmentDatabaseInsert>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -190,6 +210,10 @@ export type Database = {
       set_personal_workspace_currency: {
         Args: { p_workspace_id: string; p_currency_code: string };
         Returns: WorkspaceContract[];
+      };
+      delete_transaction_attachment_record: {
+        Args: { p_attachment_id: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

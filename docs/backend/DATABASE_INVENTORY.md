@@ -2,7 +2,8 @@
 
 ## Inventory boundary
 
-The repository contains an ordered baseline plus additive Stage 2 and Stage 3
+The repository contains an ordered baseline plus additive Stage 2, Stage 3,
+and Stage 4
 migrations under `supabase/migrations/`. The older
 `supabase/001_create_goals.sql` remains historical and is not the authoritative
 installation path. There is no linked-project schema dump or local PostgreSQL
@@ -25,6 +26,8 @@ schema rather than claiming unverified production state.
 | `handle_transaction_scope()` | Resolves legacy scope, validates account/workspace identity, and calculates base amounts. |
 | `mutate_transaction(...)` | Authenticated, idempotent create/update/soft-delete RPC with revision, scope, and currency controls. |
 | `set_personal_workspace_currency(uuid,text)` | Atomically changes the current base and default-account currency without changing history. |
+| `handle_transaction_attachment_write()` | Validates active transaction ownership, freezes attachment identity, and maintains upload timestamps/states. |
+| `delete_transaction_attachment_record(uuid)` | Removes an owned attachment row only after its private Storage object is absent. |
 
 Security-definer functions pin an empty `search_path`, check `auth.uid()` where
 they are client-callable, and revoke default public execution. Only the two
@@ -84,6 +87,20 @@ Known gap: goal contributions are not yet an append-only ledger, so concurrent
 `saved_amount` updates can still overwrite one another. Built-in transaction
 category IDs also remain app-defined until the shared parser/category stage.
 
+## `public.transaction_attachments`
+
+One transaction may own multiple receipt rows. Each row has a composite
+workspace/owner/transaction foreign key, owner-prefixed private Storage path,
+original filename, declared MIME, byte size, lowercase SHA-256, optional PDF
+page count, source/provider identity, retry state, future OCR state, and UTC
+timestamps. Duplicate content is rejected per owner/transaction/hash.
+
+PDFs require 1–25 pages, every file is capped at 10 MB, and MIME is limited to
+PDF/JPEG/PNG/WebP. Attachment identity is immutable after registration. RLS
+permits authenticated owner/member select, insert, and lifecycle update; there
+is deliberately no direct client delete. The guarded delete RPC requires the
+Storage object to be removed first.
+
 ## Auth metadata in use
 
 - `full_name`, `country_code`, `locale`, and `timezone`: captured at signup and
@@ -99,8 +116,8 @@ category IDs also remain app-defined until the shared parser/category stage.
 
 | Capability | Current state |
 | --- | --- |
-| Storage buckets and policies | None declared; private receipts are Stage 4. |
-| Edge Functions | None present. |
+| Storage buckets and policies | Private `transaction-receipts` bucket with 10 MB/MIME limits and owner-path insert/select/update/delete policies backed by matching attachment metadata. |
+| Edge Functions | `receipt-orphan-cleanup`: secret-authenticated, service-role-only, seven-day stale-upload cleanup capped at 100 rows per call. |
 | Realtime publication/subscriptions | None configured in source. |
 | Scheduled jobs and webhooks | None present. |
 
@@ -112,5 +129,8 @@ category IDs also remain app-defined until the shared parser/category stage.
   user/workspace/month cache, and a durable user-scoped pending-operation queue.
 - Goals: workspace-scoped direct PostgREST reads/writes and React Query; no
   offline mutation queue yet.
+- Receipts: locally validated bytes, owner-scoped attachment metadata, private
+  Storage, React Query, and short-lived signed viewing URLs; no offline file
+  queue.
 - Authentication: Supabase Auth SDK plus durable profile/workspace bootstrap.
 - App Lock: Expo SecureStore on native devices only.

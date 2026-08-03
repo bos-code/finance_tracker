@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 8 — workspace, account, and currency foundation
+**Batch:** 9 — secure transaction receipt vault
 
 **Branch:** `master`
 
@@ -274,6 +274,36 @@
   workspace/currency SQL invariants, scope contracts, and base-amount
   reporting plus prior-version queue migration.
 
+### Backend Stage 4 — private receipts and documents
+
+- Added the private `transaction-receipts` Storage bucket with a 10 MB object
+  limit and an allow-list for PDF, JPEG, PNG, and WebP content types.
+- Added transaction-owned attachment metadata, immutable file identity,
+  SHA-256 duplicate detection, one-to-many transaction relationships, PDF page
+  counts capped at 25, upload attempts, safe errors, and future OCR states.
+- Added owner/workspace RLS and Storage policies that require the authenticated
+  user ID as the first path segment and a matching owned metadata record.
+- Added client-side magic-byte validation before upload instead of trusting a
+  filename extension or declared MIME type; damaged and encrypted PDFs are
+  rejected before Storage is called.
+- Added register → upload → seal lifecycle progress, resumable failed-state
+  records, same-file retry, 60-second signed viewing URLs, and duplicate
+  prevention without coupling optional receipt success to transaction success.
+- Added confirmed receipt deletion that removes the private object before a
+  guarded RPC removes metadata; clients have no direct attachment-row delete
+  grant or policy.
+- Added a secret-authenticated, service-role-only orphan cleanup Edge Function
+  that removes stale pending/uploading/failed objects before their metadata,
+  with a seven-day retention window and a 100-row batch ceiling.
+- Added an Obsidian Thread receipt selector to Home and an owner-private receipt
+  vault to every synced Ledger row, including progress, retry, delete, offline,
+  empty, loading, and failure states.
+- Added fixture-backed receipt records and mutations for backend-independent
+  UI review.
+- Expanded backend coverage from 32 to 40 tests with file-signature, size/page,
+  path sanitization, private bucket/RLS, guarded deletion, and orphan cleanup
+  invariants.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
@@ -302,7 +332,12 @@
   workspace, account, regional signup, currency, cache, and reporting wiring.
 - Backend Stage 3 normal and fixture-mode production web exports — passed; all
   16 routes bundled in both modes.
-- The Stage 1–3 SQL is statically covered but has not been executed against a
+- Backend Stage 4 TypeScript, lint, and 40-test backend suite — passed after
+  private receipt validation, lifecycle, RLS, and cleanup integration.
+- Backend Stage 4 normal and fixture-mode production web exports — passed; all
+  16 routes bundled in both modes, and fixture output contains the receipt
+  selection/privacy copy.
+- The Stage 1–4 SQL is statically covered but has not been executed against a
   local or linked Supabase project in this workspace; live migration, RLS, and
   concurrent replay verification remain deployment gates.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
@@ -323,23 +358,23 @@
 
 ## Not yet redesigned or implemented
 
-- receipt vault, review drafts, Telegram connection UI, and OCR review UI
-- receipt/attachment schemas, Edge Functions, storage policies, bot flows,
-  realtime automation, privacy/notification persistence, and production
-  hardening described in `PLAN_BACKEND.md`
-- live application of the Stage 1–3 migrations to development/preview/production
+- review drafts, Telegram connection UI, and OCR review UI
+- deterministic/AI parsers, bot flows, realtime automation,
+  privacy/notification persistence, and production hardening described in
+  `PLAN_BACKEND.md`
+- live application of the Stage 1–4 migrations and receipt cleanup function to development/preview/production
   Supabase projects and device-level reconnect/concurrency validation
 
 ## Exact next batch
 
-1. Apply the ordered Stage 1–3 migrations to a development Supabase project and
+1. Apply the ordered Stage 1–4 migrations to a development Supabase project and
    run the two-user RLS, bootstrap, duplicate replay, currency-history,
-   revision-conflict, and reconnect matrix when project access is available.
-2. Begin Backend Stage 4 with a private receipt bucket, attachment records,
-   MIME/size/hash validation, signed viewing URLs, retryable upload state, and
-   owner/workspace isolation.
-3. Keep optional receipt failures independent from transaction saves, verify
-   both app modes, and publish Stage 4 as its own checkpoint.
+   revision-conflict, receipt-object isolation, deletion-order, and reconnect
+   matrix when project access is available.
+2. Begin Backend Stage 5 with deterministic transaction parsing, shared
+   validation, persisted review drafts, confirmation, correction, and expiry.
+3. Keep parser output review-first, verify both app modes, and publish Stage 5
+   as its own checkpoint before adding controlled AI fallback.
 
 ## Backend clarification
 

@@ -16,6 +16,8 @@ secure PIN and optional biometrics.
 - Queue transaction changes offline and sync them automatically when the device reconnects
 - Confirm a region-suggested base currency at signup and change it later
   without relabelling historical transactions
+- Attach private PDF, JPEG, PNG, or WebP receipts to synced transactions and
+  open them through short-lived signed links
 - Protect the native app with a SecureStore-backed 4-digit PIN and optional
   biometrics
 
@@ -32,6 +34,8 @@ secure PIN and optional biometrics.
 - `expo-local-authentication`
 - `expo-secure-store`
 - `expo-image-picker`
+- `expo-document-picker` + `expo-file-system` + `expo-crypto`
+- `pdf-lib`
 
 ## App Structure
 
@@ -130,11 +134,14 @@ The current migrations create or update:
 - `public.profiles`
 - `public.workspaces` and `public.workspace_members`
 - `public.financial_accounts`
+- `public.transaction_attachments`
 - update triggers for timestamps, goal completion state, and transaction revision
 - workspace-scoped RLS policies
 - an authenticated idempotent, workspace-aware transaction mutation RPC and
   server-only mutation journal
 - an atomic personal-workspace currency update RPC
+- a private `transaction-receipts` bucket with owner-path Storage policies
+- a guarded attachment-metadata deletion RPC
 
 The Stage 3 app uses the mutation RPC. Owner-only legacy write policies remain
 temporarily so an older installed build is not broken by the schema rollout;
@@ -144,6 +151,11 @@ Read [the migration playbook](docs/backend/MIGRATION_PLAYBOOK.md) before
 changing a deployed schema. The repository migrations are additive, but their
 live application still requires schema-history reconciliation and two-user RLS
 verification.
+
+After the Stage 4 migration is verified, deploy and schedule
+`supabase/functions/receipt-orphan-cleanup` with a strong server-only
+`RECEIPT_CLEANUP_SECRET`. Its local README records the required invocation and
+secret boundary.
 
 ### 4. Add the password reset redirect
 
@@ -187,6 +199,8 @@ Offline support currently focuses on transactions.
 - The global banner and ledger show queued, syncing, failed, and conflict states
 
 Goals are currently fetched and written directly through Supabase and do not use the offline queue.
+Receipt files also require a connection: an offline transaction still saves,
+then its receipt can be attached from Ledger after the transaction syncs.
 
 ## Data Notes
 
@@ -196,6 +210,8 @@ Goals are currently fetched and written directly through Supabase and do not use
 - Changing the workspace currency does not rewrite historical transactions;
   mixed-base summaries include only records compatible with the selected base
 - Goal completion timestamps are managed by the database trigger
+- Receipt contents are checked by magic bytes on the client, hashed with
+  SHA-256, stored in a private bucket, and never exposed through a public URL
 - Some profile preferences are still hydrated from Supabase Auth user metadata
 - Database/provider errors are normalized and are never returned as an empty
   transaction list
@@ -215,8 +231,8 @@ The repo includes EAS build profiles in [eas.json](eas.json):
 - ESLint is configured through Expo
 - React Query handles remote caching and mutation invalidation
 - The zero-dependency Node test suite covers canonical contracts, safe errors,
-  SQL/RLS/idempotency invariants, offline queue compaction, retry behavior, and
-  transaction analytics
+  SQL/RLS/idempotency and receipt-storage invariants, offline queue compaction,
+  retry behavior, file validation, cleanup ordering, and transaction analytics
 
 ## Implementation Plans
 

@@ -2,8 +2,8 @@
 
 ## Status
 
-This document records the implemented backend through Stage 3. It describes
-the existing backend and the decisions that govern Stages 4–10 in
+This document records the implemented backend through Stage 4. It describes
+the existing backend and the decisions that govern Stages 5–10 in
 `PLAN_BACKEND.md`.
 
 ## Architectural decisions
@@ -34,6 +34,9 @@ the existing backend and the decisions that govern Stages 4–10 in
    user-scoped pending operation for later synchronization.
 8. The database mutation journal makes create, update, and soft-delete retries
    idempotent; revision checks surface cross-device conflicts.
+9. A receipt upload validates bytes and PDF bounds locally, registers an owned
+   metadata path, uploads the bytes to the private bucket, then seals the row as
+   uploaded. Viewing uses a 60-second signed URL.
 
 Direct table reads remain appropriate for current workspace-scoped data. The
 Stage 3 client writes through the database RPC. Existing owner-scoped write
@@ -97,7 +100,11 @@ objects until the timestamped migrations are applied there.
   provider boundary.
 - App Lock remains device-local in the operating-system secure store and is
   not a backend credential.
-- Receipt objects will use a private bucket and short-lived signed URLs.
+- Receipt objects use a private bucket, authenticated owner-path policies, and
+  60-second signed URLs. Client code receives no service-role secret.
+- Receipt deletion removes Storage first, then crosses a guarded metadata RPC;
+  a server-only bounded cleanup function handles stale upload records in the
+  same order.
 
 ## Environment model
 
@@ -116,7 +123,7 @@ Production data is never copied into preview tests.
 
 - Stage 2 makes mutations idempotent and the offline journal reliable.
 - Stage 3 adds profiles, personal workspaces, accounts, and explicit currency.
-- Stage 4 adds private receipt storage.
+- Stage 4 adds private receipt storage, retry/delete recovery, and cleanup.
 - Stages 5–6 add deterministic parsing and controlled AI fallback.
 - Stages 7–8 add Telegram linking and finance flows.
 - Stage 9 adds Realtime, notifications, and OCR assistance.

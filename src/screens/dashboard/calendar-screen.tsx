@@ -1,3 +1,4 @@
+import { ReceiptSheet } from "@/components/attachments/receipt-sheet";
 import { LedgerEntryRow } from "@/components/finance/ledger-entry-row";
 import { PageHeading } from "@/components/finance/page-heading";
 import { PeriodNavigator } from "@/components/finance/period-navigator";
@@ -209,6 +210,8 @@ export function CalendarScreen() {
   const [filter, setFilter] = useState<LedgerFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth() + 1;
@@ -457,103 +460,119 @@ export function CalendarScreen() {
   );
 
   return (
-    <Screen backgroundColor={palette.canvas} className="px-0">
-      <SignalThreads intensity="quiet" />
-      {mode === "list" ? (
-        <SectionList
-          contentContainerStyle={styles.listContent}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={<View style={styles.stateWrap}>{stateContent}</View>}
-          ListHeaderComponent={header}
-          refreshControl={
-            <RefreshControl
-              colors={[palette.textMuted]}
-              onRefresh={() => void refetch()}
-              refreshing={isRefetching}
-              tintColor={palette.textMuted}
-            />
-          }
-          renderItem={({ item }) => (
-            <LedgerEntryRow currency={currency} transaction={item} />
-          )}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionDate}>{section.title}</Text>
-              <Text style={styles.sectionCount}>
-                {section.data.length.toString().padStart(2, "0")}
-              </Text>
-            </View>
-          )}
-          sections={sections}
-          showsVerticalScrollIndicator={false}
-          stickySectionHeadersEnabled={false}
-        />
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.listContent}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardDismissMode="on-drag"
-          refreshControl={
-            <RefreshControl
-              colors={[palette.textMuted]}
-              onRefresh={() => void refetch()}
-              refreshing={isRefetching}
-              tintColor={palette.textMuted}
-            />
-          }
-          showsVerticalScrollIndicator={false}>
-          {header}
-          {isLoading || isError ? (
-            <View style={styles.stateWrap}>{stateContent}</View>
-          ) : (
-            <>
-              <CalendarGrid
-                currency={currency}
-                dailyTotals={dailyTotals}
-                days={calendarDays}
-                onSelectDay={chooseDay}
-                selectedDay={selectedDay}
+    <>
+      <Screen backgroundColor={palette.canvas} className="px-0">
+        <SignalThreads intensity="quiet" />
+        {mode === "list" ? (
+          <SectionList
+            contentContainerStyle={styles.listContent}
+            contentInsetAdjustmentBehavior="automatic"
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View style={styles.stateWrap}>{stateContent}</View>
+            }
+            ListHeaderComponent={header}
+            refreshControl={
+              <RefreshControl
+                colors={[palette.textMuted]}
+                onRefresh={() => void refetch()}
+                refreshing={isRefetching}
+                tintColor={palette.textMuted}
               />
-
-              <View style={styles.selectedHeader}>
-                <Text style={styles.selectedLabel}>
-                  {selectedDay
-                    ? sectionTitle(selectedDay).toLocaleUpperCase()
-                    : "DAY DETAIL"}
-                </Text>
-                <Text style={styles.selectedCount}>
-                  {selectedDayTransactions.length.toString().padStart(2, "0")}
+            }
+            renderItem={({ item }) => (
+              <LedgerEntryRow
+                currency={currency}
+                onPress={() => setSelectedTransaction(item)}
+                transaction={item}
+              />
+            )}
+            renderSectionHeader={({ section }) => (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionDate}>{section.title}</Text>
+                <Text style={styles.sectionCount}>
+                  {section.data.length.toString().padStart(2, "0")}
                 </Text>
               </View>
+            )}
+            sections={sections}
+            showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={false}
+          />
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.listContent}
+            contentInsetAdjustmentBehavior="automatic"
+            keyboardDismissMode="on-drag"
+            refreshControl={
+              <RefreshControl
+                colors={[palette.textMuted]}
+                onRefresh={() => void refetch()}
+                refreshing={isRefetching}
+                tintColor={palette.textMuted}
+              />
+            }
+            showsVerticalScrollIndicator={false}>
+            {header}
+            {isLoading || isError ? (
+              <View style={styles.stateWrap}>{stateContent}</View>
+            ) : (
+              <>
+                <CalendarGrid
+                  currency={currency}
+                  dailyTotals={dailyTotals}
+                  days={calendarDays}
+                  onSelectDay={chooseDay}
+                  selectedDay={selectedDay}
+                />
 
-              <View style={styles.selectedLedger}>
-                {selectedDay == null ? (
-                  <StatePanel
-                    description="Select a date to isolate its income and outflow."
-                    title="Choose a day"
-                  />
-                ) : selectedDayTransactions.length === 0 ? (
-                  <StatePanel
-                    description="There are no matching entries for this date."
-                    title="Quiet day"
-                  />
-                ) : (
-                  selectedDayTransactions.map((transaction) => (
-                    <LedgerEntryRow
-                      currency={currency}
-                      key={transaction.id}
-                      transaction={transaction}
+                <View style={styles.selectedHeader}>
+                  <Text style={styles.selectedLabel}>
+                    {selectedDay
+                      ? sectionTitle(selectedDay).toLocaleUpperCase()
+                      : "DAY DETAIL"}
+                  </Text>
+                  <Text style={styles.selectedCount}>
+                    {selectedDayTransactions.length
+                      .toString()
+                      .padStart(2, "0")}
+                  </Text>
+                </View>
+
+                <View style={styles.selectedLedger}>
+                  {selectedDay == null ? (
+                    <StatePanel
+                      description="Select a date to isolate its income and outflow."
+                      title="Choose a day"
                     />
-                  ))
-                )}
-              </View>
-            </>
-          )}
-        </ScrollView>
-      )}
-    </Screen>
+                  ) : selectedDayTransactions.length === 0 ? (
+                    <StatePanel
+                      description="There are no matching entries for this date."
+                      title="Quiet day"
+                    />
+                  ) : (
+                    selectedDayTransactions.map((transaction) => (
+                      <LedgerEntryRow
+                        currency={currency}
+                        key={transaction.id}
+                        onPress={() => setSelectedTransaction(transaction)}
+                        transaction={transaction}
+                      />
+                    ))
+                  )}
+                </View>
+              </>
+            )}
+          </ScrollView>
+        )}
+      </Screen>
+      <ReceiptSheet
+        onClose={() => setSelectedTransaction(null)}
+        transaction={selectedTransaction}
+        visible={selectedTransaction != null}
+      />
+    </>
   );
 }
 

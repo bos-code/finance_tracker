@@ -19,6 +19,9 @@ IDs are never displayed.
 | `TRANSACTION_WRITE_FAILED` | Transaction mutation failed and is not confirmed. | Yes when operation remains queued | Unknown transaction write failure. |
 | `GOAL_READ_FAILED` | Goal retrieval failed. | Yes via explicit action | Unknown goal query failure. |
 | `GOAL_WRITE_FAILED` | Goal mutation failed and is not confirmed. | Yes via explicit action | Unknown goal write failure. |
+| `ATTACHMENT_READ_FAILED` | A private receipt could not be listed or opened. | Yes via explicit action | Metadata read or signed-link failure. |
+| `ATTACHMENT_UPLOAD_FAILED` | The transaction is safe but its optional receipt was not secured. | Yes from the receipt vault | Metadata registration, Storage upload, or finalization failure. |
+| `ATTACHMENT_DELETE_FAILED` | The receipt could not be fully removed. | Yes via explicit action | Storage removal or guarded metadata cleanup failure. |
 | `INTERNAL_ERROR` | An unexpected trusted-service error occurred. | Yes once | Unclassified Edge Function/service failure. |
 
 ## Standard result envelope

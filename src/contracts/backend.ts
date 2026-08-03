@@ -53,6 +53,9 @@ export const BACKEND_ERROR_CODES = [
   "TRANSACTION_WRITE_FAILED",
   "GOAL_READ_FAILED",
   "GOAL_WRITE_FAILED",
+  "ATTACHMENT_READ_FAILED",
+  "ATTACHMENT_UPLOAD_FAILED",
+  "ATTACHMENT_DELETE_FAILED",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -244,20 +247,37 @@ export type AttachmentProcessingStatus =
   | "failed"
   | "needs_review";
 
+export type AttachmentUploadStatus =
+  | "pending"
+  | "uploading"
+  | "uploaded"
+  | "failed";
+
+export type ReceiptMimeType =
+  | "application/pdf"
+  | "image/jpeg"
+  | "image/png"
+  | "image/webp";
+
 export type TransactionAttachmentContract = {
   id: EntityId;
   owner_user_id: EntityId;
   workspace_id: EntityId;
-  transaction_id: EntityId | null;
-  draft_id: EntityId | null;
+  transaction_id: EntityId;
+  storage_bucket: "transaction-receipts";
   storage_path: string;
   original_filename: string;
-  mime_type: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+  mime_type: ReceiptMimeType;
   file_size_bytes: number;
   file_hash: string;
   upload_source: TransactionSource;
   provider_media_id: string | null;
-  processing_status: AttachmentProcessingStatus;
+  page_count: number | null;
+  upload_status: AttachmentUploadStatus;
+  upload_attempts: number;
+  last_upload_error: string | null;
+  processing_status: AttachmentProcessingStatus | null;
+  uploaded_at: ISODateTimeString | null;
   created_at: ISODateTimeString;
   updated_at: ISODateTimeString;
 };

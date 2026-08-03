@@ -11,13 +11,20 @@ import {
   type Category,
 } from "@/constants/categories";
 import { useOffline } from "@/context/offline-context";
+import { formatReceiptSize } from "@/features/attachments/file-validation";
 import { useAuth } from "@/hooks/use-auth";
+import { useUploadTransactionAttachment } from "@/hooks/use-attachments";
 import { useWorkspace } from "@/hooks/use-workspace";
 import {
   useCreateTransaction,
   useTransactions,
 } from "@/hooks/use-transactions";
 import { ROUTES } from "@/navigation/route-names";
+import {
+  pickReceiptFile,
+  type PreparedReceiptFile,
+} from "@/services/attachments/receipt-file-service";
+import type { ReceiptUploadProgress } from "@/services/supabase/attachment-service";
 import {
   calcMonthSummary,
   transactionsForBaseCurrency,
@@ -141,6 +148,7 @@ export function HomeScreen() {
   } = useTransactions(year, month);
   const { mutateAsync: createTx, isPending: isSubmitting } =
     useCreateTransaction();
+  const receiptUpload = useUploadTransactionAttachment();
 
   const [type, setType] = useState<TransactionType>("Expenditure");
   const [expCategories, setExpCategories] = useState<Category[]>(
@@ -153,6 +161,10 @@ export function HomeScreen() {
   const [note, setNote] = useState("");
   const [categoryId, setCategoryId] = useState(expCategories[0]?.id ?? "");
   const [date, setDate] = useState(new Date());
+  const [pendingReceipt, setPendingReceipt] =
+    useState<PreparedReceiptFile | null>(null);
+  const [receiptProgress, setReceiptProgress] =
+    useState<ReceiptUploadProgress | null>(null);
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>("none");
   const [feedback, setFeedback] = useState<{
     visible: boolean;
@@ -225,6 +237,33 @@ export function HomeScreen() {
     return "The transaction could not be saved.";
   }, []);
 
+  const chooseReceipt = async () => {
+    if (!isOnline) {
+      setFeedback({
+        visible: true,
+        type: "error",
+        title: "Receipt needs a connection",
+        message:
+          "You can still save the transaction offline, then attach its receipt from Ledger after sync.",
+      });
+      return;
+    }
+    try {
+      const file = await pickReceiptFile();
+      if (file) setPendingReceipt(file);
+    } catch (error) {
+      setFeedback({
+        visible: true,
+        type: "error",
+        title: "Receipt not selected",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Choose a PDF, JPEG, PNG, or WebP receipt up to 10 MB.",
+      });
+    }
+  };
+
   const handleSave = async () => {
     if (!user) {
       setFeedback({
@@ -288,18 +327,39 @@ export function HomeScreen() {
       await refreshPendingCount();
 
       const savedLocally = savedTransaction.sync_state !== "synced";
+      let receiptMessage = "";
+      if (pendingReceipt && !savedLocally && isOnline) {
+        try {
+          await receiptUpload.mutateAsync({
+            file: pendingReceipt,
+            onProgress: setReceiptProgress,
+            ownerUserId: user.uid,
+            transaction: savedTransaction,
+            workspaceId: workspace.id,
+          });
+          receiptMessage = " Its receipt is stored in the private vault.";
+        } catch {
+          receiptMessage =
+            " The entry is safe, but the receipt upload needs review in Ledger.";
+        }
+      } else if (pendingReceipt) {
+        receiptMessage =
+          " Attach the receipt from Ledger after this local entry finishes syncing.";
+      }
       setFeedback({
         visible: true,
         type: "success",
         title: type === "Revenue" ? "Income recorded" : "Outflow recorded",
         message:
           isOnline && !savedLocally
-            ? "The entry is now in your ledger."
-            : "Saved on this device. It will sync when you reconnect.",
+            ? `The entry is now in your ledger.${receiptMessage}`
+            : `Saved on this device. It will sync when you reconnect.${receiptMessage}`,
       });
       setAmount("");
       setNote("");
       setDate(new Date());
+      setPendingReceipt(null);
+      setReceiptProgress(null);
     } catch (error) {
       setFeedback({
         visible: true,
@@ -639,7 +699,54 @@ export function HomeScreen() {
                     size={18}
                   />
                 </Pressable>
+
+                <Pressable
+                  accessibilityHint="Selects an optional private receipt"
+                  accessibilityRole="button"
+                  onPress={() => void chooseReceipt()}
+                  style={({ pressed }) => [
+                    styles.detailRow,
+                    { opacity: pressed ? 0.64 : 1 },
+                  ]}>
+                  <Text style={styles.detailLabel}>RECEIPT</Text>
+                  <Text numberOfLines={1} style={styles.detailValue}>
+                    {pendingReceipt?.originalFilename ?? "Optional / private"}
+                  </Text>
+                  <MaterialCommunityIcons
+                    color={palette.textQuiet}
+                    name="paperclip"
+                    size={18}
+                  />
+                </Pressable>
               </View>
+
+              {pendingReceipt ? (
+                <View style={styles.receiptSelection}>
+                  <View style={styles.receiptSignal} />
+                  <MaterialCommunityIcons
+                    color={palette.textMuted}
+                    name={
+                      pendingReceipt.mimeType === "application/pdf"
+                        ? "file-pdf-box"
+                        : "file-image-outline"
+                    }
+                    size={17}
+                  />
+                  <Text numberOfLines={1} style={styles.receiptSelectionText}>
+                    {formatReceiptSize(pendingReceipt.size)}
+                    {pendingReceipt.pageCount
+                      ? ` · ${pendingReceipt.pageCount} ${pendingReceipt.pageCount === 1 ? "page" : "pages"}`
+                      : ""}
+                  </Text>
+                  <Pressable
+                    accessibilityLabel="Remove selected receipt"
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    onPress={() => setPendingReceipt(null)}>
+                    <Text style={styles.receiptRemove}>CLEAR</Text>
+                  </Pressable>
+                </View>
+              ) : null}
 
               <View style={styles.categoryHeader}>
                 <Text style={styles.detailLabel}>CATEGORY</Text>
@@ -694,16 +801,44 @@ export function HomeScreen() {
                 })}
               </ScrollView>
 
+              {receiptProgress ? (
+                <View
+                  accessibilityRole="progressbar"
+                  accessibilityValue={{
+                    max: 100,
+                    min: 0,
+                    now: Math.round(receiptProgress.fraction * 100),
+                    text: receiptProgress.label,
+                  }}
+                  style={styles.receiptProgress}>
+                  <View style={styles.receiptProgressTrack}>
+                    <View
+                      style={[
+                        styles.receiptProgressFill,
+                        {
+                          width: `${Math.round(receiptProgress.fraction * 100)}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.receiptProgressText}>
+                    {receiptProgress.label}
+                  </Text>
+                </View>
+              ) : null}
+
               <Pressable
                 accessibilityRole="button"
-                disabled={isSubmitting}
+                disabled={isSubmitting || receiptUpload.isPending}
                 onPress={() => void handleSave()}
                 style={({ pressed }) => [
                   styles.saveButton,
-                  isSubmitting ? styles.saveButtonDisabled : null,
+                  isSubmitting || receiptUpload.isPending
+                    ? styles.saveButtonDisabled
+                    : null,
                   { opacity: pressed ? 0.76 : 1 },
                 ]}>
-                {isSubmitting ? (
+                {isSubmitting || receiptUpload.isPending ? (
                   <ActivityIndicator color={palette.canvas} size="small" />
                 ) : (
                   <>
@@ -1216,6 +1351,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "right",
   },
+  receiptSelection: {
+    alignItems: "center",
+    backgroundColor: withAlpha(palette.signalCyan, 0.025),
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 9,
+    minHeight: 42,
+    overflow: "hidden",
+    paddingHorizontal: 9,
+    position: "relative",
+  },
+  receiptSignal: {
+    backgroundColor: palette.signalCyan,
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    top: 0,
+    width: 1,
+  },
+  receiptSelectionText: {
+    color: palette.textQuiet,
+    flex: 1,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.35,
+  },
+  receiptRemove: {
+    color: palette.textMuted,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.6,
+  },
   categoryHeader: {
     alignItems: "center",
     flexDirection: "row",
@@ -1255,6 +1423,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   categoryLabelActive: { color: palette.text },
+  receiptProgress: { gap: 7, marginBottom: 14 },
+  receiptProgressTrack: {
+    backgroundColor: palette.line,
+    height: 2,
+    width: "100%",
+  },
+  receiptProgressFill: { backgroundColor: palette.signalCyan, height: 2 },
+  receiptProgressText: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 8,
+    letterSpacing: 0.45,
+  },
   saveButton: {
     alignItems: "center",
     backgroundColor: palette.text,

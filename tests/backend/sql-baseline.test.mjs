@@ -17,6 +17,11 @@ const workspaceUrl = new URL(
   import.meta.url,
 );
 const workspaceSql = await readFile(workspaceUrl, "utf8");
+const receiptStorageUrl = new URL(
+  "../../supabase/migrations/20260803000400_secure_receipt_storage.sql",
+  import.meta.url,
+);
+const receiptStorageSql = await readFile(receiptStorageUrl, "utf8");
 
 test("baseline creates the current critical tables", () => {
   assert.match(sql, /create table if not exists public\.transactions/i);
@@ -161,4 +166,77 @@ test("2026 regional defaults include Bulgaria and official euro microstates", ()
       new RegExp(`\\('${country}', 'EUR'\\)`, "i"),
     );
   }
+});
+
+test("receipt storage is private, bounded, and transaction-owned", () => {
+  assert.match(receiptStorageSql, /create table public\.transaction_attachments/i);
+  assert.match(receiptStorageSql, /file_size_bytes between 1 and 10485760/i);
+  assert.match(receiptStorageSql, /file_hash ~ '\^\[0-9a-f\]\{64\}\$'/i);
+  assert.match(receiptStorageSql, /page_count between 1 and 25/i);
+  assert.match(receiptStorageSql, /transactions_workspace_owner_id_unique/i);
+  assert.match(
+    receiptStorageSql,
+    /foreign key \(workspace_id, owner_user_id, transaction_id\)[\s\S]*references public\.transactions \(workspace_id, user_id, id\)/i,
+  );
+  assert.match(
+    receiptStorageSql,
+    /'transaction-receipts',[\s\S]*'transaction-receipts',[\s\S]*false,[\s\S]*10485760/i,
+  );
+});
+
+test("receipt metadata and Storage policies stay owner-only", () => {
+  assert.match(
+    receiptStorageSql,
+    /alter table public\.transaction_attachments enable row level security/i,
+  );
+  for (const action of ["select", "insert", "update"]) {
+    assert.match(
+      receiptStorageSql,
+      new RegExp(
+        `on public\\.transaction_attachments for ${action} to authenticated`,
+        "i",
+      ),
+    );
+  }
+  assert.doesNotMatch(
+    receiptStorageSql,
+    /on public\.transaction_attachments for delete to authenticated/i,
+  );
+  assert.match(
+    receiptStorageSql,
+    /grant select, insert, update on public\.transaction_attachments[\s\S]*to authenticated/i,
+  );
+  assert.doesNotMatch(
+    receiptStorageSql,
+    /grant\s+delete\s+on\s+public\.transaction_attachments/i,
+  );
+  for (const action of ["insert", "select", "update", "delete"]) {
+    assert.match(
+      receiptStorageSql,
+      new RegExp(`on storage\\.objects for ${action} to authenticated`, "i"),
+    );
+  }
+  assert.match(
+    receiptStorageSql,
+    /\(storage\.foldername\(name\)\)\[1\] = auth\.uid\(\)::text/i,
+  );
+  assert.match(
+    receiptStorageSql,
+    /attachment\.storage_path = name/i,
+  );
+});
+
+test("receipt deletion removes the private object before metadata", () => {
+  assert.match(
+    receiptStorageSql,
+    /delete_transaction_attachment_record/i,
+  );
+  assert.match(
+    receiptStorageSql,
+    /select 1 from storage\.objects[\s\S]*Private object must be removed before attachment metadata/i,
+  );
+  assert.match(
+    receiptStorageSql,
+    /delete from public\.transaction_attachments[\s\S]*owner_user_id = auth\.uid\(\)/i,
+  );
 });
