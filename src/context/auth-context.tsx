@@ -118,11 +118,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const updateName = useCallback(async (fullName: string) => {
+    if (UI_PREVIEW_ENABLED) {
+      setUser((previous) =>
+        previous ? { ...previous, fullName } : previous,
+      );
+      return;
+    }
     await supabaseUpdateName(fullName);
     setUser((prev) => prev ? { ...prev, fullName } : prev);
   }, []);
 
   const updatePassword = useCallback(async (password: string) => {
+    if (UI_PREVIEW_ENABLED) return;
     await supabaseUpdatePassword(password);
   }, []);
 

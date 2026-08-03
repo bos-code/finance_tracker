@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 3A — Goals and shared dark form primitives
+**Batch:** 3B — Profile and settings control center
 
 **Branch:** `master`
 
@@ -97,6 +97,27 @@
 - Rebuilt the goal editor and contribution sheet with the shared dark form
   system; goal color is limited to a thin thread and progress signal.
 
+### Profile and settings
+
+- Rebuilt Profile as a dark personal-workspace control center with identity,
+  base currency, workspace scope, automation readiness, privacy, security, and
+  session controls.
+- Removed the legacy full-screen color/gradient picker so the binding
+  black/white/graphite system cannot be replaced by a generic blue theme.
+- Kept currency selection functional and clarified that it changes display
+  formatting rather than converting historical values.
+- Added honest Telegram `Not linked` and WhatsApp `Deferred` states instead of
+  pretending that an unavailable backend flow is connected.
+- Added notification preference controls with an explicit frontend-preview
+  disclaimer until Backend Stage 9 persists them.
+- Added data-control readiness for user-scoped transactions, private receipts,
+  review-before-apply, export, retention, and deletion without presenting
+  unfinished controls as active.
+- Removed the dead export button and non-functional language selector.
+- Preserved profile-name update, device photo preview, app-lock entry, change
+  password, and confirmed logout; profile mutations now work in fixture mode
+  without calling Supabase.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
@@ -108,6 +129,8 @@
   — passed; all 16 routes bundled.
 - Goals fixture-mode and normal production exports after the Goals redesign —
   passed; all 16 routes bundled.
+- Profile fixture-mode and normal production exports after the settings redesign
+  — passed; all 16 routes bundled.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
   headings, search/plan affordances, state copy, and orbit navigation.
 - Automated screenshot inspection is still unavailable because the workspace
@@ -125,8 +148,8 @@
 ## Not yet redesigned or implemented
 
 - onboarding and authentication
-- Profile, workspace, account, currency, connection, privacy, notification, and
-  app-lock settings
+- Backend persistence for workspace, account, connection, privacy, and
+  notification settings
 - shared calendar, category-editor, number-pad, save-feedback, and app-lock
   surfaces used by capture/auth flows
 - receipt vault, review drafts, Telegram connection UI, and OCR review UI
@@ -135,10 +158,10 @@
 
 ## Exact next batch
 
-1. Redesign Profile and settings around workspace, accounts, currency,
-   connections, privacy, notifications, and app lock.
-2. Redesign onboarding/auth entry and shared sheets so the whole reachable
+1. Redesign onboarding/auth entry and shared sheets so the whole reachable
    frontend speaks the Obsidian Thread system.
+2. Redesign app-lock, number-pad, calendar, category, and feedback internals and
+   move the PIN out of general AsyncStorage.
 3. Re-run TypeScript, lint, both production exports, and visual verification if
    the environment permits it.
 4. Commit and push each verified frontend batch before beginning backend Stage
