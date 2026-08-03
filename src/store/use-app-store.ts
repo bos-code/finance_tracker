@@ -99,6 +99,7 @@ interface AppStoreState {
 
   // App Lock (Settings)
   appLockEnabled: boolean;
+  /** Legacy migration slot. New PIN values live in Expo SecureStore. */
   appLockPin: string | null;
   appLockOwnerUserId: string | null;
   appLockUseBiometrics: boolean;
@@ -184,7 +185,6 @@ export const useAppStore = create<AppStoreState>()(
         currency: state.currency,
         selectedAccountId: state.selectedAccountId,
         appLockEnabled: state.appLockEnabled,
-        appLockPin: state.appLockPin,
         appLockOwnerUserId: state.appLockOwnerUserId,
         appLockUseBiometrics: state.appLockUseBiometrics,
       }),

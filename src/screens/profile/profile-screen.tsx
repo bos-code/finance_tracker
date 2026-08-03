@@ -196,8 +196,12 @@ export function ProfileScreen() {
   const { signOut, updateName, user } = useAuth();
   const currency = useAppStore((state) => state.currency);
   const setCurrency = useAppStore((state) => state.setCurrency);
-  const { enabled: appLockEnabled, biometricLabel, useBiometrics } =
-    useAppLock();
+  const {
+    biometricLabel,
+    disableLock,
+    enabled: appLockEnabled,
+    useBiometrics,
+  } = useAppLock();
 
   const [activeSheet, setActiveSheet] = useState<ProfileSheet>("none");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -291,17 +295,24 @@ export function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert("Log out?", "This device will return to the sign-in screen.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log out",
-        style: "destructive",
-        onPress: async () => {
-          await signOut();
-          router.replace(ROUTES.AUTH as never);
+    Alert.alert(
+      "Log out?",
+      appLockEnabled
+        ? "This device will return to sign in and its local App Lock credential will be removed."
+        : "This device will return to the sign-in screen.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: async () => {
+            if (appLockEnabled) await disableLock();
+            await signOut();
+            router.replace(ROUTES.AUTH as never);
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (

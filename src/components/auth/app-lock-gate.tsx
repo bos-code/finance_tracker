@@ -1,20 +1,26 @@
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
-import { useAppStore } from "@/store/use-app-store";
 import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { AppLockScreen } from "./app-lock-screen";
 import { palette } from "@/theme/colors";
+import { SignalThreads } from "@/components/visuals/signal-threads";
 
 export function AppLockGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const theme = useAppStore((s) => s.theme);
   const { enabled, isReady, locked } = useAppLock();
 
   if (user && !isReady) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: palette.canvas }}>
-        <ActivityIndicator size="large" color={theme.primary} />
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: palette.canvas,
+          flex: 1,
+          justifyContent: "center",
+        }}>
+        <SignalThreads intensity="quiet" />
+        <ActivityIndicator color={palette.textMuted} size="large" />
       </View>
     );
   }

@@ -1,49 +1,87 @@
+import { ActionButton } from "@/components/finance/action-button";
+import type { Category } from "@/constants/categories";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useAppStore } from "@/store/use-app-store";
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Easing,
   Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import Animated, {
-  useSharedValue,
   useAnimatedStyle,
+  useSharedValue,
   withSpring,
   withTiming,
-  Easing,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { Category } from "@/constants/categories";
-
-// ─── Picker data ────────────────────────────────────────────────────────────
 
 const ICON_OPTIONS = [
-  "store", "silverware-fork-knife", "cart-outline", "gas-station",
-  "home-outline", "lightning-bolt", "cellphone", "school-outline",
-  "credit-card-outline", "cash", "briefcase-outline", "laptop",
-  "chart-line", "gift-outline", "home-city-outline", "star-circle-outline",
-  "car-outline", "airplane", "heart-outline", "medkit-outline",
-  "dumbbell", "music-note", "book-open-variant", "wifi",
-  "coffee-outline", "bus-outline", "train", "bicycle",
-  "baby-carriage", "paw-outline", "flower-outline", "alien-outline",
-  "bank-outline", "safe-square-outline", "bitcoin",
+  "store",
+  "silverware-fork-knife",
+  "cart-outline",
+  "gas-station",
+  "home-outline",
+  "lightning-bolt",
+  "cellphone",
+  "school-outline",
+  "credit-card-outline",
+  "cash",
+  "briefcase-outline",
+  "laptop",
+  "chart-line",
+  "gift-outline",
+  "home-city-outline",
+  "star-circle-outline",
+  "car-outline",
+  "airplane",
+  "heart-outline",
+  "medkit-outline",
+  "dumbbell",
+  "music-note",
+  "book-open-variant",
+  "wifi",
+  "coffee-outline",
+  "bus-outline",
+  "train",
+  "bicycle",
+  "baby-carriage",
+  "paw-outline",
+  "flower-outline",
+  "alien-outline",
+  "bank-outline",
+  "safe-square-outline",
+  "bitcoin",
   "dots-horizontal-circle-outline",
 ];
 
 const COLOR_OPTIONS = [
-  "#f43f5e", "#ef4444", "#f97316", "#f59e0b",
-  "#eab308", "#84cc16", "#22c55e", "#10b981",
-  "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6",
-  "#6366f1", "#8b5cf6", "#a855f7", "#ec4899",
-  "#64748b", "#0f172a",
+  "#f43f5e",
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#eab308",
+  "#84cc16",
+  "#22c55e",
+  "#10b981",
+  "#14b8a6",
+  "#06b6d4",
+  "#0ea5e9",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+  "#64748b",
+  "#9a9a95",
 ];
-
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface CategoryEditorProps {
   visible: boolean;
@@ -52,102 +90,105 @@ interface CategoryEditorProps {
   onClose: () => void;
 }
 
-// ─── Icon chip ───────────────────────────────────────────────────────────────
-
 function IconChip({
-  name,
-  selected,
   color,
+  name,
   onPress,
+  selected,
 }: {
-  name: string;
-  selected: boolean;
   color: string;
+  name: string;
   onPress: () => void;
+  selected: boolean;
 }) {
   const scale = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <TouchableOpacity
-      onPressIn={() => { scale.value = withSpring(0.88, { damping: 12 }); }}
-      onPressOut={() => { scale.value = withSpring(1); onPress(); }}
-      activeOpacity={1}
-    >
+    <Pressable
+      accessibilityLabel={`Use ${name.replaceAll("-", " ")} icon`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={() => {
+        if (Platform.OS === "ios") void Haptics.selectionAsync();
+        onPress();
+      }}
+      onPressIn={() => {
+        scale.value = withSpring(0.9, { damping: 15, stiffness: 250 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 250 });
+      }}>
       <Animated.View
         style={[
-          style,
-          {
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: selected ? color + "22" : "#f1f5f9",
-            borderWidth: selected ? 2 : 1,
-            borderColor: selected ? color : "#e2e8f0",
-            margin: 4,
-          },
-        ]}
-      >
+          styles.iconChip,
+          selected
+            ? {
+                backgroundColor: withAlpha(color, 0.08),
+                borderColor: withAlpha(color, 0.72),
+              }
+            : null,
+          animatedStyle,
+        ]}>
         <MaterialCommunityIcons
-          name={name as any}
-          size={22}
-          color={selected ? color : "#94a3b8"}
+          color={selected ? color : palette.textQuiet}
+          name={name as never}
+          size={20}
         />
       </Animated.View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
-
-// ─── Color chip ──────────────────────────────────────────────────────────────
 
 function ColorChip({
   color,
-  selected,
   onPress,
+  selected,
 }: {
   color: string;
-  selected: boolean;
   onPress: () => void;
+  selected: boolean;
 }) {
   const scale = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <TouchableOpacity
-      onPressIn={() => { scale.value = withSpring(0.85, { damping: 12 }); }}
-      onPressOut={() => { scale.value = withSpring(1); onPress(); }}
-      activeOpacity={1}
-    >
+    <Pressable
+      accessibilityLabel={`Use ${color} category signal`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={() => {
+        if (Platform.OS === "ios") void Haptics.selectionAsync();
+        onPress();
+      }}
+      onPressIn={() => {
+        scale.value = withSpring(0.88, { damping: 15, stiffness: 250 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 250 });
+      }}>
       <Animated.View
         style={[
-          style,
-          {
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: color,
-            margin: 4,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: selected ? 3 : 0,
-            borderColor: "#fff",
-            shadowColor: selected ? color : "transparent",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: selected ? 0.6 : 0,
-            shadowRadius: 6,
-            elevation: selected ? 6 : 0,
-          },
-        ]}
-      >
-        {selected && (
-          <MaterialCommunityIcons name="check" size={18} color="#fff" />
-        )}
+          styles.colorChip,
+          selected ? styles.colorChipSelected : null,
+          animatedStyle,
+        ]}>
+        <View style={[styles.colorSignal, { backgroundColor: color }]} />
+        {selected ? (
+          <MaterialCommunityIcons
+            color={palette.text}
+            name="check"
+            size={13}
+          />
+        ) : null}
       </Animated.View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
-
-// ─── Main component ───────────────────────────────────────────────────────────
 
 export function CategoryEditor({
   visible,
@@ -156,222 +197,352 @@ export function CategoryEditor({
   onClose,
 }: CategoryEditorProps) {
   const insets = useSafeAreaInsets();
-  const theme = useAppStore((s) => s.theme);
-  const primary = theme.primary;
   const [local, setLocal] = useState<Category[]>(categories);
-  const [selectedId, setSelectedId] = useState<string>(categories[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(categories[0]?.id ?? "");
+  const translateY = useSharedValue(visible ? 0 : 720);
+  const selectedCategory =
+    local.find((category) => category.id === selectedId) ?? local[0];
 
-  const selectedCat = local.find((c) => c.id === selectedId) ?? local[0];
-  const translateY = useSharedValue(visible ? 0 : 600);
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
       setLocal(categories);
       setSelectedId(categories[0]?.id ?? "");
-      translateY.value = withSpring(0, { damping: 22, stiffness: 220 });
-    } else {
-      translateY.value = withTiming(600, { duration: 260, easing: Easing.in(Easing.cubic) });
+      translateY.value = withSpring(0, { damping: 24, stiffness: 220 });
+      return;
     }
-  }, [visible]);
+
+    translateY.value = withTiming(720, {
+      duration: 240,
+      easing: Easing.in(Easing.cubic),
+    });
+  }, [categories, translateY, visible]);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
-  function patchSelected(patch: Partial<Category>) {
-    setLocal((prev) =>
-      prev.map((c) => (c.id === selectedId ? { ...c, ...patch } : c))
+  const patchSelected = (patch: Partial<Category>) => {
+    setLocal((current) =>
+      current.map((category) =>
+        category.id === selectedId ? { ...category, ...patch } : category,
+      ),
     );
-  }
+  };
 
-  function handleSave() {
-    if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleSave = () => {
+    if (Platform.OS === "ios") {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
     onSave(local);
     onClose();
-  }
+  };
 
   return (
     <Modal
-      visible={visible}
-      transparent
       animationType="none"
+      onRequestClose={onClose}
       statusBarTranslucent
-    >
-      {/* Backdrop */}
-      <TouchableOpacity
-        style={{ flex: 1, backgroundColor: "rgba(10,18,40,0.45)" }}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      transparent
+      visible={visible}>
+      <View style={styles.modalRoot}>
+        <Pressable
+          accessibilityLabel="Close category editor"
+          accessibilityRole="button"
+          onPress={onClose}
+          style={StyleSheet.absoluteFill}
+        />
+        <Animated.View
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(insets.bottom, 18) },
+            sheetStyle,
+          ]}>
+          <View style={styles.handleWrap}>
+            <View style={styles.handle} />
+          </View>
 
-      {/* Sheet */}
-      <Animated.View
-        style={[
-          sheetStyle,
-          {
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "#fff",
-            borderTopLeftRadius: 32,
-            borderTopRightRadius: 32,
-            paddingBottom: Math.max(insets.bottom, 24),
-            maxHeight: "88%",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: -8 },
-            shadowOpacity: 0.12,
-            shadowRadius: 24,
-            elevation: 30,
-          },
-        ]}
-      >
-        {/* Handle bar */}
-        <View style={{ alignItems: "center", paddingTop: 12, paddingBottom: 4 }}>
-          <View style={{ width: 40, height: 4, borderRadius: 99, backgroundColor: "#e2e8f0" }} />
-        </View>
+          <View style={styles.header}>
+            <View style={styles.headerCopy}>
+              <Text style={styles.eyebrow}>CATEGORY SIGNALS</Text>
+              <Text style={styles.title}>Edit the ledger key.</Text>
+              <Text style={styles.description}>
+                Colour stays confined to the icon and hairline signal.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={onClose}
+              style={({ pressed }) => [
+                styles.closeButton,
+                { opacity: pressed ? 0.55 : 1 },
+              ]}>
+              <MaterialCommunityIcons
+                color={palette.textMuted}
+                name="close"
+                size={20}
+              />
+            </Pressable>
+          </View>
 
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 20,
-            paddingVertical: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: "#f1f5f9",
-          }}
-        >
-          <Text style={{ fontSize: 18, fontWeight: "700", color: "#0f172a" }}>
-            Edit categories
-          </Text>
-          <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
-            <MaterialCommunityIcons name="close" size={22} color="#94a3b8" />
-          </TouchableOpacity>
-        </View>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}>
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>SELECT CATEGORY</Text>
+              <View style={styles.categoryList}>
+                {local.map((category) => {
+                  const selected = category.id === selectedId;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={category.id}
+                      onPress={() => {
+                        if (Platform.OS === "ios") {
+                          void Haptics.selectionAsync();
+                        }
+                        setSelectedId(category.id);
+                      }}
+                      style={({ pressed }) => [
+                        styles.categoryRow,
+                        selected ? styles.categoryRowSelected : null,
+                        { opacity: pressed ? 0.58 : 1 },
+                      ]}>
+                      <View
+                        style={[
+                          styles.categoryThread,
+                          { backgroundColor: category.color },
+                        ]}
+                      />
+                      <View style={styles.categoryIcon}>
+                        <MaterialCommunityIcons
+                          color={selected ? category.color : palette.textQuiet}
+                          name={category.icon as never}
+                          size={18}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.categoryLabel,
+                          selected ? styles.categoryLabelSelected : null,
+                        ]}>
+                        {category.label}
+                      </Text>
+                      <Text style={styles.categoryStatus}>
+                        {selected ? "EDITING" : "SELECT"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Category rows */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.8, marginBottom: 8 }}>
-              SELECT CATEGORY
-            </Text>
-            {local.map((cat) => {
-              const isActive = cat.id === selectedId;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => {
-                    if (Platform.OS === "ios") Haptics.selectionAsync();
-                    setSelectedId(cat.id);
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 11,
-                    paddingHorizontal: 14,
-                    borderRadius: 16,
-                    marginBottom: 6,
-                    backgroundColor: isActive ? cat.color + "12" : "#f8fafc",
-                    borderWidth: isActive ? 1.5 : 1,
-                    borderColor: isActive ? cat.color + "55" : "#f1f5f9",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 12,
-                      backgroundColor: cat.color + "20",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginRight: 12,
-                    }}
-                  >
-                    <MaterialCommunityIcons name={cat.icon as any} size={20} color={cat.color} />
+            {selectedCategory ? (
+              <>
+                <View style={styles.section}>
+                  <View style={styles.sectionTopline}>
+                    <Text style={styles.sectionLabel}>ICON</Text>
+                    <Text style={styles.sectionValue}>
+                      {selectedCategory.icon.replaceAll("-", " ")}
+                    </Text>
                   </View>
-                  <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: "#1e293b" }}>
-                    {cat.label}
-                  </Text>
-                  {isActive && (
-                    <MaterialCommunityIcons name="pencil-outline" size={16} color={cat.color} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  <View style={styles.chipGrid}>
+                    {ICON_OPTIONS.map((icon) => (
+                      <IconChip
+                        color={selectedCategory.color}
+                        key={icon}
+                        name={icon}
+                        onPress={() => patchSelected({ icon })}
+                        selected={selectedCategory.icon === icon}
+                      />
+                    ))}
+                  </View>
+                </View>
 
-          {/* Divider */}
-          <View style={{ height: 1, backgroundColor: "#f1f5f9", marginHorizontal: 20, marginVertical: 16 }} />
+                <View style={styles.section}>
+                  <View style={styles.sectionTopline}>
+                    <Text style={styles.sectionLabel}>SIGNAL COLOUR</Text>
+                    <Text style={styles.sectionValue}>
+                      {selectedCategory.color.toLocaleUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.colorGrid}>
+                    {COLOR_OPTIONS.map((color) => (
+                      <ColorChip
+                        color={color}
+                        key={color}
+                        onPress={() => patchSelected({ color })}
+                        selected={selectedCategory.color === color}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </>
+            ) : null}
 
-          {/* Icon picker */}
-          {selectedCat && (
-            <View style={{ paddingHorizontal: 20 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.8, marginBottom: 8 }}>
-                ICON
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {ICON_OPTIONS.map((icon) => (
-                  <IconChip
-                    key={icon}
-                    name={icon}
-                    color={selectedCat.color}
-                    selected={selectedCat.icon === icon}
-                    onPress={() => {
-                      if (Platform.OS === "ios") Haptics.selectionAsync();
-                      patchSelected({ icon });
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Divider */}
-          <View style={{ height: 1, backgroundColor: "#f1f5f9", marginHorizontal: 20, marginVertical: 16 }} />
-
-          {/* Color picker */}
-          {selectedCat && (
-            <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#94a3b8", letterSpacing: 0.8, marginBottom: 8 }}>
-                COLOUR
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {COLOR_OPTIONS.map((color) => (
-                  <ColorChip
-                    key={color}
-                    color={color}
-                    selected={selectedCat.color === color}
-                    onPress={() => {
-                      if (Platform.OS === "ios") Haptics.selectionAsync();
-                      patchSelected({ color });
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Save button */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 }}>
-            <TouchableOpacity
-              onPress={handleSave}
-              style={{
-                backgroundColor: theme.primary,
-                borderRadius: 18,
-                height: 54,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-                Save changes
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </Animated.View>
+            <ActionButton label="Save category system" onPress={handleSave} />
+          </ScrollView>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  modalRoot: {
+    backgroundColor: withAlpha(palette.black, 0.74),
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: palette.canvasRaised,
+    borderColor: palette.lineStrong,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    maxHeight: "90%",
+    overflow: "hidden",
+    shadowColor: palette.black,
+    shadowOffset: { width: 0, height: -18 },
+    shadowOpacity: 0.42,
+    shadowRadius: 34,
+    elevation: 28,
+  },
+  handleWrap: { alignItems: "center", paddingBottom: 5, paddingTop: 11 },
+  handle: {
+    backgroundColor: palette.lineStrong,
+    borderRadius: 999,
+    height: 4,
+    width: 42,
+  },
+  header: {
+    alignItems: "flex-start",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  headerCopy: { flex: 1, paddingRight: 18 },
+  eyebrow: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    letterSpacing: 0.72,
+    marginBottom: 7,
+  },
+  title: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 24,
+    letterSpacing: -0.25,
+  },
+  description: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 6,
+  },
+  closeButton: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 11,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+  },
+  scrollContent: { gap: 22, padding: 20 },
+  section: {
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    paddingBottom: 20,
+  },
+  sectionTopline: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    letterSpacing: 0.68,
+    marginBottom: 10,
+  },
+  sectionValue: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    marginBottom: 10,
+  },
+  categoryList: { gap: 7 },
+  categoryRow: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 54,
+    overflow: "hidden",
+    paddingHorizontal: 12,
+  },
+  categoryRowSelected: { backgroundColor: withAlpha(palette.white, 0.025) },
+  categoryThread: { alignSelf: "stretch", marginLeft: -12, marginRight: 11, width: 1 },
+  categoryIcon: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 10,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    marginRight: 11,
+    width: 34,
+  },
+  categoryLabel: {
+    color: palette.textMuted,
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  categoryLabelSelected: { color: palette.text },
+  categoryStatus: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 6,
+  },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  iconChip: {
+    alignItems: "center",
+    backgroundColor: palette.surface,
+    borderColor: palette.line,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 43,
+    justifyContent: "center",
+    width: 43,
+  },
+  colorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  colorChip: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 11,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    height: 38,
+    justifyContent: "center",
+    width: 55,
+  },
+  colorChipSelected: {
+    backgroundColor: withAlpha(palette.white, 0.035),
+    borderColor: palette.lineStrong,
+  },
+  colorSignal: { borderRadius: 999, height: 8, width: 8 },
+});

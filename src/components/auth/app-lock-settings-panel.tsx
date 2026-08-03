@@ -1,126 +1,79 @@
+import { ActionButton } from "@/components/finance/action-button";
 import { UnifiedNumpad } from "@/components/ui/unified-numpad";
 import { useAppLock } from "@/context/app-lock-context";
-import { useAppStore } from "@/store/use-app-store";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useEffect, useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-function SecurityBadge({
-  label,
-  tone = "neutral",
-}: {
-  label: string;
-  tone?: "neutral" | "success" | "warning";
-}) {
-  const palette =
-    tone === "success"
-      ? { bg: "#dcfce7", text: "#166534" }
-      : tone === "warning"
-        ? { bg: "#fef3c7", text: "#92400e" }
-        : { bg: "#f8fafc", text: "#475569" };
-
-  return (
-    <View style={{ borderRadius: 999, backgroundColor: palette.bg, paddingHorizontal: 10, paddingVertical: 6 }}>
-      <Text style={{ fontSize: 11, fontWeight: "800", color: palette.text }}>{label}</Text>
-    </View>
-  );
-}
+import { useEffect, useState } from "react";
+import { Alert, StyleSheet, Switch, Text, View } from "react-native";
 
 function SecurityRow({
-  icon,
-  iconBg,
-  iconColor,
-  title,
   description,
-  badge,
-  children,
+  icon,
+  signal,
+  status,
+  title,
 }: {
-  icon: string;
-  iconBg: string;
-  iconColor: string;
-  title: string;
   description: string;
-  badge: ReactNode;
-  children?: ReactNode;
+  icon: string;
+  signal: string;
+  status: string;
+  title: string;
 }) {
   return (
-    <View style={{ backgroundColor: "#fff", borderRadius: 22, borderWidth: 1.5, borderColor: "#e2e8f0", padding: 16, gap: 14 }}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <View style={{ flexDirection: "row", gap: 12, flex: 1 }}>
-          <View style={{ width: 42, height: 42, borderRadius: 16, backgroundColor: iconBg, alignItems: "center", justifyContent: "center" }}>
-            <MaterialCommunityIcons name={icon as any} size={20} color={iconColor} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a" }}>{title}</Text>
-            <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#64748b", fontWeight: "600" }}>
-              {description}
-            </Text>
-          </View>
-        </View>
-        {badge}
+    <View style={styles.securityRow}>
+      <View style={[styles.securitySignal, { backgroundColor: signal }]} />
+      <View style={styles.securityIcon}>
+        <MaterialCommunityIcons
+          color={palette.textMuted}
+          name={icon as never}
+          size={18}
+        />
       </View>
-      {children}
+      <View style={styles.securityCopy}>
+        <Text style={styles.securityTitle}>{title}</Text>
+        <Text style={styles.securityDescription}>{description}</Text>
+      </View>
+      <Text style={[styles.securityStatus, { color: signal }]}>
+        {status.toLocaleUpperCase()}
+      </Text>
     </View>
   );
 }
 
-function PinStageCard({
-  label,
+function PinStage({
   active,
   complete,
+  label,
   value,
-  primary,
 }: {
-  label: string;
   active: boolean;
   complete: boolean;
+  label: string;
   value: string;
-  primary: string;
 }) {
   return (
     <View
-      style={{
-        flex: 1,
-        borderRadius: 20,
-        backgroundColor: "#fff",
-        borderWidth: 1.5,
-        borderColor: active ? primary : complete ? "#22c55e" : "#e2e8f0",
-        padding: 14,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ fontSize: 12, fontWeight: "800", color: "#475569", letterSpacing: 0.8 }}>{label}</Text>
-        <MaterialCommunityIcons
-          name={complete ? "check-circle" : active ? "circle-slice-8" : "circle-outline"}
-          size={16}
-          color={complete ? "#22c55e" : active ? primary : "#cbd5e1"}
-        />
+      style={[
+        styles.pinStage,
+        active ? styles.pinStageActive : null,
+        complete ? styles.pinStageComplete : null,
+      ]}>
+      <View style={styles.pinStageTopline}>
+        <Text style={styles.pinStageLabel}>{label}</Text>
+        <Text style={styles.pinStageCount}>{value.length}/4</Text>
       </View>
-
-      <View style={{ marginTop: 16, flexDirection: "row", justifyContent: "space-between" }}>
-        {[0, 1, 2, 3].map((index) => {
-          const filled = Boolean(value[index]);
-          return (
-            <View
-              key={index}
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 7,
-                backgroundColor: filled ? (complete ? "#22c55e" : primary) : "#e2e8f0",
-                transform: [{ scale: filled ? 1.05 : 1 }],
-              }}
-            />
-          );
-        })}
+      <View style={styles.pinDots}>
+        {[0, 1, 2, 3].map((index) => (
+          <View
+            key={index}
+            style={[
+              styles.pinDot,
+              value[index] ? styles.pinDotFilled : null,
+            ]}
+          />
+        ))}
       </View>
     </View>
   );
@@ -133,19 +86,17 @@ export function AppLockSettingsPanel({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  const theme = useAppStore((s) => s.theme);
-  const primary = theme.primary;
   const {
-    enabled,
     biometricLabel,
-    enableLock,
     disableLock,
+    enableLock,
+    enabled,
+    isBiometricsSupported,
+    secureStorageAvailable,
+    setUseBiometrics,
     updatePin,
     useBiometrics,
-    setUseBiometrics,
-    isBiometricsSupported,
   } = useAppLock();
-
   const [pinDraft, setPinDraft] = useState("");
   const [confirmDraft, setConfirmDraft] = useState("");
   const [biometricsDraft, setBiometricsDraft] = useState(false);
@@ -155,7 +106,6 @@ export function AppLockSettingsPanel({
 
   useEffect(() => {
     if (!isOpen) return;
-
     setPinDraft("");
     setConfirmDraft("");
     setBiometricsDraft(useBiometrics && isBiometricsSupported);
@@ -164,14 +114,16 @@ export function AppLockSettingsPanel({
     setSaving(false);
   }, [enabled, isBiometricsSupported, isOpen, useBiometrics]);
 
-  const biometricIcon = biometricLabel.toLowerCase().includes("face") ? "face-recognition" : "fingerprint";
-  const securitySummary = !enabled ? "PIN only" : useBiometrics ? `PIN + ${biometricLabel}` : "PIN only";
+  const biometricIcon = biometricLabel.toLocaleLowerCase().includes("face")
+    ? "face-recognition"
+    : "fingerprint";
   const showPinComposer = !enabled || editingPin;
-  const appLockInputValue = pinDraft.length < 4 ? pinDraft : confirmDraft;
   const pinReady = pinDraft.length === 4;
   const confirmReady = confirmDraft.length === 4;
-  const canSave = showPinComposer ? confirmReady : biometricsDraft !== useBiometrics;
-  const saveLabel = !enabled ? "Enable App Lock" : showPinComposer ? "Save new PIN" : "Save preferences";
+  const inputValue = pinReady ? confirmDraft : pinDraft;
+  const canSave = showPinComposer
+    ? confirmReady
+    : biometricsDraft !== useBiometrics;
 
   const resetPinEditor = () => {
     setPinDraft("");
@@ -181,41 +133,47 @@ export function AppLockSettingsPanel({
   };
 
   const handleDisable = () => {
-    Alert.alert("Turn off App Lock?", "PIN and biometric unlock will be removed from this device.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Turn off",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setSaving(true);
-            await disableLock();
-            onClose();
-          } catch (nextError: any) {
-            setError(nextError?.message ?? "Couldn't turn off App Lock.");
-          } finally {
-            setSaving(false);
-          }
+    Alert.alert(
+      "Turn off App Lock?",
+      "The secure PIN and biometric preference will be removed from this device.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Turn off",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setSaving(true);
+              await disableLock();
+              onClose();
+            } catch (disableError) {
+              setError(
+                disableError instanceof Error
+                  ? disableError.message
+                  : "App Lock could not be disabled.",
+              );
+            } finally {
+              setSaving(false);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const handleSave = async () => {
     if (showPinComposer) {
       const pin = pinDraft.replace(/[^0-9]/g, "");
-      const confirm = confirmDraft.replace(/[^0-9]/g, "");
-
+      const confirmation = confirmDraft.replace(/[^0-9]/g, "");
       if (pin.length !== 4) {
         setError("Enter a 4-digit PIN.");
         return;
       }
-
-      if (pin !== confirm) {
+      if (pin !== confirmation) {
         setError("PINs do not match.");
+        setConfirmDraft("");
         return;
       }
-
       try {
         setSaving(true);
         if (enabled) {
@@ -225,8 +183,12 @@ export function AppLockSettingsPanel({
           await enableLock(pin, biometricsDraft);
         }
         onClose();
-      } catch (nextError: any) {
-        setError(nextError?.message ?? "Couldn't save your security settings.");
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Security settings could not be saved.",
+        );
       } finally {
         setSaving(false);
       }
@@ -237,239 +199,411 @@ export function AppLockSettingsPanel({
       setSaving(true);
       await setUseBiometrics(biometricsDraft);
       onClose();
-    } catch (nextError: any) {
-      setError(nextError?.message ?? "Couldn't update biometric preferences.");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Biometric preferences could not be saved.",
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  if (!secureStorageAvailable) {
+    return (
+      <View style={styles.unavailable}>
+        <View style={styles.unavailableThread} />
+        <MaterialCommunityIcons
+          color={palette.textQuiet}
+          name="shield-alert-outline"
+          size={23}
+        />
+        <Text style={styles.unavailableTitle}>Secure storage unavailable</Text>
+        <Text style={styles.unavailableCopy}>
+          App Lock is available in the native iOS and Android app when the
+          platform secure store is present. It is intentionally disabled on web.
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ padding: 20, gap: 16 }}>
-      <View style={{ backgroundColor: "#0f172a", borderRadius: 24, padding: 20, gap: 14 }}>
-        <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" }}>
-          <MaterialCommunityIcons name="shield-lock-outline" size={24} color="#fff" />
-        </View>
-        <View style={{ gap: 6 }}>
-          <Text style={{ fontSize: 20, fontWeight: "800", color: "#fff" }}>
-            {enabled ? securitySummary : "Protect this device"}
-          </Text>
-          <Text style={{ fontSize: 13, lineHeight: 20, color: "#cbd5e1", fontWeight: "600" }}>
-            App Lock is stored only on this device. Your PIN stays local and never needs a server round-trip.
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-          <SecurityBadge label="Device only" tone="success" />
-          <SecurityBadge label={enabled ? "Active" : "Optional"} />
-        </View>
+    <View style={styles.container}>
+      <View style={styles.hero}>
+        <View style={styles.heroThread} />
+        <MaterialCommunityIcons
+          color={palette.text}
+          name="shield-lock-outline"
+          size={25}
+        />
+        <Text style={styles.heroTitle}>
+          {enabled ? "Device boundary active" : "Protect this device"}
+        </Text>
+        <Text style={styles.heroCopy}>
+          The four-digit PIN is stored by the operating system secure store. It
+          is not included in general application preferences or sent to the
+          backend.
+        </Text>
       </View>
 
       <SecurityRow
-        icon="lock-outline"
-        iconBg={`${primary}12`}
-        iconColor={primary}
-        title="PIN fallback"
-        description={enabled ? "Your 4-digit PIN is always available as the unlock fallback." : "Create a 4-digit PIN that unlocks the app on this device."}
-        badge={<SecurityBadge label={enabled ? "Required" : "Setup"} />}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <MaterialCommunityIcons name="numeric-4-circle-outline" size={18} color="#475569" />
-          <Text style={{ flex: 1, fontSize: 12, fontWeight: "700", color: "#475569" }}>
-            {enabled ? "PIN fallback is active for this account on this device." : "PIN has not been created yet."}
-          </Text>
-        </View>
-      </SecurityRow>
-
+        description="Always available as the fallback unlock path on this device."
+        icon="numeric-4-circle-outline"
+        signal={enabled ? palette.income : palette.textQuiet}
+        status={enabled ? "Required" : "Setup"}
+        title="Four-digit PIN"
+      />
       <SecurityRow
-        icon={biometricIcon}
-        iconBg={`${primary}12`}
-        iconColor={primary}
-        title={biometricLabel}
         description={
           isBiometricsSupported
-            ? "Use device biometrics as a faster unlock shortcut while keeping the PIN fallback."
-            : "Biometric unlock becomes available after the device has enrolled biometrics."
+            ? "A convenience shortcut; the PIN remains the recovery path."
+            : "Enroll device biometrics to make this shortcut available."
         }
-        badge={<SecurityBadge label={isBiometricsSupported ? (biometricsDraft ? "Enabled" : "Optional") : "Unavailable"} tone={isBiometricsSupported ? "neutral" : "warning"} />}
-      >
-        {isBiometricsSupported ? (
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: "700", color: "#475569" }}>
-              Allow {biometricLabel.toLowerCase()} for quick unlock on this device
-            </Text>
-            <Switch
-              value={biometricsDraft}
-              onValueChange={(value) => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setError(null);
-                setBiometricsDraft(value);
-              }}
-              trackColor={{ false: "#e2e8f0", true: "#22c55e" }}
-              thumbColor="#fff"
-              ios_backgroundColor="#e2e8f0"
-            />
-          </View>
-        ) : (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#94a3b8" />
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: "700", color: "#94a3b8" }}>
-              Set up biometrics in device settings to enable this shortcut.
+        icon={biometricIcon}
+        signal={
+          isBiometricsSupported ? palette.signalCyan : palette.textQuiet
+        }
+        status={isBiometricsSupported ? "Available" : "Unavailable"}
+        title={biometricLabel}
+      />
+
+      {isBiometricsSupported ? (
+        <View style={styles.biometricToggle}>
+          <View style={styles.biometricToggleCopy}>
+            <Text style={styles.biometricToggleLabel}>Quick unlock</Text>
+            <Text style={styles.biometricToggleDescription}>
+              Allow {biometricLabel.toLocaleLowerCase()} on this device.
             </Text>
           </View>
-        )}
-      </SecurityRow>
+          <Switch
+            ios_backgroundColor={palette.line}
+            onValueChange={(value) => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setError(null);
+              setBiometricsDraft(value);
+            }}
+            thumbColor={biometricsDraft ? palette.text : palette.textQuiet}
+            trackColor={{ false: palette.line, true: palette.lineStrong }}
+            value={biometricsDraft}
+          />
+        </View>
+      ) : null}
 
       {showPinComposer ? (
         <>
-          <View style={{ backgroundColor: "#f8fafc", borderRadius: 24, padding: 18, borderWidth: 1.5, borderColor: "#e2e8f0", gap: 16 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: `${primary}12`, alignItems: "center", justifyContent: "center" }}>
-                  <MaterialCommunityIcons name="dialpad" size={20} color={primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#0f172a" }}>
-                    {!enabled ? "Create your PIN" : "Choose a new PIN"}
-                  </Text>
-                  <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#64748b", fontWeight: "600" }}>
-                    {pinReady ? "Step 2 of 2: confirm the same 4 digits." : "Step 1 of 2: enter the 4 digits you want to use."}
-                  </Text>
-                </View>
-              </View>
-              <SecurityBadge label={pinReady ? "Confirm" : "Create"} />
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <PinStageCard label="CREATE" active={!pinReady} complete={pinReady} value={pinDraft} primary={primary} />
-              <PinStageCard label="CONFIRM" active={pinReady} complete={pinReady && confirmReady} value={confirmDraft} primary={primary} />
-            </View>
+          <View style={styles.pinComposerHeading}>
+            <Text style={styles.composerEyebrow}>PIN SETUP</Text>
+            <Text style={styles.composerTitle}>
+              {pinReady ? "Confirm the same digits." : "Choose four digits."}
+            </Text>
           </View>
-
-          {error ? (
-            <View style={{ borderRadius: 16, backgroundColor: "#fff1f2", borderWidth: 1.5, borderColor: "#fecdd3", paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
-              <Text style={{ flex: 1, color: "#be123c", fontSize: 12, fontWeight: "700" }}>{error}</Text>
-            </View>
-          ) : null}
-
+          <View style={styles.pinStages}>
+            <PinStage
+              active={!pinReady}
+              complete={pinReady}
+              label="CREATE"
+              value={pinDraft}
+            />
+            <PinStage
+              active={pinReady}
+              complete={pinReady && confirmReady}
+              label="CONFIRM"
+              value={confirmDraft}
+            />
+          </View>
           <UnifiedNumpad
-            value={appLockInputValue}
+            maxLength={4}
+            mode="pin"
             onChange={(value) => {
               setError(null);
-              if (pinDraft.length < 4) {
+              if (!pinReady) {
                 setPinDraft(value);
                 return;
               }
-
               if (value === "" && confirmDraft === "") {
                 setPinDraft((current) => current.slice(0, -1));
                 return;
               }
-
               setConfirmDraft(value);
             }}
-            mode="pin"
-            maxLength={4}
-            title={pinReady ? "Confirm your PIN" : "Create your PIN"}
-            subtitle={pinReady ? "Enter the same four digits again to lock it in." : "Use the keypad below to choose a 4-digit PIN."}
+            subtitle={
+              pinReady
+                ? "The confirmation must match exactly."
+                : "Use a number you can remember without reusing a banking PIN."
+            }
+            title={pinReady ? "Confirm PIN" : "Create PIN"}
+            value={inputValue}
           />
-
-          <View style={{ gap: 12 }}>
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={saving || !canSave}
-              style={{ backgroundColor: saving || !canSave ? "#93c5fd" : primary, borderRadius: 18, height: 54, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="shield-check-outline" size={18} color="#fff" />
-                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{saveLabel}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {enabled ? (
-              <TouchableOpacity
-                onPress={resetPinEditor}
-                style={{ alignItems: "center", justifyContent: "center", height: 54, borderRadius: 18, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#e2e8f0", flexDirection: "row", gap: 8 }}
-              >
-                <MaterialCommunityIcons name="history" size={18} color="#475569" />
-                <Text style={{ color: "#475569", fontWeight: "800", fontSize: 14 }}>Keep current PIN</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
         </>
       ) : (
-        <>
-          {error ? (
-            <View style={{ borderRadius: 16, backgroundColor: "#fff1f2", borderWidth: 1.5, borderColor: "#fecdd3", paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
-              <Text style={{ flex: 1, color: "#be123c", fontSize: 12, fontWeight: "700" }}>{error}</Text>
-            </View>
-          ) : null}
+        <View style={styles.activePanel}>
+          <View style={styles.activeThread} />
+          <Text style={styles.activeTitle}>Lock is ready</Text>
+          <Text style={styles.activeCopy}>
+            The app will return to this boundary when it leaves the foreground.
+          </Text>
+        </View>
+      )}
 
-          <View style={{ backgroundColor: "#f8fafc", borderRadius: 24, padding: 18, borderWidth: 1.5, borderColor: "#e2e8f0", gap: 14 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ width: 40, height: 40, borderRadius: 16, backgroundColor: `${primary}12`, alignItems: "center", justifyContent: "center" }}>
-                <MaterialCommunityIcons name="shield-check-outline" size={20} color={primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: "800", color: "#0f172a" }}>Security is active</Text>
-                <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#64748b", fontWeight: "600" }}>
-                  Review your quick unlock preference, update your PIN, or turn App Lock off for this device.
-                </Text>
-              </View>
-            </View>
+      {error ? (
+        <View accessibilityRole="alert" style={styles.errorPanel}>
+          <View style={styles.errorThread} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
-            <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-              <SecurityBadge label="PIN required" />
-              {biometricsDraft ? <SecurityBadge label={`${biometricLabel} enabled`} tone="success" /> : null}
-            </View>
-          </View>
-
-          {canSave ? (
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={saving || !canSave}
-              style={{ backgroundColor: saving || !canSave ? "#93c5fd" : primary, borderRadius: 18, height: 54, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 }}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="content-save-outline" size={18} color="#fff" />
-                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{saveLabel}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ) : null}
-
-          <View style={{ gap: 12 }}>
-            <TouchableOpacity
+      <View style={styles.actions}>
+        {showPinComposer || canSave ? (
+          <ActionButton
+            disabled={!canSave}
+            label={
+              !enabled
+                ? "Enable App Lock"
+                : showPinComposer
+                  ? "Save new PIN"
+                  : "Save preference"
+            }
+            loading={saving}
+            onPress={() => void handleSave()}
+          />
+        ) : null}
+        {enabled && showPinComposer ? (
+          <ActionButton
+            label="Keep current PIN"
+            onPress={resetPinEditor}
+            tone="quiet"
+          />
+        ) : null}
+        {enabled && !showPinComposer ? (
+          <>
+            <ActionButton
+              icon="lock-reset"
+              label="Change PIN"
               onPress={() => {
-                setError(null);
                 setPinDraft("");
                 setConfirmDraft("");
                 setEditingPin(true);
+                setError(null);
               }}
-              style={{ alignItems: "center", justifyContent: "center", height: 56, borderRadius: 18, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#e2e8f0", gap: 8 }}
-            >
-              <MaterialCommunityIcons name="lock-reset" size={18} color="#475569" />
-              <Text style={{ color: "#475569", fontWeight: "800", fontSize: 14 }}>Change PIN</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
+              tone="quiet"
+            />
+            <ActionButton
+              icon="shield-off-outline"
+              label="Turn off App Lock"
               onPress={handleDisable}
-              style={{ alignItems: "center", justifyContent: "center", height: 56, borderRadius: 18, backgroundColor: "#fff1f2", borderWidth: 1.5, borderColor: "#fecdd3", gap: 8 }}
-            >
-              <MaterialCommunityIcons name="shield-off-outline" size={18} color="#e11d48" />
-              <Text style={{ color: "#e11d48", fontWeight: "800", fontSize: 14 }}>Turn off</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+              tone="danger"
+            />
+          </>
+        ) : null}
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { gap: 16 },
+  hero: {
+    backgroundColor: withAlpha(palette.white, 0.025),
+    borderColor: palette.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 10,
+    padding: 18,
+    position: "relative",
+  },
+  heroThread: {
+    backgroundColor: palette.signalViolet,
+    bottom: 16,
+    left: 0,
+    position: "absolute",
+    top: 16,
+    width: 1,
+  },
+  heroTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 21,
+  },
+  heroCopy: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    lineHeight: 16,
+  },
+  securityRow: {
+    alignItems: "stretch",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    minHeight: 72,
+    paddingVertical: 12,
+  },
+  securitySignal: { marginRight: 12, width: 1 },
+  securityIcon: {
+    alignItems: "center",
+    borderColor: palette.line,
+    borderRadius: 11,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: "center",
+    marginRight: 12,
+    width: 36,
+  },
+  securityCopy: { flex: 1, gap: 4, marginRight: 10 },
+  securityTitle: {
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  securityDescription: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  securityStatus: {
+    alignSelf: "center",
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+  },
+  biometricToggle: {
+    alignItems: "center",
+    borderBottomColor: palette.line,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    minHeight: 62,
+  },
+  biometricToggleCopy: { flex: 1, gap: 4, marginRight: 12 },
+  biometricToggleLabel: {
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  biometricToggleDescription: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 9,
+  },
+  pinComposerHeading: { gap: 6, marginTop: 4 },
+  composerEyebrow: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+    letterSpacing: 0.65,
+  },
+  composerTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 21,
+  },
+  pinStages: { flexDirection: "row", gap: 10 },
+  pinStage: {
+    borderColor: palette.line,
+    borderRadius: 13,
+    borderWidth: 1,
+    flex: 1,
+    gap: 13,
+    padding: 13,
+  },
+  pinStageActive: { borderColor: palette.lineStrong },
+  pinStageComplete: { backgroundColor: withAlpha(palette.white, 0.025) },
+  pinStageTopline: { flexDirection: "row", justifyContent: "space-between" },
+  pinStageLabel: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+  },
+  pinStageCount: {
+    color: palette.textQuiet,
+    fontFamily: fonts.ledger,
+    fontSize: 7,
+  },
+  pinDots: { flexDirection: "row", justifyContent: "space-between" },
+  pinDot: {
+    backgroundColor: palette.lineStrong,
+    borderRadius: 4,
+    height: 7,
+    width: 7,
+  },
+  pinDotFilled: { backgroundColor: palette.text },
+  activePanel: {
+    borderColor: palette.line,
+    borderRadius: 15,
+    borderWidth: 1,
+    gap: 7,
+    padding: 16,
+    position: "relative",
+  },
+  activeThread: {
+    backgroundColor: palette.income,
+    bottom: 14,
+    left: 0,
+    position: "absolute",
+    top: 14,
+    width: 1,
+  },
+  activeTitle: {
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  activeCopy: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  errorPanel: {
+    borderColor: withAlpha(palette.expense, 0.3),
+    borderRadius: 13,
+    borderWidth: 1,
+    padding: 13,
+    position: "relative",
+  },
+  errorThread: {
+    backgroundColor: palette.expense,
+    bottom: 10,
+    left: 0,
+    position: "absolute",
+    top: 10,
+    width: 1,
+  },
+  errorText: {
+    color: palette.expense,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    lineHeight: 15,
+  },
+  actions: { gap: 10 },
+  unavailable: {
+    borderColor: palette.line,
+    borderRadius: 17,
+    borderWidth: 1,
+    gap: 10,
+    padding: 18,
+    position: "relative",
+  },
+  unavailableThread: {
+    backgroundColor: palette.textQuiet,
+    bottom: 16,
+    left: 0,
+    position: "absolute",
+    top: 16,
+    width: 1,
+  },
+  unavailableTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 20,
+  },
+  unavailableCopy: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    lineHeight: 16,
+  },
+});

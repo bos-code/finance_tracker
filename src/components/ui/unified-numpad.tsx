@@ -1,9 +1,10 @@
-import { useAppStore } from "@/store/use-app-store";
+import { palette } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -136,7 +137,7 @@ function KeyButton({
         >
           {isBackspace ? (
             <View style={styles.pinActionContent}>
-              <MaterialCommunityIcons name="backspace-outline" size={24} color="#475569" />
+              <MaterialCommunityIcons name="backspace-outline" size={24} color={palette.textMuted} />
               {isPinMode ? <Text style={styles.pinActionLabel}>Erase</Text> : null}
             </View>
           ) : isBiometric ? (
@@ -184,8 +185,7 @@ export function UnifiedNumpad({
   footer,
   bottomInset = 0,
 }: UnifiedNumpadProps) {
-  const theme = useAppStore((s) => s.theme);
-  const primary = theme.primary;
+  const primary = palette.signalCyan;
   const isPinMode = mode === "pin";
   const isPinDrawer = isPinMode && pinPresentation === "drawer";
   const { width } = useWindowDimensions();
@@ -232,15 +232,18 @@ export function UnifiedNumpad({
 
       {onDone ? (
         <View style={styles.header}>
-          <TouchableOpacity
+          <Pressable
+            accessibilityRole="button"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onDone();
             }}
-            style={styles.doneButton}
-          >
-            <Text style={[styles.doneText, { color: primary }]}>Done</Text>
-          </TouchableOpacity>
+            style={({ pressed }) => [
+              styles.doneButton,
+              { opacity: pressed ? 0.56 : 1 },
+            ]}>
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -296,13 +299,13 @@ export function UnifiedNumpad({
 
 const styles = StyleSheet.create({
   amountKey: {
-    borderRadius: 18,
+    borderRadius: 15,
   },
   container: {
-    backgroundColor: "#f8fafc",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    borderTopColor: "#e2e8f0",
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopColor: palette.lineStrong,
     borderTopWidth: 1,
     paddingTop: 8,
   },
@@ -311,6 +314,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   doneText: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -326,7 +331,7 @@ const styles = StyleSheet.create({
   },
   key: {
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: palette.surfaceRaised,
     flex: 1,
     justifyContent: "center",
   },
@@ -336,14 +341,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   keyShadow: {
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    borderColor: palette.line,
+    borderWidth: 1,
   },
   keyText: {
-    color: "#0f172a",
+    color: palette.text,
+    fontFamily: fonts.display,
     fontSize: 24,
     fontWeight: "600",
   },
@@ -353,12 +356,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pinActionKey: {
-    backgroundColor: "#f8fafc",
-    borderColor: "#dbe3ef",
-    borderWidth: 1.5,
+    backgroundColor: palette.surface,
+    borderColor: palette.line,
+    borderWidth: 1,
   },
   pinActionLabel: {
-    color: "#64748b",
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.2,
@@ -371,15 +375,15 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   pinDrawerContainer: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    borderTopColor: "#dbe3ef",
-    borderTopWidth: 1.5,
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderTopColor: palette.lineStrong,
+    borderTopWidth: 1,
     paddingTop: 12,
-    shadowColor: "#0f172a",
+    shadowColor: palette.black,
     shadowOffset: { width: 0, height: -12 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.24,
     shadowRadius: 24,
     elevation: 18,
   },
@@ -392,7 +396,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   pinDrawerHandle: {
-    backgroundColor: "#cbd5e1",
+    backgroundColor: palette.lineStrong,
     borderRadius: 999,
     height: 5,
     width: 46,
@@ -420,22 +424,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   pinHeaderSubtitle: {
-    color: "#64748b",
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
     textAlign: "center",
   },
   pinHeaderTitle: {
-    color: "#0f172a",
+    color: palette.text,
+    fontFamily: fonts.body,
     fontSize: 14,
     fontWeight: "800",
     marginBottom: 6,
     textAlign: "center",
   },
   pinKey: {
-    borderColor: "#dbe3ef",
-    borderWidth: 1.5,
+    borderColor: palette.lineStrong,
+    borderWidth: 1,
   },
   pinKeyContainer: {
     flex: 0,

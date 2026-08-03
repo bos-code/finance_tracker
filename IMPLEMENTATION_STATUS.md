@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 4 — onboarding, authentication, and recovery
+**Batch:** 5 — secure App Lock and shared capture surfaces
 
 **Branch:** `master`
 
@@ -140,12 +140,34 @@
 - Added fixture-safe recovery, name, and password mutations without external
   Supabase writes.
 
+### Security and shared capture surfaces
+
+- Moved the four-digit App Lock PIN out of Zustand/AsyncStorage and into the
+  native operating-system secure store through Expo SecureStore.
+- Added a user-scoped secure-storage key and a one-time migration path for valid
+  legacy device PINs; new PIN values are no longer included in general app
+  preference persistence.
+- Delayed lock readiness until both authentication and secure storage finish
+  restoring, preventing startup races from discarding a legacy credential.
+- Kept biometric unlock as a convenience path with the PIN as the fallback;
+  unsupported or unenrolled devices receive an explicit unavailable state.
+- Intentionally disabled App Lock on web, where the native secure store is not
+  present, instead of falling back to insecure browser persistence.
+- Made logout delete the current user's device-local secure PIN before the
+  session is cleared.
+- Rebuilt the App Lock gate, lock screen, setup/update panel, and PIN/amount
+  keypad in the Obsidian Thread system.
+- Rebuilt the date calendar, category editor, and save/error feedback surfaces
+  so transaction and goal capture no longer opens bright legacy UI.
+- Limited category and status colour to icon signals, hairlines, restrained
+  ripples, and semantic success/error states.
+- Added accessibility state and labels to calendar dates, category choices,
+  colour and icon choices, month navigation, and keypad actions.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
-- `pnpm lint` — passed with zero errors and six pre-existing warnings in legacy
-  category editor, calendar, feedback, and password files; the redesign batches
-  add no warnings.
+- `pnpm lint` — passed with zero errors and zero warnings.
 - Expo fixture-mode production web export — passed; all 16 routes bundled.
 - Expo normal production web export with non-secret placeholder Supabase values
   — passed; all 16 routes bundled.
@@ -156,6 +178,8 @@
 - Entry/auth fixture-mode and normal production exports — passed; all 16 routes
   bundled, with expected onboarding, recovery, and new-password content in the
   static fixture output.
+- Security/shared-surface fixture-mode and normal production exports — passed;
+  all 16 routes bundled after the SecureStore migration and shared UI rebuild.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
   headings, search/plan affordances, state copy, and orbit navigation.
 - Automated screenshot inspection is still unavailable because the workspace
@@ -168,26 +192,26 @@
 - transaction creation and React Query invalidation
 - offline transaction queue and reconnect synchronization
 - custom amount pad, calendar, note editor, category editor, and save feedback
-- app lock and biometrics outside fixture mode
+- native App Lock and biometrics, now backed by the operating-system secure
+  store rather than general app preferences
 
 ## Not yet redesigned or implemented
 
 - Backend persistence for workspace, account, connection, privacy, and
   notification settings
-- shared calendar, category-editor, number-pad, save-feedback, and app-lock
-  surfaces used by capture/auth flows
 - receipt vault, review drafts, Telegram connection UI, and OCR review UI
 - new backend schemas, contracts, Edge Functions, storage policies, bot flows,
   and production hardening described in `PLAN_BACKEND.md`
 
 ## Exact next batch
 
-1. Redesign app-lock, number-pad, calendar, category, and feedback internals and
-   move the PIN out of general AsyncStorage.
-2. Re-run TypeScript, lint, both production exports, and visual verification if
-   the environment permits it.
-3. Commit and push each verified frontend batch before beginning backend Stage
-   1.
+1. Begin Backend Stage 1 by inventorying the current Supabase migrations, Edge
+   Functions, client models, and environment contracts against
+   `PLAN_BACKEND.md`.
+2. Add the authoritative database/API contract without breaking the existing
+   transaction flow, then verify local types and migrations.
+3. Commit and push the verified backend-contract batch before moving to
+   transaction reliability and idempotency.
 
 ## Backend clarification
 
