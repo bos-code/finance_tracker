@@ -1,21 +1,17 @@
+import { AuthShell } from "@/components/auth/auth-shell";
+import { ActionButton } from "@/components/finance/action-button";
+import { FinanceField } from "@/components/finance/finance-field";
+import { UI_PREVIEW_ENABLED } from "@/config/runtime";
 import { ROUTES } from "@/navigation/route-names";
 import { supabaseResetPassword } from "@/services/supabase/auth-service";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { isValidEmail } from "@/utils/validators";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import { useState } from "react";
-import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Keyboard, StyleSheet, Text, View } from "react-native";
 
 export function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
@@ -25,28 +21,29 @@ export function ForgotPasswordScreen() {
 
   const submit = async () => {
     Keyboard.dismiss();
-
-    if (!email.trim()) {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
       setError("Email is required.");
       return;
     }
-    
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(normalizedEmail)) {
       setError("Enter a valid email address.");
       return;
     }
 
     try {
       setIsSubmitting(true);
-      
-      const resetUrl = Linking.createURL("/update-password");
-      
-      await supabaseResetPassword(email, resetUrl);
+      setError(undefined);
+      if (!UI_PREVIEW_ENABLED) {
+        const resetUrl = Linking.createURL("/update-password");
+        await supabaseResetPassword(normalizedEmail, resetUrl);
+      }
       setIsSuccess(true);
-    } catch (err: any) {
-      Alert.alert(
-        "Reset Failed",
-        err?.message || "An unexpected error occurred. Please try again."
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "The recovery service is unavailable. Try again.",
       );
     } finally {
       setIsSubmitting(false);
@@ -54,97 +51,98 @@ export function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: "white" }}
-      edges={["top", "bottom"]}
-    >
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 60, paddingBottom: 48 }}
-        >
-          {/* Header Section */}
-          <View className="mb-10 items-start">
-            <Pressable
-              onPress={() => router.back()}
-              className="h-10 w-10 rounded-full bg-[#f8fafc] border border-[#f1f5f9] items-center justify-center mb-8"
-            >
-              <Text className="text-[#64748b] text-lg font-bold">←</Text>
-            </Pressable>
-            <Text className="text-[28px] font-extrabold text-[#0b1220] tracking-tight">Reset Password</Text>
-            <Text className="mt-2 text-[15px] text-[#64748b] max-w-[90%] leading-relaxed">
-              Enter your email address and we&apos;ll send you a link to reset your password.
+    <AuthShell
+      description="Request a time-limited recovery link. The response stays the same whether or not an account exists."
+      eyebrow="IDENTITY / RECOVERY"
+      onBack={() => router.back()}
+      title="Recover access.">
+      {isSuccess ? (
+        <>
+          <View style={styles.successPanel}>
+            <View style={styles.successThread} />
+            <MaterialCommunityIcons
+              color={palette.textMuted}
+              name="email-fast-outline"
+              size={23}
+            />
+            <Text style={styles.successTitle}>Check your inbox</Text>
+            <Text style={styles.successCopy}>
+              If an account exists for {email.trim()}, recovery instructions are
+              on the way. The link may expire, so open it on this device.
             </Text>
           </View>
-
-          {isSuccess ? (
-            <View className="bg-green-50 rounded-2xl p-6 border border-green-200 mt-4">
-              <Text className="text-green-800 font-bold text-lg mb-2">Check your inbox</Text>
-              <Text className="text-green-700 text-[15px] leading-relaxed">
-                If an account exists for {email}, we&apos;ve sent instructions on how to reset your password.
-              </Text>
-              <Pressable
-                onPress={() => router.replace(ROUTES.AUTH as any)}
-                className="mt-6 h-[48px] bg-green-600 rounded-xl items-center justify-center"
-              >
-                <Text className="text-white font-bold text-[15px]">Return to Sign In</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View className="gap-5">
-              <View>
-                <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Email Address</Text>
-                <TextInput
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    setError(undefined);
-                  }}
-                  placeholder="you@example.com"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={() => void submit()}
-                  selectionColor="#2563eb"
-                  className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
-                    error ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
-                  }`}
-                />
-                {error && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{error}</Text>}
-              </View>
-
-              {/* Primary Action Button */}
-              <View className="mt-6 mb-6">
-                <Pressable
-                  onPress={() => void submit()}
-                  disabled={isSubmitting}
-                  className={`h-[56px] rounded-2xl items-center justify-center flex-row ${
-                    isSubmitting ? "bg-blue-400" : "bg-blue-600"
-                  }`}
-                  style={{
-                    shadowColor: "#2563eb",
-                    shadowOffset: { width: 0, height: 8 },
-                    shadowOpacity: 0.25,
-                    shadowRadius: 16,
-                    elevation: 8,
-                  }}
-                >
-                  <Text className="text-white font-bold text-[16px] tracking-wide">
-                    {isSubmitting ? "Sending Link..." : "Send Reset Link"}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <ActionButton
+            label="Return to sign in"
+            onPress={() => router.replace(ROUTES.AUTH as never)}
+          />
+        </>
+      ) : (
+        <>
+          <FinanceField
+            autoCapitalize="none"
+            autoCorrect={false}
+            error={error}
+            keyboardType="email-address"
+            label="Email address"
+            onChangeText={(value) => {
+              setEmail(value);
+              setError(undefined);
+            }}
+            onSubmitEditing={() => void submit()}
+            placeholder="you@example.com"
+            returnKeyType="done"
+            textContentType="emailAddress"
+            value={email}
+          />
+          <ActionButton
+            label="Send recovery link"
+            loading={isSubmitting}
+            onPress={() => void submit()}
+          />
+          <Text style={styles.boundaryCopy}>
+            Finance Tracker never reveals whether an address is registered from
+            this screen.
+          </Text>
+        </>
+      )}
+    </AuthShell>
   );
 }
+
+const styles = StyleSheet.create({
+  successPanel: {
+    backgroundColor: withAlpha(palette.white, 0.025),
+    borderColor: palette.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    padding: 20,
+    position: "relative",
+  },
+  successThread: {
+    backgroundColor: palette.signalMoss,
+    bottom: 18,
+    left: 0,
+    position: "absolute",
+    top: 18,
+    width: 1,
+  },
+  successTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 22,
+  },
+  successCopy: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 18,
+  },
+  boundaryCopy: {
+    color: palette.textQuiet,
+    fontFamily: fonts.body,
+    fontSize: 9,
+    lineHeight: 15,
+    textAlign: "center",
+  },
+});

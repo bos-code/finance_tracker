@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-**Batch:** 3B — Profile and settings control center
+**Batch:** 4 — onboarding, authentication, and recovery
 
 **Branch:** `master`
 
@@ -118,6 +118,28 @@
   password, and confirmed logout; profile mutations now work in fixture mode
   without calling Supabase.
 
+### Onboarding and identity
+
+- Replaced the legacy single blue `Moneyme` splash with a three-step Obsidian
+  Thread onboarding flow covering position, offline-safe capture, and privacy.
+- Persisted onboarding completion so returning users are routed directly to
+  their signed-in ledger or the identity screen; storage failure cannot trap the
+  launch flow.
+- Rebuilt sign in and account creation with the shared dark shell, labeled
+  fields, password visibility controls, keyboard focus order, inline validation,
+  recoverable service errors, and an eight-character creation minimum.
+- Made sign-in state deterministic immediately after a successful Supabase
+  response instead of relying only on a later auth event.
+- Made account creation distinguish an active session from required email
+  confirmation; protected tabs are no longer entered when Supabase returns no
+  session.
+- Rebuilt password recovery with an account-enumeration-safe response and a
+  time-limited deep-link boundary.
+- Rebuilt password update with inline expired-link/error handling, confirmation,
+  an explicit success state, and clean-session return to sign in.
+- Added fixture-safe recovery, name, and password mutations without external
+  Supabase writes.
+
 ## Verification at this checkpoint
 
 - `pnpm exec tsc --noEmit` — passed.
@@ -131,6 +153,9 @@
   passed; all 16 routes bundled.
 - Profile fixture-mode and normal production exports after the settings redesign
   — passed; all 16 routes bundled.
+- Entry/auth fixture-mode and normal production exports — passed; all 16 routes
+  bundled, with expected onboarding, recovery, and new-password content in the
+  static fixture output.
 - Static fixture output contains the expected Ledger, Insights, and Goals route
   headings, search/plan affordances, state copy, and orbit navigation.
 - Automated screenshot inspection is still unavailable because the workspace
@@ -147,7 +172,6 @@
 
 ## Not yet redesigned or implemented
 
-- onboarding and authentication
 - Backend persistence for workspace, account, connection, privacy, and
   notification settings
 - shared calendar, category-editor, number-pad, save-feedback, and app-lock
@@ -158,13 +182,11 @@
 
 ## Exact next batch
 
-1. Redesign onboarding/auth entry and shared sheets so the whole reachable
-   frontend speaks the Obsidian Thread system.
-2. Redesign app-lock, number-pad, calendar, category, and feedback internals and
+1. Redesign app-lock, number-pad, calendar, category, and feedback internals and
    move the PIN out of general AsyncStorage.
-3. Re-run TypeScript, lint, both production exports, and visual verification if
+2. Re-run TypeScript, lint, both production exports, and visual verification if
    the environment permits it.
-4. Commit and push each verified frontend batch before beginning backend Stage
+3. Commit and push each verified frontend batch before beginning backend Stage
    1.
 
 ## Backend clarification

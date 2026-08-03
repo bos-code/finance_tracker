@@ -23,7 +23,11 @@ type AuthContextValue = {
   user: UserSession | null;
   isBootstrapping: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (fullName: string, email: string, password: string) => Promise<void>;
+  signUp: (
+    fullName: string,
+    email: string,
+    password: string,
+  ) => Promise<{ requiresEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
   updateName: (fullName: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
@@ -95,18 +99,33 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser({ ...PREVIEW_USER, email });
       return;
     }
-    await supabaseSignIn(email, password);
+    const result = await supabaseSignIn(email, password);
+    if (result.user) {
+      setUser({
+        uid: result.user.id,
+        email: result.user.email || email,
+        fullName: result.user.user_metadata?.full_name,
+      });
+    }
   }, []);
 
   const signUp = useCallback(async (fullName: string, email: string, password: string) => {
     if (UI_PREVIEW_ENABLED) {
       setUser({ uid: PREVIEW_USER.uid, email, fullName });
-      return;
+      return { requiresEmailConfirmation: false };
     }
     // Pass full_name inside signUp options so it's atomic — avoids a separate
     // updateUser call that can fail if email-confirmation hasn't established a
     // session yet.
-    await supabaseSignUp(email, password, fullName);
+    const result = await supabaseSignUp(email, password, fullName);
+    if (result.session && result.user) {
+      setUser({
+        uid: result.user.id,
+        email: result.user.email || email,
+        fullName,
+      });
+    }
+    return { requiresEmailConfirmation: result.session == null };
   }, []);
 
   const signOut = useCallback(async () => {

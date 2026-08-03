@@ -1,50 +1,64 @@
+import { AuthShell } from "@/components/auth/auth-shell";
+import { ActionButton } from "@/components/finance/action-button";
+import { FinanceField } from "@/components/finance/finance-field";
+import { SegmentedControl } from "@/components/finance/segmented-control";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
+import { palette, withAlpha } from "@/theme/colors";
+import { fonts } from "@/theme/typography";
 import { isValidEmail } from "@/utils/validators";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
-  Alert,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Mode = "signIn" | "signUp";
 
 type FormErrors = {
-  fullName?: string;
-  email?: string;
-  password?: string;
   confirmPassword?: string;
+  email?: string;
+  fullName?: string;
+  password?: string;
 };
+
+const MODE_OPTIONS = [
+  { label: "Sign in", value: "signIn" },
+  { label: "Create account", value: "signUp" },
+] satisfies { label: string; value: Mode }[];
 
 function getErrorMessage(error: unknown): string | undefined {
   if (!error) return undefined;
   if (typeof error === "string") return error;
   if (typeof error === "object") {
-    const anyError = error as any;
+    const candidate = error as {
+      code?: string;
+      error?: { error_description?: string; message?: string };
+      error_description?: string;
+      message?: string;
+    };
     return (
-      anyError?.message ??
-      anyError?.error_description ??
-      anyError?.error?.message ??
-      anyError?.error?.error_description
+      candidate.message ??
+      candidate.error_description ??
+      candidate.error?.message ??
+      candidate.error?.error_description
     );
   }
   return undefined;
 }
 
 function isInvalidCredentialsError(error: unknown) {
-  const message = (getErrorMessage(error) || "").toLowerCase();
+  const message = (getErrorMessage(error) || "").toLocaleLowerCase();
   const code =
     typeof error === "object" && error
-      ? String((error as any)?.code ?? "").toLowerCase()
+      ? String((error as { code?: string }).code ?? "").toLocaleLowerCase()
       : "";
   return (
     code.includes("invalid_credentials") ||
@@ -53,55 +67,77 @@ function isInvalidCredentialsError(error: unknown) {
   );
 }
 
+function VisibilityButton({
+  onPress,
+  visible,
+}: {
+  onPress: () => void;
+  visible: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={visible ? "Hide password" : "Show password"}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 6 })}>
+      <MaterialCommunityIcons
+        color={palette.textQuiet}
+        name={visible ? "eye-off-outline" : "eye-outline"}
+        size={18}
+      />
+    </Pressable>
+  );
+}
+
 export function AuthScreen() {
   const { signIn, signUp } = useAuth();
-
   const [mode, setMode] = useState<Mode>("signIn");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
-  const insets = useSafeAreaInsets();
 
   const emailRef = useRef<TextInput | null>(null);
   const passwordRef = useRef<TextInput | null>(null);
   const confirmPasswordRef = useRef<TextInput | null>(null);
 
-  const headerText = useMemo(
-    () => (mode === "signIn" ? "Welcome Back" : "Create Account"),
-    [mode],
-  );
-  
-  const subHeaderText = useMemo(
-    () => (mode === "signIn" ? "Sign in to your account to continue" : "Start your financial journey with us"),
-    [mode],
-  );
+  const chooseMode = (nextMode: Mode) => {
+    setMode(nextMode);
+    setErrors({});
+    setSubmitError(null);
+    setVerificationEmail(null);
+    void Haptics.selectionAsync();
+  };
 
   const validate = () => {
     const nextErrors: FormErrors = {};
-
     if (mode === "signUp" && !fullName.trim()) {
-      nextErrors.fullName = "Full name is required.";
+      nextErrors.fullName = "Enter the name for this personal workspace.";
     }
     if (!email.trim()) {
       nextErrors.email = "Email is required.";
     } else if (!isValidEmail(email)) {
       nextErrors.email = "Enter a valid email address.";
     }
-    if (!password.trim()) {
+    if (!password) {
       nextErrors.password = "Password is required.";
+    } else if (mode === "signUp" && password.length < 8) {
+      nextErrors.password = "Use at least 8 characters.";
     }
     if (mode === "signUp") {
-      if (!confirmPassword.trim()) {
-        nextErrors.confirmPassword = "Confirm your password.";
+      if (!confirmPassword) {
+        nextErrors.confirmPassword = "Confirm the password.";
       } else if (confirmPassword !== password) {
         nextErrors.confirmPassword = "Passwords do not match.";
       }
     }
-
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -109,273 +145,301 @@ export function AuthScreen() {
   const submit = async () => {
     Keyboard.dismiss();
     setSubmitError(null);
-
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
 
     try {
       setIsSubmitting(true);
       if (mode === "signIn") {
-        await signIn(email, password);
-      } else {
-        await signUp(fullName, email, password);
+        await signIn(email.trim(), password);
+        router.replace(ROUTES.TABS_HOME);
+        return;
+      }
+
+      const result = await signUp(fullName.trim(), email.trim(), password);
+      if (result.requiresEmailConfirmation) {
+        setVerificationEmail(email.trim());
+        return;
       }
       router.replace(ROUTES.TABS_HOME);
     } catch (error: unknown) {
       if (mode === "signIn" && isInvalidCredentialsError(error)) {
-        setSubmitError("Invalid email and/or password.");
+        setSubmitError("Email or password is incorrect.");
         return;
       }
-
-      const message = getErrorMessage(error);
-      if (message) {
-        setSubmitError(message);
-        return;
-      }
-
-      Alert.alert(
-        mode === "signIn" ? "Sign In Failed" : "Sign Up Failed",
-        "An unexpected error occurred. Please try again.",
+      setSubmitError(
+        getErrorMessage(error) ??
+          "The account service could not complete this request. Try again.",
       );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (verificationEmail) {
+    return (
+      <AuthShell
+        description="Account creation is paused at the verification boundary."
+        eyebrow="IDENTITY / VERIFY"
+        title="Check your inbox">
+        <View style={styles.verificationPanel}>
+          <View style={styles.verificationThread} />
+          <MaterialCommunityIcons
+            color={palette.textMuted}
+            name="email-check-outline"
+            size={24}
+          />
+          <Text style={styles.verificationTitle}>Verification sent</Text>
+          <Text style={styles.verificationCopy}>
+            If delivery is enabled for this project, follow the secure link sent
+            to {verificationEmail}. Then return here to sign in.
+          </Text>
+        </View>
+        <ActionButton
+          label="Return to sign in"
+          onPress={() => {
+            setVerificationEmail(null);
+            chooseMode("signIn");
+          }}
+        />
+      </AuthShell>
+    );
+  }
+
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: 'white' }}
-      edges={["top", "bottom"]}
-    >
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-      >
-        <ScrollView
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 60, paddingBottom: 48, flexGrow: 1 }}
-        >
-          {/* Header Section */}
-          <View className="mb-10 items-center">
-            <View className="h-16 w-16 bg-blue-50 rounded-2xl items-center justify-center mb-6">
-               <Text className="text-blue-600 text-3xl font-bold">F</Text>
-            </View>
-            <Text className="text-[28px] font-extrabold text-[#0b1220] tracking-tight">{headerText}</Text>
-            <Text className="mt-2 text-[15px] text-[#64748b] text-center max-w-[80%]">
-              {subHeaderText}
-            </Text>
-          </View>
+    <AuthShell
+      description={
+        mode === "signIn"
+          ? "Enter the personal ledger. Your session restores the same record across supported devices."
+          : "Create a user-scoped personal workspace with explicit ownership from the first entry."
+      }
+      eyebrow={mode === "signIn" ? "IDENTITY / RETURN" : "IDENTITY / CREATE"}
+      title={mode === "signIn" ? "Welcome back." : "Start the ledger."}>
+      <SegmentedControl
+        accessibilityLabel="Account action"
+        onChange={chooseMode}
+        options={MODE_OPTIONS}
+        value={mode}
+      />
 
-          {/* Premium Segmented Control */}
-          <View className="flex-row rounded-full bg-[#f8fafc] p-[4px] mb-8 border border-[#f1f5f9]">
-            <Pressable
-              onPress={() => {
-                setMode("signIn");
-                setErrors({});
-                setSubmitError(null);
-              }}
-              className={`flex-1 rounded-full py-3.5 items-center justify-center ${
-                mode === "signIn" ? "bg-white" : ""
-              }`}
-              style={mode === "signIn" ? {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 2,
-                elevation: 2,
-              } : undefined}
-            >
-              <Text
-                className={`text-center font-bold text-[15px] ${
-                  mode === "signIn" ? "text-[#0b1220]" : "text-[#94a3b8]"
-                }`}
-              >
-                Sign In
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setMode("signUp");
-                setErrors({});
-                setSubmitError(null);
-              }}
-              className={`flex-1 rounded-full py-3.5 items-center justify-center ${
-                mode === "signUp" ? "bg-white" : ""
-              }`}
-              style={mode === "signUp" ? {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 2,
-                elevation: 2,
-              } : undefined}
-            >
-              <Text
-                className={`text-center font-bold text-[15px] ${
-                  mode === "signUp" ? "text-[#0b1220]" : "text-[#94a3b8]"
-                }`}
-              >
-                Sign Up
-              </Text>
-            </Pressable>
-          </View>
+      {submitError ? (
+        <View accessibilityRole="alert" style={styles.errorPanel}>
+          <View style={styles.errorSignal} />
+          <MaterialCommunityIcons
+            color={palette.expense}
+            name="alert-circle-outline"
+            size={17}
+          />
+          <Text style={styles.errorText}>{submitError}</Text>
+        </View>
+      ) : null}
 
-          {!!submitError && (
-            <View className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-              <Text className="text-[13px] font-semibold text-red-700">{submitError}</Text>
-            </View>
-          )}
+      {mode === "signUp" ? (
+        <FinanceField
+          autoCapitalize="words"
+          error={errors.fullName}
+          label="Full name"
+          onChangeText={(value) => {
+            setFullName(value);
+            setErrors((current) => ({ ...current, fullName: undefined }));
+            setSubmitError(null);
+          }}
+          onSubmitEditing={() => emailRef.current?.focus()}
+          placeholder="Jordan Lee"
+          returnKeyType="next"
+          value={fullName}
+        />
+      ) : null}
 
-          {/* Form Fields */}
-          <View className="gap-5">
-            {mode === "signUp" && (
-              <View>
-                <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Full Name</Text>
-                <TextInput
-                  value={fullName}
-                  onChangeText={(text) => {
-                    setFullName(text);
-                    setErrors((previous) => ({ ...previous, fullName: undefined }));
-                    setSubmitError(null);
-                  }}
-                  placeholder="John Doe"
-                  placeholderTextColor="#94a3b8"
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                  onSubmitEditing={() => emailRef.current?.focus()}
-                  selectionColor="#2563eb"
-                  className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
-                    errors.fullName ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
-                  }`}
-                />
-                {errors.fullName && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.fullName}</Text>}
-              </View>
-            )}
+      <FinanceField
+        autoCapitalize="none"
+        autoCorrect={false}
+        error={errors.email}
+        inputRef={emailRef}
+        keyboardType="email-address"
+        label="Email address"
+        onChangeText={(value) => {
+          setEmail(value);
+          setErrors((current) => ({ ...current, email: undefined }));
+          setSubmitError(null);
+        }}
+        onSubmitEditing={() => passwordRef.current?.focus()}
+        placeholder="you@example.com"
+        returnKeyType="next"
+        textContentType="emailAddress"
+        value={email}
+      />
 
-            <View>
-              <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Email Address</Text>
-              <TextInput
-                ref={emailRef}
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  setErrors((previous) => ({ ...previous, email: undefined }));
-                  setSubmitError(null);
-                }}
-                placeholder="you@example.com"
-                placeholderTextColor="#94a3b8"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-                selectionColor="#2563eb"
-                className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
-                  errors.email ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
-                }`}
-              />
-              {errors.email && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.email}</Text>}
-            </View>
+      <FinanceField
+        autoCapitalize="none"
+        autoCorrect={false}
+        error={errors.password}
+        inputRef={passwordRef}
+        label="Password"
+        onChangeText={(value) => {
+          setPassword(value);
+          setErrors((current) => ({ ...current, password: undefined }));
+          setSubmitError(null);
+        }}
+        onSubmitEditing={() => {
+          if (mode === "signUp") confirmPasswordRef.current?.focus();
+          else void submit();
+        }}
+        placeholder="At least 8 characters"
+        returnKeyType={mode === "signUp" ? "next" : "done"}
+        secureTextEntry={!passwordVisible}
+        textContentType={mode === "signUp" ? "newPassword" : "password"}
+        trailing={
+          <VisibilityButton
+            onPress={() => setPasswordVisible((current) => !current)}
+            visible={passwordVisible}
+          />
+        }
+        value={password}
+      />
 
-            <View>
-              <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Password</Text>
-              <TextInput
-                ref={passwordRef}
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  setErrors((previous) => ({ ...previous, password: undefined }));
-                  setSubmitError(null);
-                }}
-                placeholder="••••••••"
-                placeholderTextColor="#94a3b8"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType={mode === "signUp" ? "next" : "done"}
-                onSubmitEditing={() => {
-                  if (mode === "signUp") {
-                    confirmPasswordRef.current?.focus();
-                  } else {
-                    void submit();
-                  }
-                }}
-                selectionColor="#2563eb"
-                className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
-                  errors.password ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
-                }`}
-              />
-              {errors.password && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.password}</Text>}
-              
-              {mode === "signIn" && (
-                <Pressable 
-                  className="mt-4 self-end pr-1"
-                  onPress={() => router.push(ROUTES.FORGOT_PASSWORD as any)}
-                >
-                  <Text className="text-[#2563eb] font-bold text-[13px]">Forgot Password?</Text>
-                </Pressable>
-              )}
-            </View>
+      {mode === "signIn" ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(ROUTES.FORGOT_PASSWORD as never)}
+          style={({ pressed }) => [
+            styles.forgotButton,
+            { opacity: pressed ? 0.56 : 1 },
+          ]}>
+          <Text style={styles.forgotText}>Recover access</Text>
+        </Pressable>
+      ) : (
+        <FinanceField
+          autoCapitalize="none"
+          autoCorrect={false}
+          error={errors.confirmPassword}
+          inputRef={confirmPasswordRef}
+          label="Confirm password"
+          onChangeText={(value) => {
+            setConfirmPassword(value);
+            setErrors((current) => ({
+              ...current,
+              confirmPassword: undefined,
+            }));
+            setSubmitError(null);
+          }}
+          onSubmitEditing={() => void submit()}
+          placeholder="Repeat the password"
+          returnKeyType="done"
+          secureTextEntry={!confirmPasswordVisible}
+          textContentType="newPassword"
+          trailing={
+            <VisibilityButton
+              onPress={() =>
+                setConfirmPasswordVisible((current) => !current)
+              }
+              visible={confirmPasswordVisible}
+            />
+          }
+          value={confirmPassword}
+        />
+      )}
 
-            {mode === "signUp" && (
-              <View>
-                <Text className="text-[13px] font-bold text-[#475569] mb-2 ml-1">Confirm Password</Text>
-                <TextInput
-                  ref={confirmPasswordRef}
-                value={confirmPassword}
-                onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  setErrors((previous) => ({
-                    ...previous,
-                    confirmPassword: undefined,
-                  }));
-                  setSubmitError(null);
-                }}
-                placeholder="••••••••"
-                placeholderTextColor="#94a3b8"
-                secureTextEntry
-                autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={() => void submit()}
-                  selectionColor="#2563eb"
-                  className={`h-[56px] px-5 bg-[#f8fafc] rounded-2xl text-[15px] text-[#0b1220] font-medium border ${
-                    errors.confirmPassword ? "border-red-400 bg-red-50" : "border-[#f1f5f9]"
-                  }`}
-                />
-                {errors.confirmPassword && <Text className="text-red-500 text-xs mt-1.5 ml-1 font-medium">{errors.confirmPassword}</Text>}
-              </View>
-            )}
-          </View>
+      <ActionButton
+        label={mode === "signIn" ? "Enter ledger" : "Create workspace"}
+        loading={isSubmitting}
+        onPress={() => void submit()}
+      />
 
-          {/* Primary Action Button */}
-          <View className="mt-10 mb-6">
-            <Pressable
-              onPress={() => void submit()}
-              disabled={isSubmitting}
-              className={`h-[56px] rounded-2xl items-center justify-center flex-row ${
-                isSubmitting ? "bg-blue-400" : "bg-blue-600"
-              }`}
-              style={{
-                shadowColor: "#2563eb",
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.25,
-                shadowRadius: 16,
-                elevation: 8,
-              }}
-            >
-              <Text className="text-white font-bold text-[16px] tracking-wide">
-                {isSubmitting ? "Please wait..." : (mode === "signIn" ? "Sign In" : "Create Account")}
-              </Text>
-            </Pressable>
-          </View>
-
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <View style={styles.securityNote}>
+        <View style={styles.securityThread} />
+        <Text style={styles.securityNoteText}>
+          Authentication is handled by Supabase. App lock remains a separate
+          device boundary after sign-in.
+        </Text>
+      </View>
+    </AuthShell>
   );
 }
+
+const styles = StyleSheet.create({
+  errorPanel: {
+    alignItems: "center",
+    backgroundColor: withAlpha(palette.expense, 0.05),
+    borderColor: withAlpha(palette.expense, 0.28),
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 52,
+    padding: 13,
+    position: "relative",
+  },
+  errorSignal: {
+    backgroundColor: palette.expense,
+    bottom: 12,
+    left: 0,
+    position: "absolute",
+    top: 12,
+    width: 1,
+  },
+  errorText: {
+    color: palette.textMuted,
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  forgotButton: { alignSelf: "flex-end", marginTop: -10, padding: 8 },
+  forgotText: {
+    borderBottomColor: palette.textMuted,
+    borderBottomWidth: 1,
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    fontWeight: "700",
+    paddingBottom: 2,
+  },
+  securityNote: {
+    alignItems: "stretch",
+    borderTopColor: palette.line,
+    borderTopWidth: 1,
+    flexDirection: "row",
+    paddingTop: 18,
+  },
+  securityThread: {
+    backgroundColor: palette.signalMoss,
+    marginRight: 12,
+    width: 1,
+  },
+  securityNoteText: {
+    color: palette.textQuiet,
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 9,
+    lineHeight: 15,
+  },
+  verificationPanel: {
+    alignItems: "flex-start",
+    backgroundColor: withAlpha(palette.white, 0.025),
+    borderColor: palette.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    padding: 20,
+    position: "relative",
+  },
+  verificationThread: {
+    backgroundColor: palette.signalMoss,
+    bottom: 18,
+    left: 0,
+    position: "absolute",
+    top: 18,
+    width: 1,
+  },
+  verificationTitle: {
+    color: palette.text,
+    fontFamily: fonts.display,
+    fontSize: 21,
+  },
+  verificationCopy: {
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 18,
+  },
+});
