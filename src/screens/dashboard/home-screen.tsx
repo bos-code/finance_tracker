@@ -22,6 +22,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { palette, withAlpha } from "@/theme/colors";
 import { fonts } from "@/theme/typography";
 import { toLocalDateString } from "@/utils/date";
+import { formatMoney } from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -51,23 +52,6 @@ const TYPE_OPTIONS: {
   { label: "Outflow", value: "Expenditure" },
   { label: "Income", value: "Revenue" },
 ];
-
-function formatMoney(
-  value: number,
-  currency: { code: string; symbol: string },
-) {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      currency: currency.code,
-      currencyDisplay: "narrowSymbol",
-      maximumFractionDigits: 2,
-      minimumFractionDigits: value % 1 === 0 ? 0 : 2,
-      style: "currency",
-    }).format(value);
-  } catch {
-    return `${currency.symbol}${value.toLocaleString("en-US")}`;
-  }
-}
 
 function getGreeting() {
   const hour = new Date().getHours();
