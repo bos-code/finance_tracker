@@ -3,7 +3,6 @@ import type {
   TransactionDraftContract,
   TransactionDraftFields,
   TransactionDraftLifecycle,
-  TransactionDraftUpdate,
 } from "@/contracts/backend";
 
 import type { DeterministicTransactionDraft } from "./transaction-parser";
@@ -26,10 +25,12 @@ export type TransactionDraftCorrections = Partial<
   Record<DraftCorrectionField, DraftFieldValue>
 >;
 
-export type DraftReviewEvaluation = Pick<
-  TransactionDraftUpdate,
-  "extracted_fields" | "lifecycle" | "missing_fields" | "overall_confidence"
->;
+export type DraftReviewEvaluation = {
+  extracted_fields: TransactionDraftFields;
+  lifecycle: TransactionDraftLifecycle;
+  missing_fields: string[];
+  overall_confidence: number;
+};
 
 const DEFAULT_REVIEW_THRESHOLD = 0.75;
 
@@ -102,8 +103,9 @@ export function applyDraftCorrections(
   const fields: TransactionDraftFields = { ...draft.extracted_fields };
 
   for (const [fieldName, rawValue] of Object.entries(corrections) as Array<
-    [DraftCorrectionField, DraftFieldValue]
+    [DraftCorrectionField, DraftFieldValue | undefined]
   >) {
+    if (rawValue === undefined) continue;
     const value = normalizedValue(rawValue);
     fields[fieldName] = {
       confidence: hasValue(value) ? 1 : 0,
