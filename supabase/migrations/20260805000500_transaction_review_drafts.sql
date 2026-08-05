@@ -25,7 +25,11 @@ create table public.transaction_drafts (
   original_text text not null
     check (char_length(trim(original_text)) between 1 and 4000),
   lifecycle text not null default 'needs_review'
-    check (lifecycle in ('draft', 'pending_confirmation', 'needs_review')),
+    check (
+      lifecycle in (
+        'draft', 'pending_confirmation', 'needs_review', 'confirmed'
+      )
+    ),
   extracted_fields jsonb not null default '{}'::jsonb
     check (jsonb_typeof(extracted_fields) = 'object'),
   missing_fields text[] not null default '{}'::text[],
@@ -45,7 +49,8 @@ create table public.transaction_drafts (
   ),
   constraint transaction_drafts_expiry_check check (expires_at > created_at),
   constraint transaction_drafts_confirmation_check check (
-    confirmed_transaction_id is null
+    (lifecycle = 'confirmed' and confirmed_transaction_id is not null)
+    or (lifecycle <> 'confirmed' and confirmed_transaction_id is null)
   )
 );
 
@@ -92,11 +97,24 @@ begin
     end if;
   end if;
 
+  if new.confirmed_transaction_id is not null and not exists (
+    select 1
+    from public.transactions
+    where id = new.confirmed_transaction_id
+      and workspace_id = new.workspace_id
+      and user_id = new.owner_user_id
+      and lifecycle <> 'deleted'
+  ) then
+    raise exception using
+      errcode = '23503',
+      message = 'Confirmed transaction does not belong to the draft owner and workspace';
+  end if;
+
   new.missing_fields := array(
-    select distinct trim(field_name)
-    from unnest(new.missing_fields) as field_name
-    where char_length(trim(field_name)) > 0
-    order by trim(field_name)
+    select distinct trim(raw_field_name) as field_name
+    from unnest(new.missing_fields) as raw_field_name
+    where char_length(trim(raw_field_name)) > 0
+    order by field_name
   );
   new.updated_at := timezone('utc', now());
   return new;
