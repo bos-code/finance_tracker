@@ -27,6 +27,7 @@ test("transaction drafts are review-first and protect duplicate source messages"
 test("transaction drafts expire and preserve confirmed transaction linkage", () => {
   assert.match(migration, /interval '30 days'/);
   assert.match(migration, /confirmed_transaction_id uuid references public\.transactions/);
+  assert.match(migration, /on delete restrict/);
   assert.match(
     migration,
     /lifecycle = 'confirmed' and confirmed_transaction_id is not null/,
@@ -41,10 +42,7 @@ test("transaction draft RLS is owner and workspace scoped", () => {
   assert.match(migration, /alter table public\.transaction_drafts enable row level security/);
   assert.match(migration, /auth\.uid\(\) = owner_user_id/g);
   assert.match(migration, /public\.is_workspace_member\(workspace_id\)/g);
-  assert.match(
-    migration,
-    /Draft owner is not a workspace member/,
-  );
+  assert.match(migration, /Draft owner is not a workspace member/);
   assert.match(
     migration,
     /Confirmed transaction does not belong to the draft owner and workspace/,
@@ -63,4 +61,15 @@ test("draft source identity is immutable while correction fields remain editable
     migration,
     /new\.missing_fields <> old\.missing_fields/,
   );
+});
+
+test("confirmation is one-way, ready-only, and immutable", () => {
+  assert.match(migration, /Confirmed draft history is immutable/);
+  assert.match(
+    migration,
+    /old\.lifecycle <> 'pending_confirmation'/,
+  );
+  assert.match(migration, /cardinality\(new\.missing_fields\) > 0/);
+  assert.match(migration, /new\.expires_at <= timezone\('utc', now\(\)\)/);
+  assert.match(migration, /Draft is not ready for confirmation/);
 });
