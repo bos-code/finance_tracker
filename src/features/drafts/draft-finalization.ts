@@ -7,8 +7,8 @@ import {
   ALL_CATEGORIES,
   EXPENDITURE_CATEGORIES,
   REVENUE_CATEGORIES,
-} from "@/constants/categories";
-import { BackendError } from "@/services/backend/errors";
+} from "../../constants/categories";
+import { BackendError } from "../../services/backend/errors";
 
 import { isDraftExpired } from "./draft-review";
 
@@ -182,7 +182,10 @@ function resolveNote(draft: TransactionDraftContract) {
   const description = fieldValue(draft, "description");
   const merchant = fieldValue(draft, "merchant_name");
   const parts = [description, merchant]
-    .filter((value): value is string => typeof value === "string" && !!value.trim())
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && !!value.trim(),
+    )
     .map((value) => value.trim());
   return (parts.join(" — ") || draft.original_text.trim()).slice(0, 500);
 }
