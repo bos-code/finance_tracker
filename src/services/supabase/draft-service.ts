@@ -97,6 +97,24 @@ async function findDuplicateDraft({
   return data;
 }
 
+export async function getTransactionDraft(
+  draftId: string,
+  ownerUserId: string,
+  workspaceId: string,
+) {
+  const { data, error } = await draftsTable()
+    .select("*")
+    .eq("id", draftId)
+    .eq("owner_user_id", ownerUserId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (error) throw toBackendError(error, "DRAFT_READ_FAILED");
+  if (!data) {
+    throw new BackendError({ code: "RESOURCE_NOT_FOUND" });
+  }
+  return data;
+}
+
 export async function createTransactionDraft(
   input: CreateTransactionDraftInput,
 ): Promise<CreateTransactionDraftResult> {
@@ -253,10 +271,23 @@ export async function confirmTransactionDraft(
   draft: TransactionDraftContract,
   transactionId: string,
 ) {
-  if (!transactionId.trim()) {
+  const normalizedTransactionId = transactionId.trim();
+  if (!normalizedTransactionId) {
     throw new BackendError({
       code: "VALIDATION_FAILED",
       message: "A saved transaction is required to confirm this draft.",
+    });
+  }
+  if (
+    draft.lifecycle === "confirmed" &&
+    draft.confirmed_transaction_id === normalizedTransactionId
+  ) {
+    return draft;
+  }
+  if (draft.lifecycle === "confirmed") {
+    throw new BackendError({
+      code: "CONFLICT",
+      message: "This draft is already linked to a different transaction.",
     });
   }
   if (draft.missing_fields.length > 0) {
@@ -268,7 +299,7 @@ export async function confirmTransactionDraft(
 
   const { data, error } = await draftsTable()
     .update({
-      confirmed_transaction_id: transactionId,
+      confirmed_transaction_id: normalizedTransactionId,
       lifecycle: "confirmed",
     })
     .eq("id", draft.id)
@@ -276,8 +307,26 @@ export async function confirmTransactionDraft(
     .eq("owner_user_id", draft.owner_user_id)
     .select("*")
     .single();
-  if (error) throw toBackendError(error, "DRAFT_WRITE_FAILED");
-  return data;
+  if (!error) return data;
+
+  const backendError = toBackendError(error, "DRAFT_WRITE_FAILED");
+  if (
+    backendError.code === "CONFLICT" ||
+    backendError.code === "VALIDATION_FAILED"
+  ) {
+    const current = await getTransactionDraft(
+      draft.id,
+      draft.owner_user_id,
+      draft.workspace_id,
+    );
+    if (
+      current.lifecycle === "confirmed" &&
+      current.confirmed_transaction_id === normalizedTransactionId
+    ) {
+      return current;
+    }
+  }
+  throw backendError;
 }
 
 export async function deleteTransactionDraft(draft: TransactionDraftContract) {
