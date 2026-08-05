@@ -7,10 +7,10 @@ import {
   ALL_CATEGORIES,
   EXPENDITURE_CATEGORIES,
   REVENUE_CATEGORIES,
-} from "../../constants/categories";
-import { BackendError } from "../../services/backend/errors";
+} from "../../constants/categories.ts";
+import { BackendError } from "../../services/backend/errors.ts";
 
-import { isDraftExpired } from "./draft-review";
+import { isDraftExpired } from "./draft-review.ts";
 
 export type FinalizeDraftContext = {
   accountId: string;
