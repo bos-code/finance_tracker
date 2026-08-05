@@ -4,6 +4,9 @@ import type {
   GoalRecord,
   ProfileContract,
   TransactionAttachmentContract,
+  TransactionDraftContract,
+  TransactionDraftInsert,
+  TransactionDraftUpdate,
   TransactionInsert,
   TransactionRecord,
   TransactionSource,
@@ -162,6 +165,12 @@ export type Database = {
         Row: TransactionAttachmentContract;
         Insert: TransactionAttachmentDatabaseInsert;
         Update: Partial<TransactionAttachmentDatabaseInsert>;
+        Relationships: [];
+      };
+      transaction_drafts: {
+        Row: TransactionDraftContract;
+        Insert: TransactionDraftInsert;
+        Update: TransactionDraftUpdate;
         Relationships: [];
       };
     };
