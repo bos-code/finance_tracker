@@ -40,7 +40,7 @@ create table public.transaction_drafts (
   expires_at timestamptz not null
     default (timezone('utc', now()) + interval '30 days'),
   confirmed_transaction_id uuid references public.transactions (id)
-    on delete set null,
+    on delete restrict,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   constraint transaction_drafts_source_message_check check (
@@ -85,6 +85,12 @@ begin
   end if;
 
   if tg_op = 'UPDATE' then
+    if old.lifecycle = 'confirmed' then
+      raise exception using
+        errcode = '22023',
+        message = 'Confirmed draft history is immutable';
+    end if;
+
     if new.owner_user_id <> old.owner_user_id
        or new.workspace_id <> old.workspace_id
        or new.source <> old.source
@@ -94,6 +100,29 @@ begin
       raise exception using
         errcode = '22023',
         message = 'Draft source identity is immutable';
+    end if;
+  end if;
+
+  new.missing_fields := array(
+    select distinct trim(raw_field_name) as field_name
+    from unnest(new.missing_fields) as raw_field_name
+    where char_length(trim(raw_field_name)) > 0
+    order by field_name
+  );
+
+  if new.lifecycle = 'confirmed' then
+    if tg_op <> 'UPDATE' then
+      raise exception using
+        errcode = '22023',
+        message = 'Draft confirmation requires an existing reviewed draft';
+    end if;
+
+    if old.lifecycle <> 'pending_confirmation'
+       or cardinality(new.missing_fields) > 0
+       or new.expires_at <= timezone('utc', now()) then
+      raise exception using
+        errcode = '22023',
+        message = 'Draft is not ready for confirmation';
     end if;
   end if;
 
@@ -110,12 +139,6 @@ begin
       message = 'Confirmed transaction does not belong to the draft owner and workspace';
   end if;
 
-  new.missing_fields := array(
-    select distinct trim(raw_field_name) as field_name
-    from unnest(new.missing_fields) as raw_field_name
-    where char_length(trim(raw_field_name)) > 0
-    order by field_name
-  );
   new.updated_at := timezone('utc', now());
   return new;
 end;
