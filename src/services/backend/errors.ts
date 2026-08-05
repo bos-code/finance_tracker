@@ -19,6 +19,9 @@ const FRIENDLY_MESSAGES: Record<BackendErrorCode, string> = {
   AUTHENTICATION_REQUIRED: "Please sign in and try again.",
   BACKEND_NOT_READY: "Finance data is not ready yet. Please try again shortly.",
   CONFLICT: "That change conflicts with a newer record. Refresh and try again.",
+  DRAFT_READ_FAILED: "Transaction drafts could not be loaded. Please try again.",
+  DRAFT_WRITE_FAILED:
+    "The transaction draft could not be saved. Your original text was not discarded.",
   GOAL_READ_FAILED: "Goals could not be loaded. Please try again.",
   GOAL_WRITE_FAILED: "The goal change could not be saved. Please try again.",
   INTERNAL_ERROR: "Something went wrong. Please try again.",
