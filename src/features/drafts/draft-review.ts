@@ -102,9 +102,10 @@ export function applyDraftCorrections(
 ): DraftReviewEvaluation {
   const fields: TransactionDraftFields = { ...draft.extracted_fields };
 
-  for (const [fieldName, rawValue] of Object.entries(corrections) as Array<
-    [DraftCorrectionField, DraftFieldValue | undefined]
-  >) {
+  for (const [fieldName, rawValue] of Object.entries(corrections) as [
+    DraftCorrectionField,
+    DraftFieldValue | undefined,
+  ][]) {
     if (rawValue === undefined) continue;
     const value = normalizedValue(rawValue);
     fields[fieldName] = {
