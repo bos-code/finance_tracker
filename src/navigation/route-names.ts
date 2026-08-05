@@ -3,6 +3,7 @@ export const ROUTES = {
   AUTH: "/",
   FORGOT_PASSWORD: "/forgot-password",
   UPDATE_PASSWORD: "/update-password",
+  DRAFTS: "/drafts",
   TABS_HOME: "/(tabs)/home",
   TABS_CALENDAR: "/(tabs)/calender",
   TABS_GOALS: "/(tabs)/goals",
