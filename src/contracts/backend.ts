@@ -51,6 +51,8 @@ export const BACKEND_ERROR_CODES = [
   "BACKEND_NOT_READY",
   "TRANSACTION_READ_FAILED",
   "TRANSACTION_WRITE_FAILED",
+  "DRAFT_READ_FAILED",
+  "DRAFT_WRITE_FAILED",
   "GOAL_READ_FAILED",
   "GOAL_WRITE_FAILED",
   "ATTACHMENT_READ_FAILED",
@@ -282,11 +284,20 @@ export type TransactionAttachmentContract = {
   updated_at: ISODateTimeString;
 };
 
+export type DraftFieldValue = string | number | boolean | null;
+
 export type FieldConfidence = {
-  value: unknown;
+  value: DraftFieldValue;
   confidence: number;
   reason: string | null;
 };
+
+export type TransactionDraftLifecycle = Extract<
+  TransactionLifecycle,
+  "draft" | "pending_confirmation" | "needs_review" | "confirmed"
+>;
+
+export type TransactionDraftFields = Record<string, FieldConfidence>;
 
 export type TransactionDraftContract = {
   id: EntityId;
@@ -295,15 +306,41 @@ export type TransactionDraftContract = {
   source: TransactionSource;
   source_message_id: string | null;
   original_text: string;
-  lifecycle: Extract<
-    TransactionLifecycle,
-    "draft" | "pending_confirmation" | "needs_review"
-  >;
-  extracted_fields: Record<string, FieldConfidence>;
+  lifecycle: TransactionDraftLifecycle;
+  extracted_fields: TransactionDraftFields;
   missing_fields: string[];
+  parser_version: string;
+  overall_confidence: number;
+  expires_at: ISODateTimeString;
+  confirmed_transaction_id: EntityId | null;
   created_at: ISODateTimeString;
   updated_at: ISODateTimeString;
 };
+
+export type TransactionDraftInsert = Omit<
+  TransactionDraftContract,
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "confirmed_transaction_id"
+> & {
+  id?: EntityId;
+  confirmed_transaction_id?: EntityId | null;
+  created_at?: ISODateTimeString;
+  updated_at?: ISODateTimeString;
+};
+
+export type TransactionDraftUpdate = Partial<
+  Pick<
+    TransactionDraftContract,
+    | "lifecycle"
+    | "extracted_fields"
+    | "missing_fields"
+    | "overall_confidence"
+    | "expires_at"
+    | "confirmed_transaction_id"
+  >
+>;
 
 export type BotProvider = "telegram" | "whatsapp";
 
