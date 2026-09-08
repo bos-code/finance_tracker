@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.anonymous.financetracker",
+      "package": "com.johndera.financetracker",
       "splash": {
         "backgroundColor": "#080D0C"
       },
