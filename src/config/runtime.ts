@@ -29,6 +29,10 @@ function resolveEnvironment(): AppEnvironment {
 
 export const APP_ENVIRONMENT = resolveEnvironment();
 
+/** Public bot handle (no "@"); only used to build the t.me deep link. */
+export const TELEGRAM_BOT_USERNAME =
+  process.env.EXPO_PUBLIC_TELEGRAM_BOT_USERNAME?.trim() || undefined;
+
 export function getSupabaseRuntimeConfig() {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
   const anonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY?.trim();

@@ -4,23 +4,22 @@ import type {
   TransactionDraftLifecycle,
   TransactionSource,
 } from "@/contracts/backend";
+import { buildTransactionDraftInsert } from "@/features/drafts/draft-capture";
 import {
   applyDraftCorrections,
-  draftFieldsFromParser,
   evaluateDraftFields,
   isDraftExpired,
   type TransactionDraftCorrections,
 } from "@/features/drafts/draft-review";
-import {
-  parseTransactionText,
-  type ParseTransactionContext,
-} from "@/features/drafts/transaction-parser";
+import { type ParseTransactionContext } from "@/features/drafts/transaction-parser";
 import { BackendError, toBackendError } from "@/services/backend/errors";
 
 import { supabaseClient } from "./supabase-client";
 
-export const DETERMINISTIC_PARSER_VERSION = "deterministic-v1";
-export const DEFAULT_DRAFT_TTL_DAYS = 30;
+export {
+  DEFAULT_DRAFT_TTL_DAYS,
+  DETERMINISTIC_PARSER_VERSION,
+} from "@/features/drafts/draft-capture";
 
 export type CreateTransactionDraftInput = Pick<
   ParseTransactionContext,
@@ -46,12 +45,6 @@ export type ListTransactionDraftOptions = {
 
 function draftsTable() {
   return supabaseClient.from("transaction_drafts");
-}
-
-function draftExpiry(now: Date, ttlDays = DEFAULT_DRAFT_TTL_DAYS) {
-  const expiresAt = new Date(now);
-  expiresAt.setDate(expiresAt.getDate() + ttlDays);
-  return expiresAt.toISOString();
 }
 
 function validateDraftIdentity(input: CreateTransactionDraftInput) {
@@ -130,31 +123,17 @@ export async function createTransactionDraft(
     if (duplicate) return { draft: duplicate, duplicate: true };
   }
 
-  const now = input.now ? new Date(input.now) : new Date();
-  const parsed = parseTransactionText(text, {
+  const draftInsert: TransactionDraftInsert = buildTransactionDraftInsert({
     categoryRules: input.categoryRules,
     defaultCurrency: input.defaultCurrency,
-    now,
+    now: input.now,
+    ownerUserId: input.ownerUserId,
     reviewThreshold: input.reviewThreshold,
-  });
-  const review = evaluateDraftFields(
-    draftFieldsFromParser(parsed),
-    input.reviewThreshold,
-  );
-
-  const draftInsert: TransactionDraftInsert = {
-    expires_at: draftExpiry(now),
-    extracted_fields: review.extracted_fields,
-    lifecycle: review.lifecycle,
-    missing_fields: review.missing_fields,
-    original_text: text,
-    overall_confidence: review.overall_confidence,
-    owner_user_id: input.ownerUserId,
-    parser_version: DETERMINISTIC_PARSER_VERSION,
     source,
-    source_message_id: sourceMessageId,
-    workspace_id: input.workspaceId,
-  };
+    sourceMessageId,
+    text,
+    workspaceId: input.workspaceId,
+  });
 
   const { data, error } = await draftsTable()
     .insert(draftInsert)

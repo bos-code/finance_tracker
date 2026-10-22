@@ -5,7 +5,7 @@ import type {
   TransactionDraftLifecycle,
 } from "@/contracts/backend";
 
-import type { DeterministicTransactionDraft } from "./transaction-parser";
+import type { DeterministicTransactionDraft } from "./transaction-parser.ts";
 
 export const REQUIRED_DRAFT_FIELDS = [
   "amount",
