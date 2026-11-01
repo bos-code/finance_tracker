@@ -2,7 +2,7 @@
 
 ## Application identity
 
-- Expo project ID: `d500d2e5-f29e-4a40-99ed-5caa918eab29`
+- Expo project ID: `11ce149b-518e-4577-982b-33a9de6a82fe`
 - Android package: `com.johndera.financetracker`
 - Production build output: Android App Bundle (`.aab`)
 - Internal install build output: Android package (`.apk`)

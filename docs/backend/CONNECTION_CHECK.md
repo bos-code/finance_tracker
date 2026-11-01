@@ -15,7 +15,7 @@ anon key, project reference, database password, access token, service-role key,
 or Edge Function secret is committed.
 
 The Expo application is linked to EAS project
-`d500d2e5-f29e-4a40-99ed-5caa918eab29`, but EAS environment variables and
+`11ce149b-518e-4577-982b-33a9de6a82fe`, but EAS environment variables and
 Supabase project access cannot be verified from the GitHub repository.
 
 No Vercel project matching `finance_tracker` or `finance-tracker` is linked in
