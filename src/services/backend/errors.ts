@@ -138,7 +138,7 @@ export function toBackendError(
     return new BackendError({ cause: error, code: "RESOURCE_NOT_FOUND" });
   }
 
-  if (details.status === 429) {
+  if (details.status === 429 || details.code === "54000") {
     return new BackendError({
       cause: error,
       code: "RATE_LIMITED",

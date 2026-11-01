@@ -5,8 +5,10 @@ import { FinanceSheet } from "@/components/finance/finance-sheet";
 import { PageHeading } from "@/components/finance/page-heading";
 import { Screen } from "@/components/ui/screen";
 import { SignalThreads } from "@/components/visuals/signal-threads";
+import { TelegramConnectionPanel } from "@/components/finance/telegram-connection-panel";
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
+import { useTelegramConnection } from "@/hooks/use-telegram-connection";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { ROUTES } from "@/navigation/route-names";
 import { CURRENCY_OPTIONS, useAppStore } from "@/store/use-app-store";
@@ -209,6 +211,9 @@ export function ProfileScreen() {
     enabled: appLockEnabled,
     useBiometrics,
   } = useAppLock();
+
+  const { connection: telegramStatus } = useTelegramConnection();
+  const telegramLinked = Boolean(telegramStatus.data);
 
   const [activeSheet, setActiveSheet] = useState<ProfileSheet>("none");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -438,12 +443,18 @@ export function ProfileScreen() {
 
         <SettingsSection label="Automation">
           <SettingRow
-            description="Secure linking and transaction capture ship with Backend Stage 7."
+            description="Save entries by chatting with the Finance Tracker bot."
             icon="send-outline"
             label="Telegram"
             onPress={() => openSheet("connections")}
-            signal={palette.signalCyan}
-            value="Not linked"
+            signal={telegramLinked ? palette.income : palette.signalCyan}
+            value={
+              telegramStatus.isLoading
+                ? "…"
+                : telegramLinked
+                  ? "Connected"
+                  : "Not linked"
+            }
           />
           <SettingRow
             description="Cloud API implementation is explicitly deferred."
@@ -601,27 +612,16 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
-        description="Channel status is honest until the server-side linking contracts are deployed."
+        description="Link one Telegram account with a short-lived, single-use code. You can disconnect at any time."
         onClose={closeSheet}
         title="Connections"
         visible={activeSheet === "connections"}>
-        <ReadinessRow
-          description="Shared bot, expiring link code, transaction capture, receipts, and queries."
-          label="Telegram"
-          status="Backend Stage 7"
-          statusColor={palette.signalCyan}
-        />
+        {activeSheet === "connections" ? <TelegramConnectionPanel /> : null}
         <ReadinessRow
           description="The WhatsApp Cloud API is outside this release's implementation scope."
           label="WhatsApp"
           status="Deferred"
           statusColor={palette.textQuiet}
-        />
-        <ActionButton
-          disabled
-          label="Connect after backend deployment"
-          onPress={() => undefined}
-          tone="quiet"
         />
       </FinanceSheet>
 

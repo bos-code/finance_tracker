@@ -1,4 +1,6 @@
 import type {
+  BotConnectionContract,
+  BotProvider,
   CurrencyContract,
   FinancialAccountContract,
   GoalRecord,
@@ -173,6 +175,14 @@ export type Database = {
         Update: TransactionDraftUpdate;
         Relationships: [];
       };
+      // Read-only for clients: connections are created by the webhook and
+      // revoked through revoke_channel_connection.
+      channel_connections: {
+        Row: BotConnectionContract;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -223,6 +233,14 @@ export type Database = {
       delete_transaction_attachment_record: {
         Args: { p_attachment_id: string };
         Returns: undefined;
+      };
+      create_channel_link_code: {
+        Args: { p_provider?: BotProvider };
+        Returns: { link_code: string; link_expires_at: string }[];
+      };
+      revoke_channel_connection: {
+        Args: { p_connection_id: string };
+        Returns: BotConnectionContract[];
       };
     };
     Enums: Record<string, never>;

@@ -133,7 +133,10 @@ function DraftCard({
             {lifecycleLabel(draft.lifecycle).toLocaleUpperCase()}
           </Text>
         </View>
-        <Text style={styles.confidence}>{confidence}% CONFIDENCE</Text>
+        <Text style={styles.confidence}>
+          {draft.source === "telegram" ? "TELEGRAM · " : ""}
+          {confidence}% CONFIDENCE
+        </Text>
       </View>
       <Text numberOfLines={2} style={styles.draftText}>
         {draft.original_text}

@@ -17,6 +17,7 @@ Configure these in the EAS `production` environment before building:
 - `EXPO_PUBLIC_UI_PREVIEW=0`
 - `EXPO_PUBLIC_SUPABASE_URL=<production Supabase URL>`
 - `EXPO_PUBLIC_SUPABASE_KEY=<production Supabase anon/publishable key>`
+- `EXPO_PUBLIC_TELEGRAM_BOT_USERNAME=<bot handle without @>` (optional; enables the "Open Telegram" button)
 
 Do not commit service-role keys, database passwords, Telegram bot tokens, AI provider keys, or Google Play service-account JSON to the repository.
 

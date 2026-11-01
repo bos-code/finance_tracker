@@ -356,10 +356,31 @@
 - native App Lock and biometrics, now backed by the operating-system secure
   store rather than general app preferences
 
+## Telegram linking and draft capture (Backend Stage 7 + first slice of Stage 8)
+
+- Migration `20261022000600_telegram_channel_connections.sql`: hashed single-use
+  link codes (10 minute TTL, newest code wins), `channel_connections` with one
+  active identity per account and per Telegram user, webhook idempotency ledger,
+  per-chat rate limit, and failed-guess throttling. Webhook-side functions are
+  `service_role` only; users get just `create_channel_link_code` and
+  `revoke_channel_connection`.
+- `telegram-webhook` Edge Function: secret-header authentication, `/start`,
+  `/link`, `/status`, `/help`, `/disconnect`, and plain messages saved as
+  review-first `telegram` drafts through the same parser and
+  `buildTransactionDraftInsert` the app uses.
+- App: Profile → Connections now generates a link code with a live countdown,
+  opens Telegram with the code pre-filled, detects the link, and disconnects.
+  Telegram drafts are labelled in Drafts review.
+- Not built yet: inline Confirm/Edit/Cancel in chat, receipt upload over
+  Telegram, and balance/category queries (rest of Backend Stage 8). Confirming
+  from the bot needs a server-side transaction path, because
+  `mutate_transaction` requires an authenticated user.
+
 ## Not yet redesigned or implemented
 
-- review drafts, Telegram connection UI, and OCR review UI
-- deterministic/AI parsers, bot flows, realtime automation,
+- OCR review UI
+- AI parser fallback, remaining bot flows (confirm/edit in chat, receipts,
+  queries), realtime automation,
   privacy/notification persistence, and production hardening described in
   `PLAN_BACKEND.md`
 - live application of the Stage 1–4 migrations and receipt cleanup function to development/preview/production
