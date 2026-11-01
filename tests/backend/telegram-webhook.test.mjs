@@ -10,18 +10,27 @@ import {
 
 const NOW = new Date("2026-10-22T10:00:00.000Z");
 const CONNECTION = {
+  aiAssistEnabled: true,
   defaultCurrency: "NGN",
   id: "conn-1",
   ownerUserId: "user-1",
   workspaceId: "workspace-1",
 };
 
-function harness({ connection = null, claim = "new", link = "linked" } = {}) {
+function harness({
+  assistant = undefined,
+  claim = "new",
+  connection = null,
+  link = "linked",
+} = {}) {
   const sent = [];
   const drafts = [];
   const finished = [];
-  const calls = { consume: [], disconnect: [] };
-  const state = { connection, throwOn: null };
+  const calls = { aiAssist: [], consume: [], disconnect: [] };
+  const state = {
+    connection: connection ? { ...connection } : null,
+    throwOn: null,
+  };
 
   const store = {
     async claimEvent() {
@@ -40,6 +49,11 @@ function harness({ connection = null, claim = "new", link = "linked" } = {}) {
       state.connection = null;
       return had;
     },
+    async setAiAssist(userId, enabled) {
+      calls.aiAssist.push({ enabled, userId });
+      if (state.connection) state.connection.aiAssistEnabled = enabled;
+      return state.connection !== null;
+    },
     async finishEvent(eventId, status, errorCode) {
       finished.push({ errorCode, eventId, status });
     },
@@ -56,6 +70,7 @@ function harness({ connection = null, claim = "new", link = "linked" } = {}) {
   return {
     calls,
     deps: {
+      assistant,
       now: () => NOW,
       sendMessage: async (chatId, text) => {
         sent.push({ chatId, text });
@@ -171,7 +186,7 @@ test("replies never expose internal identifiers", async () => {
 test("/status reports the base currency and waiting drafts", async () => {
   const h = harness({ connection: CONNECTION });
   await handleTelegramUpdate(update("/status"), h.deps);
-  assert.equal(h.sent[0].text, "Linked. Base currency NGN. 3 drafts waiting for review.");
+  assert.equal(h.sent[0].text, "Linked. Base currency NGN. 3 drafts waiting for review. AI assistance: not set up.");
 });
 
 test("/disconnect revokes the link and is honest when nothing is linked", async () => {

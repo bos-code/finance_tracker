@@ -1,6 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2.99.1";
 
 import {
+  createAssistant,
+  type AiFeature,
+  type AssistantQuotaStore,
+} from "./assistant.ts";
+import {
   handleTelegramUpdate,
   type ActiveConnection,
   type ChannelStore,
@@ -12,6 +17,11 @@ import {
 const JSON_HEADERS = { "content-type": "application/json" };
 const PROVIDER = "telegram";
 const REVIEWABLE_LIFECYCLES = ["draft", "pending_confirmation", "needs_review"];
+
+function intFromEnv(name: string, fallback: number) {
+  const parsed = Number.parseInt(Deno.env.get(name) ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -68,7 +78,7 @@ function createStore(
     async findConnection(providerUserId) {
       const { data: connection, error } = await admin
         .from("channel_connections")
-        .select("id, owner_user_id, workspace_id")
+        .select("id, owner_user_id, workspace_id, ai_assist_enabled")
         .eq("provider", PROVIDER)
         .eq("provider_user_id", providerUserId)
         .eq("status", "active")
@@ -84,6 +94,7 @@ function createStore(
       if (workspaceError) throw workspaceError;
 
       return {
+        aiAssistEnabled: connection.ai_assist_enabled !== false,
         defaultCurrency: workspace?.default_currency ?? "USD",
         id: connection.id,
         ownerUserId: connection.owner_user_id,
@@ -111,6 +122,18 @@ function createStore(
       return data === true;
     },
 
+    async setAiAssist(providerUserId, enabled) {
+      const { data, error } = await admin
+        .from("channel_connections")
+        .update({ ai_assist_enabled: enabled })
+        .eq("provider", PROVIDER)
+        .eq("provider_user_id", providerUserId)
+        .eq("status", "active")
+        .select("id");
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    },
+
     async insertDraft(draft) {
       const { error } = await admin.from("transaction_drafts").insert(draft);
       if (!error) return { duplicate: false };
@@ -130,6 +153,38 @@ function createStore(
         .gt("expires_at", new Date().toISOString());
       if (error) throw error;
       return count ?? 0;
+    },
+  };
+}
+
+function createQuotaStore(
+  admin: ReturnType<typeof createClient>,
+): AssistantQuotaStore {
+  const userLimit = intFromEnv("GEMINI_DAILY_USER_LIMIT", 30);
+  const globalLimit = intFromEnv("GEMINI_DAILY_GLOBAL_LIMIT", 300);
+
+  return {
+    async claim(ownerUserId: string, feature: AiFeature, model: string) {
+      const { data, error } = await admin.rpc("claim_ai_quota", {
+        p_feature: feature,
+        p_global_daily_limit: globalLimit,
+        p_model: model,
+        p_owner_user_id: ownerUserId,
+        p_user_daily_limit: userLimit,
+      });
+      if (error) throw error;
+      const row = (data as { quota_outcome: string; quota_usage_id: string | null }[])[0];
+      return { outcome: row.quota_outcome, usageId: row.quota_usage_id };
+    },
+
+    async finish(usageId, outcome, inputTokens, outputTokens) {
+      const { error } = await admin.rpc("finish_ai_usage", {
+        p_input_tokens: inputTokens,
+        p_outcome: outcome,
+        p_output_tokens: outputTokens,
+        p_usage_id: usageId,
+      });
+      if (error) throw error;
     },
   };
 }
@@ -173,7 +228,18 @@ Deno.serve(async (request) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // The assistant stays off unless both the key and an explicit model name are
+  // set; the model is a secret so it can change without a redeploy.
+  const assistant = createAssistant(
+    {
+      apiKey: Deno.env.get("GEMINI_API_KEY"),
+      model: Deno.env.get("GEMINI_MODEL"),
+    },
+    createQuotaStore(admin),
+  );
+
   const result = await handleTelegramUpdate(update, {
+    assistant,
     sendMessage: async (chatId, text) => {
       const response = await fetch(
         `https://api.telegram.org/bot${botToken}/sendMessage`,

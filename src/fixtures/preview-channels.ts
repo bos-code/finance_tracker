@@ -28,6 +28,7 @@ export async function createPreviewTelegramLinkCode(): Promise<TelegramLinkCode>
 
 export async function simulatePreviewTelegramLink() {
   connection = {
+    ai_assist_enabled: true,
     id: "preview-telegram-connection",
     linked_at: new Date().toISOString(),
     owner_user_id: PREVIEW_USER.uid,

@@ -1,6 +1,13 @@
 import type { TransactionDraftInsert } from "../../../src/contracts/backend.ts";
+import {
+  aiFillableFieldsFor,
+  aiSuggestedFieldNames,
+  applyAiSuggestion,
+} from "../../../src/features/assistant/ai-suggestions.ts";
 import { isPlausibleLinkCode } from "../../../src/features/channels/telegram-link.ts";
 import { buildTransactionDraftInsert } from "../../../src/features/drafts/draft-capture.ts";
+import { DEFAULT_CATEGORY_RULES } from "../../../src/features/drafts/transaction-parser.ts";
+import type { AssistantPort } from "./assistant.ts";
 
 /**
  * Telegram update handling, kept free of Deno and network globals so it can be
@@ -31,6 +38,7 @@ export type ActiveConnection = {
   ownerUserId: string;
   workspaceId: string;
   defaultCurrency: string;
+  aiAssistEnabled: boolean;
 };
 
 export type ClaimOutcome = "new" | "duplicate" | "rate_limited";
@@ -51,6 +59,7 @@ export interface ChannelStore {
     chatId: string,
   ): Promise<LinkOutcome>;
   disconnect(providerUserId: string): Promise<boolean>;
+  setAiAssist(providerUserId: string, enabled: boolean): Promise<boolean>;
   insertDraft(draft: TransactionDraftInsert): Promise<{ duplicate: boolean }>;
   countReviewableDrafts(connection: ActiveConnection): Promise<number>;
 }
@@ -59,6 +68,8 @@ export type HandlerDeps = {
   store: ChannelStore;
   sendMessage: (chatId: string, text: string) => Promise<void>;
   now?: () => Date;
+  /** Optional: when absent or disabled the bot is purely deterministic. */
+  assistant?: AssistantPort;
 };
 
 export type HandlerResult = {
@@ -66,6 +77,17 @@ export type HandlerResult = {
 };
 
 export const MESSAGES = {
+  aiDisabledForChat:
+    "AI assistance is off for this chat. Send /ai on to turn it back on.",
+  aiOff:
+    "AI assistance is off. Your messages will not be sent to the AI provider.",
+  aiOn: "AI assistance is on. Short messages may be sent to an AI provider to help read them or answer questions.",
+  aiUnavailable:
+    "The assistant isn’t set up yet, so I can only read messages with simple rules for now.",
+  aiUsage: "Send /ai on or /ai off.",
+  askUsage: "Ask me something after /ask, for example: /ask how do I attach a receipt?",
+  assistantBusy:
+    "The assistant isn’t available right now. Send /help to see what I can do.",
   alreadyLinked:
     "This chat is already linked to your Finance Tracker account. Send /help to see what I can do.",
   disconnected:
@@ -75,6 +97,8 @@ export const MESSAGES = {
   help: [
     "Send a message like “spent 2500 on lunch” and I’ll save it as a draft for you to review in the app.",
     "",
+    "/ask – ask how to use Finance Tracker",
+    "/ai on|off – allow or stop AI assistance",
     "/status – check your link",
     "/disconnect – unlink this chat",
     "/help – show this message",
@@ -92,6 +116,8 @@ export const MESSAGES = {
     "Receipt uploads over Telegram are coming soon. For now, attach receipts to a transaction in the app.",
   notLinked:
     "This chat isn’t linked to a Finance Tracker account yet. Open the app → Profile → Connections → Telegram, then send /link followed by your code.",
+  notATransaction:
+    "I couldn’t find an amount or whether it was income or an expense. Try something like “spent 2500 on lunch”, or send /help.",
   notLinkedDisconnect: "This chat isn’t linked, so there is nothing to disconnect.",
   privateOnly: "Please message me in a private chat to use Finance Tracker.",
   tooLong: "That message is too long. Please keep it under 4,000 characters.",
@@ -135,10 +161,38 @@ export function draftSummary(draft: TransactionDraftInsert) {
     ? `Saved to your drafts: ${parts.join(" · ")}`
     : "Saved to your drafts.";
 
+  const suggested = aiSuggestedFieldNames(draft);
+  const aiNote = suggested.length
+    ? `\nThe AI assistant suggested: ${suggested.join(", ")}. Please check ${suggested.length === 1 ? "it" : "them"} in the app.`
+    : "";
+
   if (draft.missing_fields.length > 0) {
-    return `${headline}\nStill needed: ${draft.missing_fields.join(", ")}. Open Finance Tracker → Drafts to finish it.`;
+    return `${headline}${aiNote}\nStill needed: ${draft.missing_fields.join(", ")}. Open Finance Tracker → Drafts to finish it.`;
   }
-  return `${headline}\nOpen Finance Tracker → Drafts to review and confirm.`;
+  return `${headline}${aiNote}\nOpen Finance Tracker → Drafts to review and confirm.`;
+}
+
+function assistantReady(deps: HandlerDeps, connection: ActiveConnection) {
+  return Boolean(deps.assistant?.enabled && connection.aiAssistEnabled);
+}
+
+async function answerQuestion(
+  deps: HandlerDeps,
+  connection: ActiveConnection,
+  chatId: string,
+  question: string,
+) {
+  if (!deps.assistant?.enabled) {
+    await deps.sendMessage(chatId, MESSAGES.aiUnavailable);
+  } else if (!connection.aiAssistEnabled) {
+    await deps.sendMessage(chatId, MESSAGES.aiDisabledForChat);
+  } else {
+    const answer = await deps.assistant.answer({
+      ownerUserId: connection.ownerUserId,
+      question,
+    });
+    await deps.sendMessage(chatId, answer ?? MESSAGES.assistantBusy);
+  }
 }
 
 async function linkChat(
@@ -213,9 +267,43 @@ async function route(
           return "processed";
         }
         const waiting = await deps.store.countReviewableDrafts(connection);
+        const ai = !deps.assistant?.enabled
+          ? "not set up"
+          : connection.aiAssistEnabled
+            ? "on"
+            : "off";
         await deps.sendMessage(
           chatId,
-          `Linked. Base currency ${connection.defaultCurrency}. ${plural(waiting, "draft")} waiting for review.`,
+          `Linked. Base currency ${connection.defaultCurrency}. ${plural(waiting, "draft")} waiting for review. AI assistance: ${ai}.`,
+        );
+        return "processed";
+      }
+      case "ask": {
+        const connection = await deps.store.findConnection(userId);
+        if (!connection) {
+          await deps.sendMessage(chatId, MESSAGES.notLinked);
+        } else if (!command.argument) {
+          await deps.sendMessage(chatId, MESSAGES.askUsage);
+        } else {
+          await answerQuestion(deps, connection, chatId, command.argument);
+        }
+        return "processed";
+      }
+      case "ai": {
+        const connection = await deps.store.findConnection(userId);
+        if (!connection) {
+          await deps.sendMessage(chatId, MESSAGES.notLinked);
+          return "processed";
+        }
+        const choice = command.argument.toLowerCase();
+        if (choice !== "on" && choice !== "off") {
+          await deps.sendMessage(chatId, MESSAGES.aiUsage);
+          return "processed";
+        }
+        await deps.store.setAiAssist(userId, choice === "on");
+        await deps.sendMessage(
+          chatId,
+          choice === "on" ? MESSAGES.aiOn : MESSAGES.aiOff,
         );
         return "processed";
       }
@@ -249,7 +337,7 @@ async function route(
     return "processed";
   }
 
-  const draft = buildTransactionDraftInsert({
+  const parsed = buildTransactionDraftInsert({
     defaultCurrency: connection.defaultCurrency,
     now: deps.now?.(),
     ownerUserId: connection.ownerUserId,
@@ -258,6 +346,39 @@ async function route(
     text,
     workspaceId: connection.workspaceId,
   });
+
+  // No amount and no income/expense wording: this is a question or small talk,
+  // not a transaction. Don't save an empty draft for it.
+  if (
+    fieldValue(parsed, "amount") === null &&
+    fieldValue(parsed, "type") === null
+  ) {
+    if (assistantReady(deps, connection)) {
+      const answer = await deps.assistant!.answer({
+        ownerUserId: connection.ownerUserId,
+        question: text,
+      });
+      await deps.sendMessage(chatId, answer ?? MESSAGES.notATransaction);
+    } else {
+      await deps.sendMessage(chatId, MESSAGES.notATransaction);
+    }
+    return "processed";
+  }
+
+  // Let the AI suggest only what the rules could not read. Suggestions stay
+  // below the review threshold, so the draft still needs a human check.
+  let draft = parsed;
+  const fieldsNeeded = aiFillableFieldsFor(parsed);
+  if (fieldsNeeded.length > 0 && assistantReady(deps, connection)) {
+    const suggestion = await deps.assistant!.suggestFields({
+      categoryKeys: DEFAULT_CATEGORY_RULES.map((rule) => rule.key),
+      fieldsNeeded,
+      ownerUserId: connection.ownerUserId,
+      text,
+    });
+    if (suggestion) draft = applyAiSuggestion(parsed, suggestion);
+  }
+
   const { duplicate } = await deps.store.insertDraft(draft);
   await deps.sendMessage(
     chatId,

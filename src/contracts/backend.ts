@@ -352,6 +352,8 @@ export type BotConnectionContract = {
   provider_user_id: string;
   provider_chat_id: string;
   status: "active" | "revoked";
+  /** False when the user sent /ai off: their messages never go to the AI provider. */
+  ai_assist_enabled: boolean;
   linked_at: ISODateTimeString;
   revoked_at: ISODateTimeString | null;
 };
@@ -359,13 +361,14 @@ export type BotConnectionContract = {
 export type AIUsageContract = {
   id: EntityId;
   owner_user_id: EntityId;
-  feature: "transaction_parser" | "receipt_parser";
+  feature: "transaction_parser" | "assistant_help" | "receipt_parser";
   provider: "gemini";
   model: string;
   input_tokens: number;
   output_tokens: number;
-  estimated_cost_usd: number;
-  outcome: "success" | "failure" | "limited" | "fallback";
+  /** Null until a price table is configured; token counts are authoritative. */
+  estimated_cost_usd: number | null;
+  outcome: "pending" | "success" | "failure" | "fallback";
   created_at: ISODateTimeString;
 };
 
