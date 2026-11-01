@@ -233,7 +233,7 @@ export function DraftFinalizationScreen() {
 
         <PageHeading
           description="Only reviewed drafts appear here. Finalization creates the permanent ledger record and links the draft to it using an idempotent write."
-          eyebrow="CONFIRM / STAGE 5"
+          eyebrow="CONFIRM / DRAFTS"
           title="Save ready drafts"
         />
 

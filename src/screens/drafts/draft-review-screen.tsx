@@ -293,7 +293,7 @@ export function DraftReviewScreen() {
 
         <PageHeading
           description="Capture transaction wording, inspect every extracted field, correct uncertainty, and only then move the draft toward confirmation."
-          eyebrow="REVIEW / STAGE 5"
+          eyebrow="REVIEW / DRAFTS"
           title="Transaction drafts"
         />
 

@@ -573,7 +573,7 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
-        description="These controls are a frontend preview until notification preferences are persisted by Backend Stage 9."
+        description="These switches are a preview. They are not saved yet, so they reset when you close the app."
         onClose={closeSheet}
         title="Notifications"
         visible={activeSheet === "notifications"}>
@@ -626,7 +626,7 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
-        description="Current guarantees and the controls still waiting on backend contracts."
+        description="What protects your data today, and what is still to come."
         onClose={closeSheet}
         title="Data controls"
         visible={activeSheet === "privacy"}>
@@ -637,21 +637,21 @@ export function ProfileScreen() {
           statusColor={palette.income}
         />
         <ReadinessRow
-          description="Images and PDFs will use private buckets and signed URLs."
+          description="Receipts are stored in a private bucket and opened through short-lived signed links."
           label="Private receipts"
-          status="Stage 4"
-          statusColor={palette.signalViolet}
+          status="Active"
+          statusColor={palette.income}
         />
         <ReadinessRow
-          description="Parser, OCR, and AI fields will require explicit confirmation."
+          description="Parsed and AI-suggested fields are saved as drafts that need your confirmation."
           label="Review before apply"
-          status="Stages 5–9"
-          statusColor={palette.signalAmber}
+          status="Active"
+          statusColor={palette.income}
         />
         <ReadinessRow
-          description="Portable export, retention, and account deletion require final security contracts."
+          description="Portable export, retention, and account deletion are not available yet."
           label="Export and deletion"
-          status="Stage 10"
+          status="Planned"
           statusColor={palette.textQuiet}
         />
       </FinanceSheet>
