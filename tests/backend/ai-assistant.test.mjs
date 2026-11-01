@@ -12,6 +12,7 @@ import {
   AI_FIELD_REASON,
   aiFillableFieldsFor,
   applyAiSuggestion,
+  numberWordAmounts,
   validateAiSuggestion,
 } from "../../src/features/assistant/ai-suggestions.ts";
 import {
@@ -62,17 +63,57 @@ test("an amount that appears in the message is accepted, including 50k style", (
   assert.equal(withComma.amount, 2500);
 });
 
-test("number words allow an amount without digits, but only then", () => {
-  const spelled = validateAiSuggestion(
-    { amount: 2000 },
-    { categoryKeys: CATEGORY_KEYS, text: "spent two thousand on lunch" },
+test("a number word does not license an unrelated amount", () => {
+  const context = {
+    categoryKeys: CATEGORY_KEYS,
+    text: "spent two thousand on lunch",
+  };
+  assert.equal(validateAiSuggestion({ amount: 2000 }, context).amount, 2000);
+  // The message has a number word, but 9999 is not what it says.
+  assert.equal(validateAiSuggestion({ amount: 9999 }, context).amount, undefined);
+  assert.equal(validateAiSuggestion({ amount: 2 }, context).amount, undefined);
+  // No number at all, in digits or words.
+  assert.equal(
+    validateAiSuggestion(
+      { amount: 2000 },
+      { categoryKeys: CATEGORY_KEYS, text: "spent some on lunch" },
+    ).amount,
+    undefined,
   );
-  assert.equal(spelled.amount, 2000);
-  const none = validateAiSuggestion(
+});
+
+test("amounts written in words are understood exactly", () => {
+  const cases = [
+    ["twenty five", [25]],
+    ["twenty-five", [25]],
+    ["a hundred", [100]],
+    ["one hundred and fifty", [150]],
+    ["two thousand five hundred", [2500]],
+    ["two thousand and five", [2005]],
+    ["one hundred thousand", [100000]],
+    ["three million two hundred thousand", [3200000]],
+    ["five and ten", [5, 10]],
+    ["I paid nothing", []],
+    // Words that exist on every JavaScript object must not read as numbers.
+    ["paid the constructor and toString valueOf hasOwnProperty", []],
+    ["constructor twenty constructor", [20]],
+  ];
+  for (const [text, expected] of cases) {
+    assert.deepEqual(numberWordAmounts(text), expected, text);
+  }
+});
+
+test("digits followed by a scale word are grounded too", () => {
+  const ok = validateAiSuggestion(
     { amount: 2000 },
-    { categoryKeys: CATEGORY_KEYS, text: "spent some on lunch" },
+    { categoryKeys: CATEGORY_KEYS, text: "got 2 thousand from a client" },
   );
-  assert.equal(none.amount, undefined);
+  assert.equal(ok.amount, 2000);
+  const million = validateAiSuggestion(
+    { amount: 1500000 },
+    { categoryKeys: CATEGORY_KEYS, text: "sold the car for 1.5 million" },
+  );
+  assert.equal(million.amount, 1500000);
 });
 
 test("bad shapes, enums, and unknown categories are dropped field by field", () => {
@@ -489,6 +530,17 @@ test("/ask and /ai explain themselves when used wrongly or before linking", asyn
   assert.equal(unlinked.sent.at(-1).text, MESSAGES.notLinked);
 });
 
+test("/status tells an opted-out user how to turn AI on", async () => {
+  const assistant = fakeAssistant();
+  const h = botHarness({
+    assistant,
+    connection: { ...CONNECTION, aiAssistEnabled: false },
+  });
+  await handleTelegramUpdate(incoming("/status"), h.deps);
+  assert.match(h.sent[0].text, /AI assistance: off \(send \/ai on to enable\)\./);
+  assert.equal(assistant.calls.answer.length, 0);
+});
+
 test("/ask says plainly when the assistant is not set up", async () => {
   const h = botHarness({ assistant: fakeAssistant({ enabled: false }) });
   await handleTelegramUpdate(incoming("/ask how do I link?"), h.deps);
@@ -512,7 +564,8 @@ test("AI usage tables and functions are service_role only", async () => {
   assert.match(sql, /'circuit_open'/);
   assert.match(sql, /'user_limited'/);
   assert.match(sql, /'global_limited'/);
-  assert.match(sql, /ai_assist_enabled boolean not null default true/);
+  // Sending a user's messages to a third party is opt-in, never the default.
+  assert.match(sql, /ai_assist_enabled boolean not null default false/);
 });
 
 test("the Gemini key is read from the function environment only", async () => {

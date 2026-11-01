@@ -374,7 +374,8 @@
 - Gemini assistant (Backend Stage 6, Telegram only): parsing fallback for fields the
   rules could not read, plus `/ask` and conversational help. Grounded and validated
   suggestions that always stay flagged for review, per-user and project daily quotas,
-  a circuit breaker, a `/ai on|off` privacy switch, and a token usage ledger. Off
+  a circuit breaker, an opt-in `/ai on|off` privacy switch (off until the user turns it on),
+  and a token usage ledger. Off
   until `GEMINI_API_KEY` and `GEMINI_MODEL` are set. Not yet exercised against the real
   Gemini API: only unit-tested with a fake client.
 - Not built yet: inline Confirm/Edit/Cancel in chat, receipt upload over

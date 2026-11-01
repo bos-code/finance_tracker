@@ -9,7 +9,8 @@ the app (Profile → Connections → Telegram).
 - `/start <code>`, `/link <code>`: link this chat to the account that created the code.
 - `/status`, `/help`, `/disconnect`.
 - `/ask <question>` and plain questions: short help about using Finance Tracker (needs the Gemini assistant, below).
-- `/ai on|off`: per-chat switch. When off, this chat's messages are never sent to the AI provider.
+- `/ai on|off`: per-chat consent switch. **Off by default**: nothing is sent to the AI provider
+  until the user sends `/ai on`.
 - Any other private text message is parsed by the same deterministic parser the
   app uses and saved as a **draft** (`source = telegram`). Drafts appear in the
   app's Drafts review screen; nothing becomes a transaction without review.
@@ -36,7 +37,9 @@ What it does, and what it is not allowed to do:
   No ids, balances, or history.
 - Every call is reserved against per-user and project-wide daily limits (`claim_ai_quota`) and
   logged with token counts in `ai_usage`. Five failures with no success in five minutes opens a
-  circuit breaker. If anything fails the bot silently falls back to its built-in rules.
+  circuit breaker. If Gemini is unavailable, limited, or returns something unusable, draft
+  parsing silently keeps the built-in rules' result. `/ask` has no rules-based answer, so it
+  replies that the assistant is unavailable and points to `/help`.
 
 Non-private chats, bot senders, and unsupported updates are ignored. Retried
 updates are de-duplicated by `update_id`; chats are limited to 30 updates per

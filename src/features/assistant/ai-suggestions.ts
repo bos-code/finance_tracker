@@ -27,8 +27,24 @@ export type AiSuggestion = {
   category_key?: string;
 };
 
-const NUMBER_WORDS =
-  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|half|dozen)\b/i;
+const UNIT_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+  fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+  nineteen: 19,
+};
+const TENS_WORDS: Record<string, number> = {
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70,
+  eighty: 80, ninety: 90,
+};
+const SCALE_WORDS: Record<string, number> = {
+  thousand: 1_000, million: 1_000_000, billion: 1_000_000_000,
+};
+
+// `word in table` is also true for inherited names such as "constructor", so
+// look words up on the table's own keys only.
+const hasOwn = (table: Record<string, number>, key: string) =>
+  Object.prototype.hasOwnProperty.call(table, key);
 
 /** Every numeric amount that literally appears in the message. */
 export function amountsInText(text: string): number[] {
@@ -38,15 +54,79 @@ export function amountsInText(text: string): number[] {
     .filter((value): value is number => value !== null);
 }
 
+/** "2 thousand" / "1.5 million": digits followed by a scale word. */
+function scaledDigitAmounts(text: string): number[] {
+  const amounts: number[] = [];
+  for (const match of text.matchAll(
+    /(\d[\d,]*(?:\.\d+)?)\s*(thousand|million|billion)\b/gi,
+  )) {
+    const base = Number(match[1].replace(/,/g, ""));
+    const scale = SCALE_WORDS[match[2].toLowerCase()];
+    if (Number.isFinite(base) && base > 0) amounts.push(base * scale);
+  }
+  return amounts;
+}
+
+/**
+ * Amounts written in English words, such as "two thousand five hundred" (2500)
+ * or "twenty-five" (25). Each run of number words is one amount, so
+ * "five and ten" is 5 and 10, not 15.
+ */
+export function numberWordAmounts(text: string): number[] {
+  const words = text.toLowerCase().replace(/-/g, " ").match(/[a-z]+|\d[\d,]*(?:\.\d+)?/g) ?? [];
+  const values: number[] = [];
+  let total = 0;
+  let current = 0;
+  let active = false;
+  let lastWasMagnitude = false;
+
+  const flush = () => {
+    if (active && total + current > 0) values.push(total + current);
+    total = 0;
+    current = 0;
+    active = false;
+    lastWasMagnitude = false;
+  };
+
+  for (const word of words) {
+    if (hasOwn(UNIT_WORDS, word)) {
+      current += UNIT_WORDS[word];
+      active = true;
+      lastWasMagnitude = false;
+    } else if (hasOwn(TENS_WORDS, word)) {
+      current += TENS_WORDS[word];
+      active = true;
+      lastWasMagnitude = false;
+    } else if (word === "hundred") {
+      current = (current || 1) * 100;
+      active = true;
+      lastWasMagnitude = true;
+    } else if (hasOwn(SCALE_WORDS, word)) {
+      total += (current || 1) * SCALE_WORDS[word];
+      current = 0;
+      active = true;
+      lastWasMagnitude = true;
+    } else if (word === "and" && active && lastWasMagnitude) {
+      // "one hundred and fifty": "and" continues the same amount.
+      lastWasMagnitude = false;
+    } else {
+      flush();
+    }
+  }
+  flush();
+  return values;
+}
+
 function amountIsGrounded(amount: number, text: string): boolean {
   const close = (a: number, b: number) =>
     Math.abs(a - b) <= Math.max(1e-9, Math.abs(b) * 1e-9);
-  if (amountsInText(text).some((candidate) => close(candidate, amount))) {
-    return true;
-  }
-  // "two thousand" has no digits to compare against, so allow a suggestion only
-  // when the message really contains number words.
-  return NUMBER_WORDS.test(text);
+  // The suggested amount has to be one the user actually wrote, as digits or
+  // as words. Merely containing a number word is not enough.
+  return [
+    ...amountsInText(text),
+    ...scaledDigitAmounts(text),
+    ...numberWordAmounts(text),
+  ].some((candidate) => close(candidate, amount));
 }
 
 /**

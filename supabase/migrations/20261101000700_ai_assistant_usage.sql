@@ -1,7 +1,8 @@
 -- Finance Tracker Backend Stage 6 (controlled AI assistance)
 -- Purpose: usage ledger, daily quotas, and a circuit breaker for the Gemini
 -- assistant, plus a per-connection switch so each user controls whether their
--- Telegram messages may be sent to the AI provider.
+-- Telegram messages may be sent to the AI provider. The switch is opt-in: it
+-- defaults to off, and a user turns it on with /ai on.
 -- Prerequisite: 20261022000600_telegram_channel_connections.sql.
 -- Trust model: everything here is service_role only. Clients never read or write
 -- the usage ledger, and the AI key never leaves the Edge Function environment.
@@ -10,10 +11,10 @@
 begin;
 
 alter table public.channel_connections
-  add column ai_assist_enabled boolean not null default true;
+  add column ai_assist_enabled boolean not null default false;
 
 comment on column public.channel_connections.ai_assist_enabled is
-  'When false the bot never sends this user''s messages to the AI provider (/ai off).';
+  'Opt-in consent: the bot sends this user''s messages to the AI provider only after /ai on.';
 
 create table public.ai_usage (
   id uuid primary key default gen_random_uuid(),

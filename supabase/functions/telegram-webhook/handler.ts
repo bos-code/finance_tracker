@@ -78,7 +78,7 @@ export type HandlerResult = {
 
 export const MESSAGES = {
   aiDisabledForChat:
-    "AI assistance is off for this chat. Send /ai on to turn it back on.",
+    "AI assistance is off for this chat. Send /ai on to turn it on.",
   aiOff:
     "AI assistance is off. Your messages will not be sent to the AI provider.",
   aiOn: "AI assistance is on. Short messages may be sent to an AI provider to help read them or answer questions.",
@@ -271,7 +271,7 @@ async function route(
           ? "not set up"
           : connection.aiAssistEnabled
             ? "on"
-            : "off";
+            : "off (send /ai on to enable)";
         await deps.sendMessage(
           chatId,
           `Linked. Base currency ${connection.defaultCurrency}. ${plural(waiting, "draft")} waiting for review. AI assistance: ${ai}.`,

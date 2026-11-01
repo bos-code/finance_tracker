@@ -361,7 +361,7 @@ export type BotConnectionContract = {
 export type AIUsageContract = {
   id: EntityId;
   owner_user_id: EntityId;
-  feature: "transaction_parser" | "assistant_help" | "receipt_parser";
+  feature: "transaction_parser" | "assistant_help";
   provider: "gemini";
   model: string;
   input_tokens: number;
