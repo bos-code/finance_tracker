@@ -1,6 +1,5 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { SignalThreads } from "@/components/visuals/signal-threads";
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import {
@@ -27,6 +26,8 @@ export function AuthShell({
   onBack?: () => void;
   title: string;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <SignalThreads intensity="visible" />
@@ -48,7 +49,7 @@ export function AuthShell({
             </View>
             <View style={styles.brandCopy}>
               <Text style={styles.brandName}>FINANCE TRACKER</Text>
-              <Text style={styles.brandSystem}>OBSIDIAN THREAD / 01</Text>
+              <Text style={styles.brandSystem}>Personal money tracker</Text>
             </View>
             {onBack ? (
               <Pressable
@@ -79,7 +80,7 @@ export function AuthShell({
 
           <View style={styles.form}>{children}</View>
           <Text style={styles.footer}>
-            YOUR RECORD / USER-SCOPED / REVIEW BEFORE AUTOMATION
+            Your records are private to your account.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -87,15 +88,16 @@ export function AuthShell({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   safeArea: { backgroundColor: palette.canvas, flex: 1 },
   fill: { flex: 1 },
   scrollContent: {
     alignSelf: "center",
     flexGrow: 1,
     maxWidth: 560,
-    paddingBottom: 40,
-    paddingHorizontal: 24,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
     width: "100%",
   },
   brandRow: {
@@ -103,7 +105,7 @@ const styles = StyleSheet.create({
     borderBottomColor: palette.line,
     borderBottomWidth: 1,
     flexDirection: "row",
-    minHeight: 82,
+    minHeight: 68,
   },
   brandMark: {
     alignItems: "center",
@@ -119,14 +121,13 @@ const styles = StyleSheet.create({
   brandName: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(12),
     letterSpacing: 0.8,
   },
   brandSystem: {
-    color: palette.textQuiet,
-    fontFamily: fonts.ledger,
-    fontSize: 7,
-    letterSpacing: 0.45,
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: fs(12),
   },
   backButton: {
     alignItems: "center",
@@ -137,37 +138,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 40,
   },
-  heading: { gap: 10, paddingBottom: 34, paddingTop: 42 },
+  heading: { gap: 10, paddingBottom: 22, paddingTop: 22 },
   eyebrowRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   headingThread: { backgroundColor: palette.signalViolet, height: 1, width: 34 },
   eyebrow: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(11),
     letterSpacing: 0.85,
   },
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 43,
-    letterSpacing: -1,
-    lineHeight: 49,
+    fontSize: fs(34),
+    letterSpacing: -0.5,
+    lineHeight: lh(34, 40),
   },
   description: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: fs(15),
+    lineHeight: lh(15, 22),
     maxWidth: 450,
   },
-  form: { gap: 22 },
+  form: { gap: 18 },
   footer: {
-    color: palette.textQuiet,
-    fontFamily: fonts.ledger,
-    fontSize: 7,
-    letterSpacing: 0.35,
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: fs(13),
     marginTop: "auto",
-    paddingTop: 38,
+    paddingTop: 28,
     textAlign: "center",
   },
 });

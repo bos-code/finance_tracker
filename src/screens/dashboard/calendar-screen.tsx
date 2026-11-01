@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ReceiptSheet } from "@/components/attachments/receipt-sheet";
 import { LedgerEntryRow } from "@/components/finance/ledger-entry-row";
 import { PageHeading } from "@/components/finance/page-heading";
@@ -16,8 +17,7 @@ import {
   type Transaction,
 } from "@/services/supabase/transaction-service";
 import { useAppStore } from "@/store/use-app-store";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { formatCompactMoney, formatMoney } from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -120,6 +120,8 @@ function CalendarGrid({
   onSelectDay: (dateKey: string) => void;
   selectedDay: string | null;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const today = new Date();
   const todayKey = dateKeyFor(
     today.getFullYear(),
@@ -202,6 +204,8 @@ function CalendarGrid({
 }
 
 export function CalendarScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const currency = useAppStore((state) => state.currency);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -576,7 +580,8 @@ export function CalendarScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   listContent: {
     alignSelf: "center",
     maxWidth: 720,
@@ -596,7 +601,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     minHeight: 48,
     paddingVertical: 0,
   },
@@ -618,10 +623,10 @@ const styles = StyleSheet.create({
   filterText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: "700",
   },
-  filterTextSelected: { color: palette.black },
+  filterTextSelected: { color: palette.onPrimary },
   resultLine: {
     alignItems: "center",
     flexDirection: "row",
@@ -631,14 +636,14 @@ const styles = StyleSheet.create({
   resultCount: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   resultRule: { backgroundColor: palette.line, flex: 1, height: 1 },
   resultCode: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   sectionHeader: {
     alignItems: "center",
@@ -654,14 +659,14 @@ const styles = StyleSheet.create({
   sectionDate: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.55,
     textTransform: "uppercase",
   },
   sectionCount: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   stateWrap: { paddingHorizontal: 20, paddingTop: 10 },
   calendarPanel: {
@@ -675,7 +680,7 @@ const styles = StyleSheet.create({
   weekday: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     textAlign: "center",
     width: "14.2857%",
   },
@@ -692,7 +697,7 @@ const styles = StyleSheet.create({
     width: "14.2857%",
   },
   calendarCellSelected: {
-    backgroundColor: withAlpha(palette.white, 0.04),
+    backgroundColor: withAlpha(palette.tint, 0.04),
     borderColor: palette.lineStrong,
   },
   dayNumberWrap: {
@@ -706,16 +711,16 @@ const styles = StyleSheet.create({
   dayNumber: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: "700",
   },
-  todayNumber: { color: palette.black },
+  todayNumber: { color: palette.onPrimary },
   dayTotalWrap: { alignItems: "center", gap: 4, marginTop: 5 },
   daySignal: { height: 1, width: 15 },
   dayTotal: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 6,
+    fontSize: fs(6),
     maxWidth: 42,
   },
   emptyDaySignal: {
@@ -734,13 +739,13 @@ const styles = StyleSheet.create({
   selectedLabel: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.65,
   },
   selectedCount: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   selectedLedger: { marginHorizontal: 20 },
 });

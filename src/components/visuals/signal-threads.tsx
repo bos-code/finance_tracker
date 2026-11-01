@@ -1,4 +1,5 @@
-import { palette, withAlpha } from "@/theme/colors";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+import { withAlpha } from "@/theme/colors";
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
@@ -20,6 +21,8 @@ type SignalThreadsProps = {
  * financial UI remains monochrome. The whole layer moves on transform only.
  */
 export function SignalThreads({ intensity = "quiet" }: SignalThreadsProps) {
+  const styles = useStyles(createStyles);
+  const { effectsOpacity } = useTheme();
   const reduceMotion = useReducedMotion();
   const phase = useSharedValue(0);
 
@@ -33,14 +36,22 @@ export function SignalThreads({ intensity = "quiet" }: SignalThreadsProps) {
     return () => cancelAnimation(phase);
   }, [phase, reduceMotion]);
 
+  // The user's "background effects" setting decides how strong the layer is.
+  const layerOpacity = Math.min(
+    1,
+    effectsOpacity * (intensity === "visible" ? 1.45 : 1),
+  );
+
   const motionStyle = useAnimatedStyle(() => ({
-    opacity: intensity === "visible" ? 0.9 : 0.62,
+    opacity: layerOpacity,
     transform: [
       { translateX: interpolate(phase.value, [0, 1], [-10, 14]) },
       { translateY: interpolate(phase.value, [0, 1], [4, -8]) },
       { rotate: `${interpolate(phase.value, [0, 1], [-1.5, 1.5])}deg` },
     ],
   }));
+
+  if (effectsOpacity <= 0) return null;
 
   return (
     <View pointerEvents="none" style={styles.clip}>
@@ -55,7 +66,8 @@ export function SignalThreads({ intensity = "quiet" }: SignalThreadsProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette }: AppTheme) =>
+  StyleSheet.create({
   clip: {
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",

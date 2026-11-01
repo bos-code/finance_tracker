@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+
 import { StyleSheet, Text, View } from "react-native";
 
 export type SummaryItem = {
@@ -9,6 +9,8 @@ export type SummaryItem = {
 };
 
 export function SummaryRail({ items }: { items: SummaryItem[] }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.container}>
       {items.map((item, index) => {
@@ -35,7 +37,8 @@ export function SummaryRail({ items }: { items: SummaryItem[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   container: {
     borderBottomColor: palette.line,
     borderBottomWidth: 1,
@@ -49,12 +52,12 @@ const styles = StyleSheet.create({
   label: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   value: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 10,
+    fontSize: fs(10),
   },
 });

@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles } from "@/theme/theme-context";
+
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export type SegmentOption<T extends string> = {
@@ -18,6 +18,7 @@ export function SegmentedControl<T extends string>({
   options: SegmentOption<T>[];
   value: T;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View accessibilityLabel={accessibilityLabel} style={styles.container}>
       {options.map((option) => {
@@ -47,27 +48,34 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   container: {
-    borderBottomColor: palette.line,
-    borderBottomWidth: 1,
+    backgroundColor: palette.surface,
+    borderColor: palette.lineStrong,
+    borderRadius: 14,
+    borderWidth: 1,
     flexDirection: "row",
+    gap: 4,
+    padding: 4,
   },
   option: {
     alignItems: "center",
-    borderBottomColor: "transparent",
-    borderBottomWidth: 1,
+    borderRadius: 10,
     flex: 1,
-    minHeight: 46,
     justifyContent: "center",
-    marginBottom: -1,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
-  optionSelected: { borderBottomColor: palette.text },
+  // The chosen option is a solid block, so it is obvious which one is active.
+  optionSelected: { backgroundColor: palette.text },
   label: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(14),
     fontWeight: "700",
+    textAlign: "center",
   },
-  labelSelected: { color: palette.text },
+  labelSelected: { color: palette.onPrimary },
 });

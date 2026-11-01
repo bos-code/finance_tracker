@@ -1,9 +1,9 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { SignalThreads } from "@/components/visuals/signal-threads";
 import { UI_PREVIEW_ENABLED } from "@/config/runtime";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -26,7 +26,7 @@ const STEPS = [
     eyebrow: "POSITION / 01",
     icon: "chart-timeline-variant-shimmer",
     points: ["Living monthly position", "Exact ledger movement"],
-    signal: palette.signalCyan,
+    signal: "signalCyan",
     title: "Know what changed.",
   },
   {
@@ -34,7 +34,7 @@ const STEPS = [
     eyebrow: "CAPTURE / 02",
     icon: "pencil-plus-outline",
     points: ["Offline-safe capture", "Clear pending status"],
-    signal: palette.signalAmber,
+    signal: "signalAmber",
     title: "Capture without friction.",
   },
   {
@@ -42,12 +42,14 @@ const STEPS = [
     eyebrow: "CONTROL / 03",
     icon: "shield-lock-outline",
     points: ["Private by default", "Review before automation"],
-    signal: palette.signalMoss,
+    signal: "signalMoss",
     title: "Keep control of the record.",
   },
 ] as const;
 
 export default function OnboardingScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { isBootstrapping, user } = useAuth();
   const [stepIndex, setStepIndex] = useState(0);
   const [isReady, setIsReady] = useState(UI_PREVIEW_ENABLED);
@@ -134,7 +136,7 @@ export default function OnboardingScreen() {
         <View style={styles.main}>
           <View style={styles.visualField}>
             <View
-              style={[styles.visualThread, { backgroundColor: step.signal }]}
+              style={[styles.visualThread, { backgroundColor: palette[step.signal] }]}
             />
             <View style={styles.visualOrbitLarge} />
             <View style={styles.visualOrbitSmall} />
@@ -152,7 +154,7 @@ export default function OnboardingScreen() {
 
           <View style={styles.copy}>
             <View style={styles.eyebrowRow}>
-              <View style={[styles.copyThread, { backgroundColor: step.signal }]} />
+              <View style={[styles.copyThread, { backgroundColor: palette[step.signal] }]} />
               <Text style={styles.eyebrow}>{step.eyebrow}</Text>
             </View>
             <Text style={styles.title}>{step.title}</Text>
@@ -180,7 +182,7 @@ export default function OnboardingScreen() {
                 style={[
                   styles.progressTrack,
                   index <= stepIndex
-                    ? { backgroundColor: index === stepIndex ? step.signal : palette.textMuted }
+                    ? { backgroundColor: index === stepIndex ? palette[step.signal] : palette.textMuted }
                     : null,
                 ]}
               />
@@ -197,7 +199,7 @@ export default function OnboardingScreen() {
               {isLast ? "Enter Finance Tracker" : "Continue"}
             </Text>
             <MaterialCommunityIcons
-              color={palette.black}
+              color={palette.onPrimary}
               name="arrow-right"
               size={18}
             />
@@ -208,7 +210,8 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   loading: {
     alignItems: "center",
     backgroundColor: palette.canvas,
@@ -244,20 +247,20 @@ const styles = StyleSheet.create({
   brandName: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.75,
   },
   brandMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.4,
   },
   skip: { padding: 10 },
   skipText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: "700",
   },
   main: { flex: 1, justifyContent: "center", paddingVertical: 22 },
@@ -315,7 +318,7 @@ const styles = StyleSheet.create({
     bottom: 12,
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     position: "absolute",
     right: 8,
   },
@@ -325,21 +328,21 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 41,
+    fontSize: fs(41),
     letterSpacing: -0.9,
-    lineHeight: 47,
+    lineHeight: lh(41, 47),
   },
   body: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: fs(12),
+    lineHeight: lh(12, 19),
     maxWidth: 540,
   },
   points: { marginTop: 8 },
@@ -353,14 +356,14 @@ const styles = StyleSheet.create({
   pointIndex: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     width: 25,
   },
   pointRule: { backgroundColor: palette.lineStrong, height: 1, marginRight: 10, width: 20 },
   pointText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
   },
   bottom: { paddingBottom: 18 },
   progress: { flexDirection: "row", gap: 7, marginBottom: 16 },
@@ -374,9 +377,9 @@ const styles = StyleSheet.create({
     minHeight: 54,
   },
   continueText: {
-    color: palette.black,
+    color: palette.onPrimary,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "700",
     marginRight: 10,
   },

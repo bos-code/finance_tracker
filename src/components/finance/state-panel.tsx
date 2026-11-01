@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -16,6 +16,8 @@ export function StatePanel({
   onAction?: () => void;
   title: string;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.container}>
       {loading ? (
@@ -46,7 +48,8 @@ export function StatePanel({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   container: {
     alignItems: "center",
     borderColor: palette.line,
@@ -62,14 +65,14 @@ const styles = StyleSheet.create({
   title: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "700",
   },
   description: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(11),
+    lineHeight: lh(11, 16),
   },
   action: {
     borderBottomColor: palette.textMuted,
@@ -79,7 +82,7 @@ const styles = StyleSheet.create({
   actionText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: "700",
   },
 });

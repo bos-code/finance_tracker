@@ -1,6 +1,6 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ActionButton } from "@/components/finance/action-button";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef } from "react";
@@ -36,6 +36,8 @@ export function SaveFeedback({
   onPrimaryAction,
   onDone,
 }: SaveFeedbackProps) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const backdropOpacity = useSharedValue(0);
   const cardScale = useSharedValue(0.92);
   const cardOpacity = useSharedValue(0);
@@ -236,7 +238,8 @@ export function SaveFeedback({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   backdrop: {
     alignItems: "center",
     backgroundColor: withAlpha(palette.black, 0.8),
@@ -271,7 +274,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.72,
     marginBottom: 23,
   },
@@ -300,15 +303,15 @@ const styles = StyleSheet.create({
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
     letterSpacing: -0.3,
     textAlign: "center",
   },
   message: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 16,
+    fontSize: fs(10),
+    lineHeight: lh(10, 16),
     marginTop: 8,
     textAlign: "center",
   },
@@ -324,7 +327,7 @@ const styles = StyleSheet.create({
   autoDismiss: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 6,
+    fontSize: fs(6),
     letterSpacing: 0.55,
   },
 });

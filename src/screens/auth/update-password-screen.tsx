@@ -1,10 +1,10 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
@@ -24,6 +24,7 @@ function VisibilityButton({
   onPress: () => void;
   visible: boolean;
 }) {
+  const { palette } = useTheme();
   return (
     <Pressable
       accessibilityLabel={visible ? "Hide password" : "Show password"}
@@ -41,6 +42,8 @@ function VisibilityButton({
 }
 
 export function UpdatePasswordScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { signOut, updatePassword } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -75,7 +78,7 @@ export function UpdatePasswordScreen() {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "The link may have expired. Request a new recovery email.",
+          : "The link may have expired. Request a new reset email.",
       );
     } finally {
       setIsSubmitting(false);
@@ -89,10 +92,10 @@ export function UpdatePasswordScreen() {
 
   return (
     <AuthShell
-      description="Set a new credential only inside a valid authenticated or recovery session."
-      eyebrow="IDENTITY / NEW CREDENTIAL"
+      description="Choose a new password for your account."
+      eyebrow="NEW PASSWORD"
       onBack={() => router.back()}
-      title={isSuccess ? "Password updated." : "Secure the account."}>
+      title={isSuccess ? "Password updated." : "Choose a new password."}>
       {isSuccess ? (
         <>
           <View style={styles.successPanel}>
@@ -165,8 +168,8 @@ export function UpdatePasswordScreen() {
             onPress={() => void submit()}
           />
           <Text style={styles.hint}>
-            Use a unique credential. Finance Tracker never displays or stores
-            the password in application state.
+            Use a password you do not use anywhere else. At least 8
+            characters.
           </Text>
         </>
       )}
@@ -174,9 +177,10 @@ export function UpdatePasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   successPanel: {
-    backgroundColor: withAlpha(palette.white, 0.025),
+    backgroundColor: withAlpha(palette.tint, 0.025),
     borderColor: palette.line,
     borderRadius: 18,
     borderWidth: 1,
@@ -195,19 +199,19 @@ const styles = StyleSheet.create({
   successTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 22,
+    fontSize: fs(22),
   },
   successCopy: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 18,
+    fontSize: fs(14),
+    lineHeight: lh(14, 21),
   },
   hint: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 15,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
     textAlign: "center",
   },
 });

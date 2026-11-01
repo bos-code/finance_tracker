@@ -1,3 +1,5 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+import type { AppPalette } from "@/theme/themes";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
 import { FinanceSheet } from "@/components/finance/finance-sheet";
@@ -20,8 +22,7 @@ import {
 } from "@/hooks/use-transaction-drafts";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { backendErrorMessage } from "@/services/backend/errors";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
@@ -101,7 +102,10 @@ function lifecycleLabel(lifecycle: TransactionDraftLifecycle) {
   return "Review";
 }
 
-function lifecycleColor(lifecycle: TransactionDraftLifecycle) {
+function lifecycleColor(
+  lifecycle: TransactionDraftLifecycle,
+  palette: AppPalette,
+) {
   if (lifecycle === "pending_confirmation") return palette.income;
   if (lifecycle === "confirmed") return palette.signalCyan;
   if (lifecycle === "draft") return palette.signalAmber;
@@ -115,7 +119,9 @@ function DraftCard({
   draft: TransactionDraftContract;
   onPress: () => void;
 }) {
-  const statusColor = lifecycleColor(draft.lifecycle);
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
+  const statusColor = lifecycleColor(draft.lifecycle, palette);
   const confidence = Math.round(draft.overall_confidence * 100);
 
   return (
@@ -158,6 +164,8 @@ function DraftCard({
 }
 
 export function DraftReviewScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { user } = useAuth();
   const { workspace } = useWorkspace();
   const workspaceId = workspace?.id ?? "";
@@ -411,7 +419,7 @@ export function DraftReviewScreen() {
                 style={[
                   styles.reviewStatusDot,
                   {
-                    backgroundColor: lifecycleColor(selectedDraft.lifecycle),
+                    backgroundColor: lifecycleColor(selectedDraft.lifecycle, palette),
                   },
                 ]}
               />
@@ -544,7 +552,8 @@ export function DraftReviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   content: {
     gap: 24,
     paddingBottom: 48,
@@ -565,7 +574,7 @@ const styles = StyleSheet.create({
   backLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   summaryRail: {
@@ -581,12 +590,12 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
   },
   summaryLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.8,
   },
   summaryRule: { backgroundColor: palette.line, height: 32, width: 1 },
@@ -606,7 +615,7 @@ const styles = StyleSheet.create({
   panelEyebrow: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   panelBadge: {
@@ -616,7 +625,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: palette.signalAmber,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.7,
     overflow: "hidden",
     paddingHorizontal: 9,
@@ -625,8 +634,8 @@ const styles = StyleSheet.create({
   captureDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   listHeading: {
     alignItems: "center",
@@ -636,7 +645,7 @@ const styles = StyleSheet.create({
   listTitle: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.9,
   },
   draftList: { gap: 12 },
@@ -657,20 +666,20 @@ const styles = StyleSheet.create({
   statusDot: { borderRadius: 999, height: 7, width: 7 },
   statusText: {
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.75,
   },
   confidence: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.6,
   },
   draftText: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: fs(14),
+    lineHeight: lh(14, 20),
   },
   draftFooter: {
     alignItems: "center",
@@ -683,7 +692,7 @@ const styles = StyleSheet.create({
   draftMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.65,
   },
   statePanel: {
@@ -697,13 +706,13 @@ const styles = StyleSheet.create({
   stateTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: fs(20),
   },
   stateCopy: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   reviewStatus: {
     alignItems: "center",
@@ -720,25 +729,25 @@ const styles = StyleSheet.create({
   reviewStatusTitle: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "700",
   },
   reviewStatusDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: fs(10),
+    lineHeight: lh(10, 15),
   },
   reviewConfidence: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   typeGroup: { gap: 8 },
   fieldLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.75,
   },
   typeRow: { flexDirection: "row", gap: 10 },
@@ -758,9 +767,9 @@ const styles = StyleSheet.create({
   typeButtonText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "700",
   },
-  typeButtonTextSelected: { color: palette.black },
+  typeButtonTextSelected: { color: palette.onPrimary },
   fieldGrid: { gap: 18 },
 });

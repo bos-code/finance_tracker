@@ -1,9 +1,9 @@
+import { useTheme } from "@/theme/theme-context";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppStore } from "@/store/use-app-store";
 import { Redirect } from "expo-router";
 import React, { PropsWithChildren } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { palette } from "@/theme/colors";
 
 /**
  * AuthGate — single authoritative component for auth-state-dependent routing.
@@ -32,6 +32,7 @@ interface AuthGateProps extends PropsWithChildren {
 }
 
 export function AuthGate({ children, protected: isProtected, redirect }: AuthGateProps) {
+  const { palette } = useTheme();
   const theme = useAppStore((s) => s.theme);
   const { user, isBootstrapping } = useAuth();
 

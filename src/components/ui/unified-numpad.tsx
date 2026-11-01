@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useMemo } from "react";
@@ -67,6 +67,8 @@ function KeyButton({
   biometricIconName?: IconName;
   pinKeySize: number;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
@@ -185,6 +187,8 @@ export function UnifiedNumpad({
   footer,
   bottomInset = 0,
 }: UnifiedNumpadProps) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const primary = palette.signalCyan;
   const isPinMode = mode === "pin";
   const isPinDrawer = isPinMode && pinPresentation === "drawer";
@@ -297,7 +301,8 @@ export function UnifiedNumpad({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   amountKey: {
     borderRadius: 15,
   },
@@ -316,7 +321,7 @@ const styles = StyleSheet.create({
   doneText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 16,
+    fontSize: fs(16),
     fontWeight: "700",
   },
   grid: {
@@ -347,7 +352,7 @@ const styles = StyleSheet.create({
   keyText: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
     fontWeight: "600",
   },
   pinActionContent: {
@@ -363,7 +368,7 @@ const styles = StyleSheet.create({
   pinActionLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -426,15 +431,15 @@ const styles = StyleSheet.create({
   pinHeaderSubtitle: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "600",
-    lineHeight: 18,
+    lineHeight: lh(13, 18),
     textAlign: "center",
   },
   pinHeaderTitle: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 14,
+    fontSize: fs(14),
     fontWeight: "800",
     marginBottom: 6,
     textAlign: "center",

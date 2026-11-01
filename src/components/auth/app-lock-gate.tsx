@@ -1,12 +1,13 @@
+import { useTheme } from "@/theme/theme-context";
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
 import React from "react";
 import { ActivityIndicator, View } from "react-native";
 import { AppLockScreen } from "./app-lock-screen";
-import { palette } from "@/theme/colors";
 import { SignalThreads } from "@/components/visuals/signal-threads";
 
 export function AppLockGate({ children }: { children: React.ReactNode }) {
+  const { palette } = useTheme();
   const { user } = useAuth();
   const { enabled, isReady, locked } = useAppLock();
 

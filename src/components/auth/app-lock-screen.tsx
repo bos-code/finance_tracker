@@ -1,9 +1,9 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { UnifiedNumpad } from "@/components/ui/unified-numpad";
 import { SignalThreads } from "@/components/visuals/signal-threads";
 import { useAppLock } from "@/context/app-lock-context";
 import { useAuth } from "@/hooks/use-auth";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -18,6 +18,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function AppLockScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const {
     biometricLabel,
     biometricUnlock,
@@ -239,7 +241,8 @@ export function AppLockScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   safeArea: { backgroundColor: palette.canvas, flex: 1 },
   container: { flex: 1 },
   intro: {
@@ -273,13 +276,13 @@ const styles = StyleSheet.create({
   brandName: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.65,
   },
   brandStatus: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
   },
   securityMark: {
     alignItems: "center",
@@ -300,15 +303,15 @@ const styles = StyleSheet.create({
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 36,
+    fontSize: fs(36),
     letterSpacing: -0.8,
   },
-  titleCompact: { fontSize: 30 },
+  titleCompact: { fontSize: fs(30) },
   description: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 16,
+    fontSize: fs(10),
+    lineHeight: lh(10, 16),
     marginTop: 8,
     maxWidth: 410,
   },
@@ -324,7 +327,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pinSlotActive: { borderColor: palette.lineStrong },
-  pinSlotFilled: { backgroundColor: withAlpha(palette.white, 0.035) },
+  pinSlotFilled: { backgroundColor: withAlpha(palette.tint, 0.035) },
   pinDot: {
     backgroundColor: palette.lineStrong,
     borderRadius: 4,
@@ -346,8 +349,8 @@ const styles = StyleSheet.create({
     color: palette.textQuiet,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
   },
   biometricButton: {
     alignItems: "center",
@@ -364,7 +367,7 @@ const styles = StyleSheet.create({
   biometricText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: "700",
   },
   footer: { gap: 8 },
@@ -381,14 +384,14 @@ const styles = StyleSheet.create({
   signOutText: {
     color: palette.expense,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: "700",
   },
   footerCopy: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 8,
-    lineHeight: 13,
+    fontSize: fs(8),
+    lineHeight: lh(8, 13),
     textAlign: "center",
   },
 });

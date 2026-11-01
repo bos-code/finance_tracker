@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import {
@@ -31,8 +32,7 @@ import {
   type ReceiptUploadProgress,
 } from "@/services/supabase/attachment-service";
 import type { Transaction } from "@/services/supabase/transaction-service";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 
 const EMPTY_ATTACHMENTS: TransactionAttachmentContract[] = [];
 
@@ -52,6 +52,8 @@ export function ReceiptSheet({
   transaction: Transaction | null;
   visible: boolean;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { user } = useAuth();
   const { isOnline } = useOffline();
   const { workspace } = useWorkspace();
@@ -364,7 +366,8 @@ export function ReceiptSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   privacyPanel: {
     alignItems: "center",
     backgroundColor: withAlpha(palette.signalMoss, 0.035),
@@ -389,14 +392,14 @@ const styles = StyleSheet.create({
   privacyTitle: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.8,
   },
   privacyText: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(11),
+    lineHeight: lh(11, 16),
   },
   progressPanel: { gap: 8 },
   progressTrack: { backgroundColor: palette.line, height: 2, width: "100%" },
@@ -404,7 +407,7 @@ const styles = StyleSheet.create({
   progressText: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.5,
   },
   errorPanel: {
@@ -420,8 +423,8 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(11),
+    lineHeight: lh(11, 16),
   },
   attachmentList: { borderColor: palette.line, borderWidth: 1 },
   attachmentRow: {
@@ -455,32 +458,32 @@ const styles = StyleSheet.create({
   fileName: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "700",
   },
   fileMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.35,
   },
   fileError: {
     color: palette.expense,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: fs(10),
+    lineHeight: lh(10, 14),
   },
   fileActions: { flexDirection: "row", gap: 18, marginTop: 3 },
   fileAction: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.6,
   },
   deleteAction: {
     color: palette.expense,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.6,
   },
 });

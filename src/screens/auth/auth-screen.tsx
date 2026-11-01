@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
@@ -6,8 +7,7 @@ import { detectRegionalDefaults } from "@/features/profile/region-defaults";
 import { useAuth } from "@/hooks/use-auth";
 import { ROUTES } from "@/navigation/route-names";
 import { CURRENCY_OPTIONS } from "@/store/use-app-store";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { isValidEmail } from "@/utils/validators";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -77,6 +77,7 @@ function VisibilityButton({
   onPress: () => void;
   visible: boolean;
 }) {
+  const { palette } = useTheme();
   return (
     <Pressable
       accessibilityLabel={visible ? "Hide password" : "Show password"}
@@ -85,15 +86,17 @@ function VisibilityButton({
       onPress={onPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 6 })}>
       <MaterialCommunityIcons
-        color={palette.textQuiet}
+        color={palette.textMuted}
         name={visible ? "eye-off-outline" : "eye-outline"}
-        size={18}
+        size={22}
       />
     </Pressable>
   );
 }
 
 export function AuthScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { signIn, signUp } = useAuth();
   const regionalDefaults = useMemo(() => detectRegionalDefaults(), []);
   const [mode, setMode] = useState<Mode>("signIn");
@@ -190,8 +193,8 @@ export function AuthScreen() {
   if (verificationEmail) {
     return (
       <AuthShell
-        description="Account creation is paused at the verification boundary."
-        eyebrow="IDENTITY / VERIFY"
+        description="One more step before you can sign in."
+        eyebrow="CHECK YOUR EMAIL"
         title="Check your inbox">
         <View style={styles.verificationPanel}>
           <View style={styles.verificationThread} />
@@ -202,8 +205,9 @@ export function AuthScreen() {
           />
           <Text style={styles.verificationTitle}>Verification sent</Text>
           <Text style={styles.verificationCopy}>
-            If delivery is enabled for this project, follow the secure link sent
-            to {verificationEmail}. Then return here to sign in.
+            We sent a confirmation link to {verificationEmail}. Open it, then
+            come back here to sign in. If it does not arrive, check your spam
+            folder.
           </Text>
         </View>
         <ActionButton
@@ -221,11 +225,11 @@ export function AuthScreen() {
     <AuthShell
       description={
         mode === "signIn"
-          ? "Enter the personal ledger. Your session restores the same record across supported devices."
-          : "Create a user-scoped personal workspace with explicit ownership from the first entry."
+          ? "Sign in to see your money, goals and drafts on any device."
+          : "Create your account. Everything you record stays private to you."
       }
-      eyebrow={mode === "signIn" ? "IDENTITY / RETURN" : "IDENTITY / CREATE"}
-      title={mode === "signIn" ? "Welcome back." : "Start the ledger."}>
+      eyebrow={mode === "signIn" ? "SIGN IN" : "NEW ACCOUNT"}
+      title={mode === "signIn" ? "Welcome back." : "Create your account."}>
       <SegmentedControl
         accessibilityLabel="Account action"
         onChange={chooseMode}
@@ -263,11 +267,11 @@ export function AuthScreen() {
           />
           <View style={styles.currencyPanel}>
             <View style={styles.currencyHeading}>
-              <Text style={styles.currencyLabel}>BASE CURRENCY / CONFIRM</Text>
+              <Text style={styles.currencyLabel}>BASE CURRENCY</Text>
               <Text style={styles.currencySource}>
                 {regionalDefaults.countryCode
-                  ? `REGION ${regionalDefaults.countryCode}`
-                  : "SYSTEM DEFAULT"}
+                  ? `Detected: ${regionalDefaults.countryCode}`
+                  : "Device default"}
               </Text>
             </View>
             <ScrollView
@@ -303,8 +307,8 @@ export function AuthScreen() {
               })}
             </ScrollView>
             <Text style={styles.currencyHint}>
-              This choice stays fixed while travelling. You can change it later
-              without rewriting historical entries.
+              This stays fixed while you travel. You can change it later without
+              changing past entries.
             </Text>
           </View>
         </>
@@ -359,13 +363,14 @@ export function AuthScreen() {
 
       {mode === "signIn" ? (
         <Pressable
+          accessibilityLabel="Forgot password"
           accessibilityRole="button"
           onPress={() => router.push(ROUTES.FORGOT_PASSWORD as never)}
           style={({ pressed }) => [
             styles.forgotButton,
             { opacity: pressed ? 0.56 : 1 },
           ]}>
-          <Text style={styles.forgotText}>Recover access</Text>
+          <Text style={styles.forgotText}>Forgot password?</Text>
         </Pressable>
       ) : (
         <FinanceField
@@ -400,23 +405,39 @@ export function AuthScreen() {
       )}
 
       <ActionButton
-        label={mode === "signIn" ? "Enter ledger" : "Create workspace"}
+        label={mode === "signIn" ? "Sign in" : "Create account"}
         loading={isSubmitting}
         onPress={() => void submit()}
       />
 
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => chooseMode(mode === "signIn" ? "signUp" : "signIn")}
+        style={({ pressed }) => [
+          styles.switchButton,
+          { opacity: pressed ? 0.56 : 1 },
+        ]}>
+        <Text style={styles.switchText}>
+          {mode === "signIn" ? "New here? " : "Already have an account? "}
+          <Text style={styles.switchTextStrong}>
+            {mode === "signIn" ? "Create an account" : "Sign in"}
+          </Text>
+        </Text>
+      </Pressable>
+
       <View style={styles.securityNote}>
         <View style={styles.securityThread} />
         <Text style={styles.securityNoteText}>
-          Authentication is handled by Supabase. App lock remains a separate
-          device boundary after sign-in.
+          Sign-in is handled securely by Supabase. App lock is a separate lock
+          on this device.
         </Text>
       </View>
     </AuthShell>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   currencyPanel: {
     borderColor: palette.line,
     borderWidth: 1,
@@ -431,14 +452,13 @@ const styles = StyleSheet.create({
   currencyLabel: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(11),
     letterSpacing: 0.8,
   },
   currencySource: {
     color: palette.signalMoss,
-    fontFamily: fonts.ledger,
-    fontSize: 8,
-    letterSpacing: 0.6,
+    fontFamily: fonts.body,
+    fontSize: fs(12),
   },
   currencyOptions: { gap: 7 },
   currencyOption: {
@@ -458,15 +478,15 @@ const styles = StyleSheet.create({
   currencyOptionText: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 10,
+    fontSize: fs(13),
     textAlign: "center",
   },
-  currencyOptionTextSelected: { color: palette.black },
+  currencyOptionTextSelected: { color: palette.onPrimary },
   currencyHint: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   errorPanel: {
     alignItems: "center",
@@ -489,21 +509,41 @@ const styles = StyleSheet.create({
     width: 1,
   },
   errorText: {
-    color: palette.textMuted,
+    color: palette.text,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(14),
+    lineHeight: lh(14, 20),
   },
-  forgotButton: { alignSelf: "flex-end", marginTop: -10, padding: 8 },
+  forgotButton: {
+    alignSelf: "flex-end",
+    justifyContent: "center",
+    marginTop: -8,
+    minHeight: 44,
+    paddingHorizontal: 4,
+  },
   forgotText: {
-    borderBottomColor: palette.textMuted,
-    borderBottomWidth: 1,
+    color: palette.text,
+    fontFamily: fonts.body,
+    fontSize: fs(14),
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  switchButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  switchText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(14),
+    textAlign: "center",
+  },
+  switchTextStrong: {
+    color: palette.text,
     fontWeight: "700",
-    paddingBottom: 2,
+    textDecorationLine: "underline",
   },
   securityNote: {
     alignItems: "stretch",
@@ -518,15 +558,15 @@ const styles = StyleSheet.create({
     width: 1,
   },
   securityNoteText: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 15,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   verificationPanel: {
     alignItems: "flex-start",
-    backgroundColor: withAlpha(palette.white, 0.025),
+    backgroundColor: withAlpha(palette.tint, 0.025),
     borderColor: palette.line,
     borderRadius: 18,
     borderWidth: 1,
@@ -545,12 +585,12 @@ const styles = StyleSheet.create({
   verificationTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 21,
+    fontSize: fs(22),
   },
   verificationCopy: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 18,
+    fontSize: fs(14),
+    lineHeight: lh(14, 21),
   },
 });
