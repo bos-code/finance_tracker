@@ -10,13 +10,18 @@ import {
   type ActiveConnection,
   type ChannelStore,
   type ClaimOutcome,
+  type ConfirmOutcome,
+  type DiscardOutcome,
   type LinkOutcome,
   type TelegramUpdate,
 } from "./handler.ts";
+import type { ChatDraft } from "../../../src/features/drafts/chat-confirmation.ts";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const PROVIDER = "telegram";
 const REVIEWABLE_LIFECYCLES = ["draft", "pending_confirmation", "needs_review"];
+const DRAFT_COLUMNS =
+  "id, owner_user_id, workspace_id, lifecycle, extracted_fields, missing_fields, original_text, expires_at";
 
 function intFromEnv(name: string, fallback: number) {
   const parsed = Number.parseInt(Deno.env.get(name) ?? "", 10);
@@ -86,16 +91,27 @@ function createStore(
       if (error) throw error;
       if (!connection) return null;
 
-      const { data: workspace, error: workspaceError } = await admin
-        .from("workspaces")
-        .select("default_currency")
-        .eq("id", connection.workspace_id)
-        .maybeSingle();
-      if (workspaceError) throw workspaceError;
+      const [workspaceResult, accountResult] = await Promise.all([
+        admin
+          .from("workspaces")
+          .select("default_currency")
+          .eq("id", connection.workspace_id)
+          .maybeSingle(),
+        admin
+          .from("financial_accounts")
+          .select("id")
+          .eq("workspace_id", connection.workspace_id)
+          .eq("is_default", true)
+          .eq("is_archived", false)
+          .maybeSingle(),
+      ]);
+      if (workspaceResult.error) throw workspaceResult.error;
+      if (accountResult.error) throw accountResult.error;
 
       return {
         aiAssistEnabled: connection.ai_assist_enabled !== false,
-        defaultCurrency: workspace?.default_currency ?? "USD",
+        defaultAccountId: accountResult.data?.id ?? null,
+        defaultCurrency: workspaceResult.data?.default_currency ?? "USD",
         id: connection.id,
         ownerUserId: connection.owner_user_id,
         workspaceId: connection.workspace_id,
@@ -135,12 +151,74 @@ function createStore(
     },
 
     async insertDraft(draft) {
-      const { error } = await admin.from("transaction_drafts").insert(draft);
-      if (!error) return { duplicate: false };
+      const { data, error } = await admin
+        .from("transaction_drafts")
+        .insert(draft)
+        .select("id")
+        .single();
+      if (!error) return { draftId: data?.id ?? null, duplicate: false };
       // The unique (owner, source, source_message_id) index makes a redelivered
       // message a harmless duplicate rather than a second draft.
-      if (error.code === "23505") return { duplicate: true };
+      if (error.code === "23505") return { draftId: null, duplicate: true };
       throw error;
+    },
+
+    async getDraft(connection, draftId) {
+      // Scoped to the connection's owner and workspace, so a button copied from
+      // someone else's chat can never reach another person's draft.
+      const { data, error } = await admin
+        .from("transaction_drafts")
+        .select(DRAFT_COLUMNS)
+        .eq("id", draftId)
+        .eq("owner_user_id", connection.ownerUserId)
+        .eq("workspace_id", connection.workspaceId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as ChatDraft | null) ?? null;
+    },
+
+    async listOpenDrafts(connection, limit) {
+      const { data, error } = await admin
+        .from("transaction_drafts")
+        .select(DRAFT_COLUMNS)
+        .eq("owner_user_id", connection.ownerUserId)
+        .eq("workspace_id", connection.workspaceId)
+        .in("lifecycle", REVIEWABLE_LIFECYCLES)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []) as ChatDraft[];
+    },
+
+    async confirmDraft(providerUserId, draftId, transaction) {
+      const { data, error } = await admin.rpc("telegram_confirm_draft", {
+        p_account_id: transaction.account_id,
+        p_amount: transaction.amount,
+        p_base_currency_code: transaction.base_currency_code,
+        p_category_id: transaction.category_id,
+        p_currency_code: transaction.currency_code,
+        p_draft_id: draftId,
+        p_exchange_rate: transaction.exchange_rate,
+        p_note: transaction.note,
+        p_provider_user_id: providerUserId,
+        p_transaction_date: transaction.transaction_date,
+        p_type: transaction.type,
+      });
+      if (error) throw error;
+      const row = (
+        data as { outcome: ConfirmOutcome; result_transaction_id: string | null }[]
+      )[0];
+      return { outcome: row.outcome, transactionId: row.result_transaction_id };
+    },
+
+    async discardDraft(providerUserId, draftId) {
+      const { data, error } = await admin.rpc("telegram_discard_draft", {
+        p_draft_id: draftId,
+        p_provider_user_id: providerUserId,
+      });
+      if (error) throw error;
+      return data as DiscardOutcome;
     },
 
     async countReviewableDrafts(connection) {
@@ -189,6 +267,42 @@ function createQuotaStore(
   };
 }
 
+let webhookChecked: Promise<void> | null = null;
+
+/**
+ * Save and Discard buttons only reach this function if the webhook allows
+ * `callback_query` updates. Webhooks set up earlier were limited to `message`,
+ * so once per running instance this widens that list. Best effort: a failure
+ * is ignored and never blocks a message.
+ */
+function ensureButtonTapsAllowed(botToken: string, secret: string) {
+  webhookChecked ??= (async () => {
+    try {
+      const base = `https://api.telegram.org/bot${botToken}`;
+      const info = await (
+        await fetch(`${base}/getWebhookInfo`, { signal: AbortSignal.timeout(5_000) })
+      ).json();
+      const url: string | undefined = info?.result?.url;
+      const allowed: string[] | undefined = info?.result?.allowed_updates;
+      // No list means Telegram's default, which already includes button taps.
+      if (!url || !allowed?.length || allowed.includes("callback_query")) return;
+      await fetch(`${base}/setWebhook`, {
+        body: JSON.stringify({
+          allowed_updates: [...allowed, "callback_query"],
+          secret_token: secret,
+          url,
+        }),
+        headers: JSON_HEADERS,
+        method: "POST",
+        signal: AbortSignal.timeout(5_000),
+      });
+    } catch {
+      // Ignore: the bot still works for messages.
+    }
+  })();
+  return webhookChecked;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return json(405, { error: "METHOD_NOT_ALLOWED" });
@@ -224,6 +338,8 @@ Deno.serve(async (request) => {
     return json(400, { error: "INVALID_UPDATE" });
   }
 
+  await ensureButtonTapsAllowed(botToken, webhookSecret);
+
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -238,27 +354,54 @@ Deno.serve(async (request) => {
     createQuotaStore(admin),
   );
 
+  // The URL contains the bot token, so only the method and status are logged.
+  const callTelegram = async (method: string, body: Record<string, unknown>) => {
+    const response = await fetch(
+      `https://api.telegram.org/bot${botToken}/${method}`,
+      {
+        body: JSON.stringify(body),
+        headers: JSON_HEADERS,
+        method: "POST",
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (!response.ok) console.error(`telegram ${method} failed`, response.status);
+  };
+
   const result = await handleTelegramUpdate(update, {
+    answerCallback: (callbackQueryId, text) =>
+      callTelegram("answerCallbackQuery", {
+        callback_query_id: callbackQueryId,
+        ...(text ? { text } : {}),
+      }),
     assistant,
-    sendMessage: async (chatId, text) => {
-      const response = await fetch(
-        `https://api.telegram.org/bot${botToken}/sendMessage`,
-        {
-          body: JSON.stringify({
-            chat_id: chatId,
-            disable_web_page_preview: true,
-            text,
-          }),
-          headers: JSON_HEADERS,
-          method: "POST",
-          signal: AbortSignal.timeout(8_000),
-        },
-      );
-      if (!response.ok) {
-        // Log the status only; the URL contains the bot token.
-        console.error("telegram sendMessage failed", response.status);
-      }
-    },
+    editMessage: (chatId, messageId, text) =>
+      callTelegram("editMessageText", {
+        chat_id: chatId,
+        disable_web_page_preview: true,
+        message_id: messageId,
+        // An empty keyboard removes the buttons so they cannot be tapped twice.
+        reply_markup: { inline_keyboard: [] },
+        text,
+      }),
+    sendMessage: (chatId, text, options) =>
+      callTelegram("sendMessage", {
+        chat_id: chatId,
+        disable_web_page_preview: true,
+        ...(options?.buttons
+          ? {
+              reply_markup: {
+                inline_keyboard: options.buttons.map((row) =>
+                  row.map((button) => ({
+                    callback_data: button.data,
+                    text: button.text,
+                  })),
+                ),
+              },
+            }
+          : {}),
+        text,
+      }),
     store: createStore(admin),
   });
 
