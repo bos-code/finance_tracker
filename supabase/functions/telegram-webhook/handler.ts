@@ -7,7 +7,18 @@ import {
   aiSuggestedFieldNames,
   applyAiSuggestion,
 } from "../../../src/features/assistant/ai-suggestions.ts";
+import {
+  applyReceiptReading,
+  hasAnyReading,
+  RECEIPT_CATEGORY_KEYS,
+  RECEIPT_PLACEHOLDER_TEXT,
+} from "../../../src/features/assistant/receipt-extraction.ts";
 import { isPlausibleLinkCode } from "../../../src/features/channels/telegram-link.ts";
+import {
+  pickReceiptMedia,
+  type ReceiptMedia,
+  type ReceiptMimeType,
+} from "../../../src/features/channels/telegram-media.ts";
 import {
   assessDraftForChat,
   fieldLabel,
@@ -32,6 +43,8 @@ export type TelegramMessage = {
   chat: { id: number; type: string };
   from?: { id: number; is_bot?: boolean };
   text?: string;
+  /** The text a person typed under a photo. */
+  caption?: string;
   photo?: unknown;
   document?: unknown;
   voice?: unknown;
@@ -54,6 +67,24 @@ export type TelegramUpdate = {
 
 export type InlineButton = { text: string; data: string };
 export type SendOptions = { buttons?: InlineButton[][] };
+
+/** A downloaded receipt image, already checked to really be an image. */
+export type ReceiptImage = {
+  bytes: Uint8Array;
+  mimeType: ReceiptMimeType;
+  filename: string;
+  /** Lowercase hex SHA-256 of the bytes. */
+  sha256: string;
+  providerMediaId: string | null;
+};
+
+export type ReceiptDownload =
+  | { ok: true; image: ReceiptImage }
+  | { ok: false; reason: "too_large" | "not_image" | "unavailable" };
+
+export interface ReceiptPort {
+  download(media: ReceiptMedia): Promise<ReceiptDownload>;
+}
 
 export type ActiveConnection = {
   id: string;
@@ -95,9 +126,15 @@ export interface ChannelStore {
   ): Promise<LinkOutcome>;
   disconnect(providerUserId: string): Promise<boolean>;
   setAiAssist(providerUserId: string, enabled: boolean): Promise<boolean>;
+  /** With a receipt, also keeps the photo privately and links it to the draft. */
   insertDraft(
     draft: TransactionDraftInsert,
-  ): Promise<{ duplicate: boolean; draftId: string | null }>;
+    receipt?: ReceiptImage,
+  ): Promise<{
+    duplicate: boolean;
+    draftId: string | null;
+    receiptStored?: boolean;
+  }>;
   countReviewableDrafts(connection: ActiveConnection): Promise<number>;
   /** A draft owned by this connection, or null. Never another person's. */
   getDraft(
@@ -139,6 +176,8 @@ export type HandlerDeps = {
   now?: () => Date;
   /** Optional: when absent or disabled the bot is purely deterministic. */
   assistant?: AssistantPort;
+  /** Downloads photos sent to the bot. Without it, photos are declined. */
+  receipts?: ReceiptPort;
 };
 
 export type HandlerResult = {
@@ -150,7 +189,7 @@ export const MESSAGES = {
     "AI assistance is off for this chat. Send /ai on to turn it on.",
   aiOff:
     "AI assistance is off. Your messages will not be sent to the AI provider.",
-  aiOn: "AI assistance is on. Short messages may be sent to an AI provider to help read them or answer questions.",
+  aiOn: "AI assistance is on. Short messages and receipt photos may be sent to an AI provider to help read them or answer questions.",
   aiUnavailable:
     "The assistant isn’t set up yet, so I can only read messages with simple rules for now.",
   aiUsage: "Send /ai on or /ai off.",
@@ -173,6 +212,8 @@ export const MESSAGES = {
   help: [
     "Send a message like “spent 2500 on lunch” and I’ll make a draft. Tap Save to add it to your ledger, or review it in the app.",
     "",
+    "Or send a photo of a receipt and I’ll read it (with AI assistance on) and attach it.",
+    "",
     "/drafts – review and save waiting drafts",
     "/ask – ask how to use Finance Tracker",
     "/ai on|off – allow or stop AI assistance",
@@ -189,8 +230,21 @@ export const MESSAGES = {
     "Linked! Send a message like “spent 2500 on lunch” and I’ll make a draft. Tap Save to add it to your ledger, or review it in the app.",
   linkUsage:
     "Send /link followed by the code from the app, for example: /link K7M2-9QXA",
-  mediaSoon:
-    "Receipt uploads over Telegram are coming soon. For now, attach receipts to a transaction in the app.",
+  mediaUnsupported:
+    "I can read receipt photos. Voice notes, videos and other media aren’t supported yet.",
+  receiptDocument:
+    "I can read photos and image files (JPEG, PNG or WebP). PDFs and other files aren’t supported yet.",
+  receiptDownloadFailed:
+    "I couldn’t download that image. Please try sending it again.",
+  receiptNeedsAi:
+    "I can read a receipt photo when AI assistance is on. Send /ai on, or add a caption like “spent 2500 on groceries” and I’ll attach the photo to that draft.",
+  receiptNeedsAiUnavailable:
+    "The assistant isn’t set up yet, so I can’t read receipt photos. Add a caption like “spent 2500 on groceries” and I’ll attach the photo to that draft.",
+  receiptTooLarge: "That image is too large. Please send a photo under 8 MB.",
+  receiptUnavailable:
+    "Receipt photos aren’t available right now. Please try again later.",
+  receiptUnreadable:
+    "I couldn’t read that receipt. Try a clearer, well-lit photo, or add a caption like “spent 2500 on groceries”.",
   notLinked:
     "This chat isn’t linked to a Finance Tracker account yet. Open the app → Profile → Connections → Telegram, then send /link followed by your code.",
   notATransaction:
@@ -250,6 +304,7 @@ function partialSummary(draft: Pick<ChatDraft, "extracted_fields">) {
 export function draftReply(
   draft: ChatDraft,
   assessment: ChatConfirmation,
+  note?: string,
 ): { text: string; buttons: InlineButton[][] } {
   const discard = { data: `d:${draft.id}`, text: "🗑 Discard" };
   const suggested = aiSuggestedFieldNames(draft);
@@ -262,6 +317,7 @@ export function draftReply(
     );
     const lines = [`Draft ready: ${transactionSummary(assessment.transaction)}`];
     if (check.length) lines.push(`Please double-check: ${check.join(", ")}.`);
+    if (note) lines.push(note);
     lines.push("Save it to your ledger?");
     return {
       buttons: [[{ data: `s:${draft.id}`, text: "✅ Save" }, discard]],
@@ -278,7 +334,7 @@ export function draftReply(
     : "";
   return {
     buttons: [[discard]],
-    text: `${headline}${aiNote}\n${assessment.reason}`,
+    text: `${headline}${aiNote}\n${assessment.reason}${note ? `\n${note}` : ""}`,
   };
 }
 
@@ -350,14 +406,25 @@ async function route(
     return "ignored";
   }
 
-  const text = message.text?.trim();
-  if (!text) {
-    if (message.photo || message.document || message.voice || message.video) {
-      await deps.sendMessage(chatId, MESSAGES.mediaSoon);
-      return "processed";
-    }
-    return "ignored";
+  const picked = pickReceiptMedia(message);
+  if (picked.kind === "unsupported") {
+    await deps.sendMessage(
+      chatId,
+      picked.reason === "document"
+        ? MESSAGES.receiptDocument
+        : picked.reason === "too_large"
+          ? MESSAGES.receiptTooLarge
+          : MESSAGES.mediaUnsupported,
+    );
+    return "processed";
   }
+  if (picked.kind === "receipt") {
+    await handleReceiptPhoto(deps, message, userId, picked.media);
+    return "processed";
+  }
+
+  const text = message.text?.trim();
+  if (!text) return "ignored";
 
   const command = parseCommand(text);
   if (command) {
@@ -535,19 +602,149 @@ async function route(
   return "processed";
 }
 
+/**
+ * A photo of a receipt. The AI (when the person has switched it on) reads the
+ * total, date, shop and category; whatever was typed in the caption wins. The
+ * photo is kept privately and attached to the transaction only if the draft is
+ * saved. Nothing is saved without the person tapping Save.
+ */
+async function handleReceiptPhoto(
+  deps: HandlerDeps,
+  message: TelegramMessage,
+  userId: string,
+  media: ReceiptMedia,
+) {
+  const chatId = String(message.chat.id);
+  const connection = await deps.store.findConnection(userId);
+  if (!connection) {
+    await deps.sendMessage(chatId, MESSAGES.notLinked);
+    return;
+  }
+
+  const caption = message.caption?.trim() ?? "";
+  if (caption.length > MAX_MESSAGE_LENGTH) {
+    await deps.sendMessage(chatId, MESSAGES.tooLong);
+    return;
+  }
+
+  const assistant = deps.assistant;
+  const canRead = assistantReady(deps, connection);
+  if (!canRead && !caption) {
+    await deps.sendMessage(
+      chatId,
+      assistant?.enabled
+        ? MESSAGES.receiptNeedsAi
+        : MESSAGES.receiptNeedsAiUnavailable,
+    );
+    return;
+  }
+  if (!deps.receipts) {
+    await deps.sendMessage(chatId, MESSAGES.receiptUnavailable);
+    return;
+  }
+
+  const parsed = buildTransactionDraftInsert({
+    defaultCurrency: connection.defaultCurrency,
+    now: deps.now?.(),
+    ownerUserId: connection.ownerUserId,
+    source: "telegram",
+    sourceMessageId: `${chatId}:${message.message_id}`,
+    text: caption || RECEIPT_PLACEHOLDER_TEXT,
+    workspaceId: connection.workspaceId,
+  });
+
+  // Without the AI the caption is all there is to go on; if it is no
+  // transaction, there is no point downloading the photo.
+  if (
+    !canRead &&
+    fieldValue(parsed, "amount") === null &&
+    fieldValue(parsed, "type") === null
+  ) {
+    await deps.sendMessage(chatId, MESSAGES.notATransaction);
+    return;
+  }
+
+  const download = await deps.receipts.download(media);
+  if (!download.ok) {
+    await deps.sendMessage(
+      chatId,
+      download.reason === "too_large"
+        ? MESSAGES.receiptTooLarge
+        : download.reason === "not_image"
+          ? MESSAGES.receiptDocument
+          : MESSAGES.receiptDownloadFailed,
+    );
+    return;
+  }
+  const image = download.image;
+
+  let draft = parsed;
+  let readByAi = false;
+  if (canRead && assistant) {
+    const reading = await assistant.readReceipt({
+      baseCurrency: connection.defaultCurrency,
+      categoryKeys: RECEIPT_CATEGORY_KEYS,
+      image: { bytes: image.bytes, mimeType: image.mimeType },
+      now: deps.now?.(),
+      ownerUserId: connection.ownerUserId,
+    });
+    if (reading && hasAnyReading(reading)) {
+      draft = applyReceiptReading(parsed, reading, {
+        hasCaption: Boolean(caption),
+      });
+      readByAi = true;
+    }
+  }
+
+  // Nothing read and nothing usable typed: don't save an empty draft.
+  if (
+    !readByAi &&
+    (!caption ||
+      (fieldValue(parsed, "amount") === null &&
+        fieldValue(parsed, "type") === null))
+  ) {
+    await deps.sendMessage(
+      chatId,
+      caption ? MESSAGES.notATransaction : MESSAGES.receiptUnreadable,
+    );
+    return;
+  }
+
+  const { duplicate, draftId, receiptStored } = await deps.store.insertDraft(
+    draft,
+    image,
+  );
+  if (duplicate) {
+    await deps.sendMessage(chatId, "That message was already saved.");
+    return;
+  }
+  if (!draftId) {
+    await deps.sendMessage(chatId, "Saved to your drafts. Review it in the app.");
+    return;
+  }
+
+  const note = !receiptStored
+    ? "I couldn’t keep the photo, so only the details were saved."
+    : readByAi
+      ? "Receipt photo attached, and read by the AI assistant."
+      : "Receipt photo attached.";
+  await sendDraft(deps, chatId, connection, { ...draft, id: draftId }, note);
+}
+
 /** Shows a draft with Save and Discard when it can be saved from chat. */
 async function sendDraft(
   deps: HandlerDeps,
   chatId: string,
   connection: ActiveConnection,
   draft: ChatDraft,
+  note?: string,
 ) {
   const assessment = assessDraftForChat(draft, {
     accountId: connection.defaultAccountId,
     baseCurrencyCode: connection.defaultCurrency,
     now: deps.now?.(),
   });
-  const reply = draftReply(draft, assessment);
+  const reply = draftReply(draft, assessment, note);
   await deps.sendMessage(chatId, reply.text, { buttons: reply.buttons });
 }
 

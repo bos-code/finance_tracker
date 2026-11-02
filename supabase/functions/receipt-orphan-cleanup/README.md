@@ -5,6 +5,11 @@ This server-only Edge Function removes attachment uploads that have remained in
 Storage object before deleting its metadata record and processes at most 100
 records per invocation.
 
+It also removes receipt photos that were sent to the Telegram bot but never became
+part of a transaction: photos whose draft was deleted, or whose draft has expired
+without being confirmed (`draft_receipts` rows with no `attached_at`). Photos that
+are attached to a transaction are never touched here.
+
 Deployment requirements:
 
 - set a strong `RECEIPT_CLEANUP_SECRET` Edge Function secret;

@@ -23,7 +23,6 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useCallback, useMemo, useState } from "react";
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   SectionList,
@@ -32,6 +31,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 const DAYS_OF_WEEK = ["M", "T", "W", "T", "F", "S", "S"];
 

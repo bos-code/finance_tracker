@@ -1,4 +1,5 @@
-import { Pressable, Text } from "react-native";
+import { Text } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 type AppButtonProps = {
   title: string;

@@ -1,7 +1,8 @@
 import { useTheme } from "@/theme/theme-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,

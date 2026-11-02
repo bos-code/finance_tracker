@@ -26,13 +26,13 @@ import { useCallback, useState } from "react";
 import {
   Alert,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 type ProfileSheet =
   | "name"
@@ -400,7 +400,7 @@ export function ProfileScreen({ topSlot }: { topSlot?: ReactNode }) {
               </View>
             </Pressable>
             <Text style={styles.email}>{user?.email || "No email"}</Text>
-            <Text style={styles.avatarNote}>PHOTO PREVIEW / THIS SESSION</Text>
+            <Text style={styles.avatarNote}>Photo preview only. It isn’t saved yet.</Text>
           </View>
         </View>
 
@@ -762,10 +762,9 @@ const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
   },
   email: { color: palette.textMuted, fontFamily: fonts.body, fontSize: fs(11) },
   avatarNote: {
-    color: palette.textQuiet,
-    fontFamily: fonts.ledger,
-    fontSize: fs(7),
-    letterSpacing: 0.45,
+    color: palette.textMuted,
+    fontFamily: fonts.body,
+    fontSize: fs(12),
   },
   workspacePanel: {
     borderBottomColor: palette.line,

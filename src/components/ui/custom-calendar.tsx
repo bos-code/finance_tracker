@@ -5,11 +5,11 @@ import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
 import {
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,

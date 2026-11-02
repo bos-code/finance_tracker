@@ -15,13 +15,13 @@ import { router } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import {
   Keyboard,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 type Mode = "signIn" | "signUp";
 

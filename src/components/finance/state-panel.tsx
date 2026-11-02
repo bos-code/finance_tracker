@@ -1,7 +1,8 @@
 import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 export function StatePanel({
   actionLabel,

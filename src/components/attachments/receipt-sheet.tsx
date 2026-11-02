@@ -3,11 +3,11 @@ import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import {
   Alert,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { ActionButton } from "@/components/finance/action-button";

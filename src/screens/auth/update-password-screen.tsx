@@ -10,12 +10,12 @@ import { router } from "expo-router";
 import { useRef, useState } from "react";
 import {
   Keyboard,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 function VisibilityButton({
   onPress,
