@@ -22,11 +22,31 @@ const CONNECTION = {
   workspaceId: "workspace-1",
 };
 
+const RECEIPT_IMAGE = {
+  bytes: Uint8Array.from([0xff, 0xd8, 0xff, 1, 2, 3]),
+  filename: "receipt.jpg",
+  mimeType: "image/jpeg",
+  providerMediaId: "unique-1",
+  sha256: "a".repeat(64),
+};
+
+function fakeReceipts(result = { image: RECEIPT_IMAGE, ok: true }) {
+  const downloads = [];
+  return {
+    downloads,
+    async download(media) {
+      downloads.push(media);
+      return result;
+    },
+  };
+}
+
 function harness({
   assistant = undefined,
   claim = "new",
   connection = null,
   link = "linked",
+  receipts = undefined,
 } = {}) {
   const sent = [];
   const drafts = [];
@@ -40,8 +60,10 @@ function harness({
     discard: [],
     disconnect: [],
   };
+  const uploads = [];
   const state = {
     confirmOutcome: "confirmed",
+    receiptStored: true,
     connection: connection ? { ...connection } : null,
     discardOutcome: "discarded",
     openDrafts: [],
@@ -78,9 +100,10 @@ function harness({
       if (state.throwOn === "findConnection") throw new Error("db down");
       return state.connection;
     },
-    async insertDraft(draft) {
+    async insertDraft(draft, receipt) {
       drafts.push(draft);
-      return { draftId: DRAFT_ID, duplicate: false };
+      if (receipt) uploads.push(receipt);
+      return { draftId: DRAFT_ID, duplicate: false, receiptStored: state.receiptStored };
     },
     async getDraft() {
       if (state.throwOn === "getDraft") throw new Error("db down");
@@ -110,6 +133,7 @@ function harness({
         edits.push({ chatId, messageId, text });
       },
       now: () => NOW,
+      receipts,
       sendMessage: async (chatId, text, options) => {
         sent.push({
           chatId,
@@ -125,6 +149,7 @@ function harness({
     finished,
     sent,
     state,
+    uploads,
   };
 }
 
@@ -307,16 +332,6 @@ test("group chats, bots, and non-message updates are ignored", async () => {
   const other = harness();
   const otherResult = await handleTelegramUpdate({ update_id: 5 }, other.deps);
   assert.equal(otherResult.status, "ignored");
-});
-
-test("receipt media gets an honest coming-soon reply", async () => {
-  const h = harness({ connection: CONNECTION });
-  await handleTelegramUpdate(
-    update(undefined, { message: { photo: [{ file_id: "x" }], text: undefined } }),
-    h.deps,
-  );
-  assert.equal(h.sent[0].text, MESSAGES.mediaSoon);
-  assert.equal(h.drafts.length, 0);
 });
 
 test("oversized messages are rejected before parsing", async () => {
@@ -640,4 +655,271 @@ test("the entrypoint wires the confirm RPCs and keeps button taps enabled", asyn
   assert.match(entry, /ensureButtonTapsAllowed/);
   // The bot token is in every Bot API URL and must never be logged.
   assert.doesNotMatch(entry, /console\.\w+\([^)]*(botToken|webhookSecret)/);
+});
+
+// --- receipt photos ------------------------------------------------------------
+
+function photoUpdate(overrides = {}) {
+  return update(undefined, {
+    message: {
+      caption: overrides.caption,
+      document: overrides.document,
+      photo:
+        overrides.document || overrides.voice
+          ? undefined
+          : (overrides.photo ?? [{ file_id: "file-1", file_size: 50_000, file_unique_id: "unique-1" }]),
+      text: undefined,
+      voice: overrides.voice,
+      ...overrides.message,
+    },
+    update_id: overrides.update_id ?? 3001,
+  });
+}
+
+function receiptAssistant({ reading = null, enabled = true } = {}) {
+  const calls = [];
+  return {
+    answer: async () => null,
+    calls,
+    enabled,
+    readReceipt: async (input) => {
+      calls.push(input);
+      return reading;
+    },
+    suggestFields: async () => null,
+  };
+}
+
+const READING = {
+  amount: 4500,
+  category_key: "shopping",
+  currency_code: "NGN",
+  merchant_name: "Shoprite",
+  transaction_date: "2026-10-20",
+};
+
+test("a receipt photo is read, kept privately, and offered with Save and Discard", async () => {
+  const assistant = receiptAssistant({ reading: READING });
+  const receipts = fakeReceipts();
+  const h = harness({ assistant, connection: CONNECTION, receipts });
+  const result = await handleTelegramUpdate(photoUpdate(), h.deps);
+
+  assert.equal(result.status, "processed");
+  // The photo was fetched, then read, then stored with the draft.
+  assert.equal(receipts.downloads[0].fileId, "file-1");
+  assert.equal(assistant.calls.length, 1);
+  assert.equal(assistant.calls[0].baseCurrency, "NGN");
+  assert.equal(assistant.calls[0].image.mimeType, "image/jpeg");
+  assert.deepEqual(assistant.calls[0].categoryKeys.includes("salary"), false);
+  assert.equal(h.uploads.length, 1);
+  assert.equal(h.uploads[0].sha256, "a".repeat(64));
+
+  const [draft] = h.drafts;
+  assert.equal(draft.source, "telegram");
+  assert.equal(draft.source_message_id, "555:42");
+  assert.equal(draft.extracted_fields.amount.value, 4500);
+  assert.equal(draft.extracted_fields.type.value, "Expenditure");
+  assert.equal(draft.original_text, "Receipt photo");
+
+  assert.match(h.sent[0].text, /^Draft ready: 4,500 NGN · expense · Shopping · 2026-10-20/);
+  assert.match(
+    h.sent[0].text,
+    /Please double-check: amount \(suggested by the AI assistant\), date \(suggested by the AI assistant\), category \(suggested by the AI assistant\)\./,
+  );
+  assert.match(h.sent[0].text, /Receipt photo attached, and read by the AI assistant\./);
+  assert.match(h.sent[0].text, /Save it to your ledger\?$/);
+  assert.equal(h.sent[0].buttons[0][0].data, `s:${DRAFT_ID}`);
+});
+
+test("what was typed under the photo wins over what the AI read", async () => {
+  const assistant = receiptAssistant({ reading: { ...READING, amount: 9999 } });
+  const h = harness({ assistant, connection: CONNECTION, receipts: fakeReceipts() });
+  await handleTelegramUpdate(photoUpdate({ caption: "spent 3000 on lunch" }), h.deps);
+  assert.equal(h.drafts[0].extracted_fields.amount.value, 3000);
+  assert.equal(h.drafts[0].original_text, "spent 3000 on lunch");
+});
+
+test("with AI off, a caption still makes a draft and the photo is attached", async () => {
+  const assistant = receiptAssistant({ enabled: true });
+  const optedOut = { ...CONNECTION, aiAssistEnabled: false };
+  const h = harness({ assistant, connection: optedOut, receipts: fakeReceipts() });
+  await handleTelegramUpdate(photoUpdate({ caption: "spent 2500 on groceries at Shoprite" }), h.deps);
+
+  assert.equal(assistant.calls.length, 0, "the photo is never sent to the AI");
+  assert.equal(h.uploads.length, 1);
+  assert.match(h.sent[0].text, /^Draft ready: 2,500 NGN/);
+  assert.match(h.sent[0].text, /Receipt photo attached\.\nSave it/);
+  assert.doesNotMatch(h.sent[0].text, /AI assistant/);
+});
+
+test("with AI off and no caption the bot explains instead of guessing", async () => {
+  const receipts = fakeReceipts();
+  const optedOut = harness({
+    assistant: receiptAssistant(),
+    connection: { ...CONNECTION, aiAssistEnabled: false },
+    receipts,
+  });
+  await handleTelegramUpdate(photoUpdate(), optedOut.deps);
+  assert.equal(optedOut.sent[0].text, MESSAGES.receiptNeedsAi);
+
+  const notSetUp = harness({ connection: CONNECTION, receipts });
+  await handleTelegramUpdate(photoUpdate(), notSetUp.deps);
+  assert.equal(notSetUp.sent[0].text, MESSAGES.receiptNeedsAiUnavailable);
+
+  assert.equal(receipts.downloads.length, 0, "nothing is downloaded or stored");
+  assert.equal(optedOut.drafts.length + notSetUp.drafts.length, 0);
+});
+
+test("a caption that is not a transaction, with AI off, downloads nothing", async () => {
+  const receipts = fakeReceipts();
+  const h = harness({ connection: CONNECTION, receipts });
+  await handleTelegramUpdate(photoUpdate({ caption: "look at this" }), h.deps);
+  assert.equal(h.sent[0].text, MESSAGES.notATransaction);
+  assert.equal(receipts.downloads.length, 0);
+});
+
+test("a photo the AI cannot read, with no caption, saves nothing", async () => {
+  for (const reading of [null, {}]) {
+    const h = harness({
+      assistant: receiptAssistant({ reading }),
+      connection: CONNECTION,
+      receipts: fakeReceipts(),
+    });
+    await handleTelegramUpdate(photoUpdate(), h.deps);
+    assert.equal(h.sent[0].text, MESSAGES.receiptUnreadable);
+    assert.equal(h.drafts.length, 0);
+    assert.equal(h.uploads.length, 0);
+  }
+});
+
+test("a receipt in another currency can only be discarded or finished in the app", async () => {
+  const h = harness({
+    assistant: receiptAssistant({ reading: { ...READING, currency_code: "USD" } }),
+    connection: CONNECTION,
+    receipts: fakeReceipts(),
+  });
+  await handleTelegramUpdate(photoUpdate(), h.deps);
+  assert.match(h.sent[0].text, /exchange rate/);
+  assert.equal(h.sent[0].buttons[0].length, 1);
+  assert.match(h.sent[0].text, /Receipt photo attached/);
+});
+
+test("when the photo cannot be kept the details are still saved, and it says so", async () => {
+  const h = harness({
+    assistant: receiptAssistant({ reading: READING }),
+    connection: CONNECTION,
+    receipts: fakeReceipts(),
+  });
+  h.state.receiptStored = false;
+  await handleTelegramUpdate(photoUpdate(), h.deps);
+  assert.match(h.sent[0].text, /I couldn’t keep the photo, so only the details were saved\./);
+  assert.doesNotMatch(h.sent[0].text, /attached/);
+});
+
+test("download problems get a plain reply and save nothing", async () => {
+  const cases = [
+    [{ ok: false, reason: "too_large" }, MESSAGES.receiptTooLarge],
+    [{ ok: false, reason: "unavailable" }, MESSAGES.receiptDownloadFailed],
+    // A file that is not really an image, whatever its name or claimed type.
+    [{ ok: false, reason: "not_image" }, MESSAGES.receiptDocument],
+  ];
+  for (const [result, text] of cases) {
+    const assistant = receiptAssistant({ reading: READING });
+    const h = harness({ assistant, connection: CONNECTION, receipts: fakeReceipts(result) });
+    await handleTelegramUpdate(photoUpdate(), h.deps);
+    assert.equal(h.sent[0].text, text);
+    assert.equal(assistant.calls.length, 0);
+    assert.equal(h.drafts.length, 0);
+  }
+  const noPort = harness({ assistant: receiptAssistant({ reading: READING }), connection: CONNECTION });
+  await handleTelegramUpdate(photoUpdate(), noPort.deps);
+  assert.equal(noPort.sent[0].text, MESSAGES.receiptUnavailable);
+});
+
+test("photos from an unlinked chat, group chats, and bots are refused or ignored", async () => {
+  const receipts = fakeReceipts();
+  const unlinked = harness({ assistant: receiptAssistant({ reading: READING }), receipts });
+  await handleTelegramUpdate(photoUpdate(), unlinked.deps);
+  assert.equal(unlinked.sent[0].text, MESSAGES.notLinked);
+
+  const group = harness({ assistant: receiptAssistant({ reading: READING }), connection: CONNECTION, receipts });
+  await handleTelegramUpdate(photoUpdate({ message: { chat: { id: -9, type: "group" } } }), group.deps);
+  assert.equal(group.sent[0].text, MESSAGES.privateOnly);
+  assert.equal(receipts.downloads.length, 0);
+});
+
+test("files that are not receipt images get a clear reply", async () => {
+  const cases = [
+    [{ document: { file_id: "d", mime_type: "application/pdf" } }, MESSAGES.receiptDocument],
+    [{ voice: { file_id: "v" } }, MESSAGES.mediaUnsupported],
+    [{ photo: [{ file_id: "p", file_size: 99_000_000 }] }, MESSAGES.receiptTooLarge],
+  ];
+  for (const [overrides, text] of cases) {
+    const receipts = fakeReceipts();
+    const h = harness({ assistant: receiptAssistant({ reading: READING }), connection: CONNECTION, receipts });
+    await handleTelegramUpdate(photoUpdate(overrides), h.deps);
+    assert.equal(h.sent[0].text, text);
+    assert.equal(receipts.downloads.length, 0);
+  }
+});
+
+test("a redelivered photo says it was already saved", async () => {
+  const h = harness({
+    assistant: receiptAssistant({ reading: READING }),
+    connection: CONNECTION,
+    receipts: fakeReceipts(),
+  });
+  h.deps.store.insertDraft = async () => ({ draftId: null, duplicate: true });
+  await handleTelegramUpdate(photoUpdate(), h.deps);
+  assert.equal(h.sent[0].text, "That message was already saved.");
+});
+
+test("the consent text and help now cover receipt photos", () => {
+  assert.match(MESSAGES.aiOn, /receipt photos/);
+  assert.match(MESSAGES.help, /photo of a receipt/);
+});
+
+test("the entrypoint downloads photos safely and never logs the bot token", async () => {
+  const entry = await readFile(
+    new URL("../../supabase/functions/telegram-webhook/index.ts", import.meta.url),
+    "utf8",
+  );
+  // The type comes from the bytes, and the size is capped before and after.
+  assert.match(entry, /sniffImageType\(bytes\)/);
+  assert.match(entry, /MAX_RECEIPT_BYTES/);
+  // Nothing in the download path logs an error object or a URL (both can carry
+  // the token): only fixed text and a status code.
+  const download = entry.slice(entry.indexOf("function createReceiptPort"), entry.indexOf("async function keepReceipt"));
+  assert.doesNotMatch(download, /console\.\w+\([^)]*(error|url|botToken|\$\{)/i);
+  assert.match(download, /catch \{/);
+});
+
+test("a kept photo lives in the owner's own private folder and is never left orphaned", async () => {
+  const entry = await readFile(
+    new URL("../../supabase/functions/telegram-webhook/index.ts", import.meta.url),
+    "utf8",
+  );
+  const keep = entry.slice(entry.indexOf("async function keepReceipt"), entry.indexOf("function createStore"));
+  assert.match(keep, /\$\{draft\.owner_user_id\}\/\$\{draft\.workspace_id\}\/\$\{attachmentId\}\/\$\{receipt\.filename\}/);
+  assert.match(keep, /upsert: false/);
+  assert.match(keep, /\.from\(RECEIPT_BUCKET\)/);
+  assert.match(entry, /const RECEIPT_BUCKET = "transaction-receipts";/);
+  // If the record cannot be written the file is removed straight away.
+  assert.match(keep, /rowError[\s\S]*?\.remove\(\[path\]\)/);
+
+  // Discarding a draft removes its held photo, scoped to the same owner.
+  const discard = entry.slice(entry.indexOf("async discardDraft"));
+  assert.match(discard, /\.from\("draft_receipts"\)[\s\S]*?\.eq\("owner_user_id", connection\.owner_user_id\)/);
+  assert.match(discard, /\.is\("attached_at", null\)/);
+  assert.match(discard, /\.remove\(\[held\.storage_path\]\)/);
+});
+
+test("photos are only ever read by the AI when the chat has opted in", async () => {
+  const handler = await readFile(
+    new URL("../../supabase/functions/telegram-webhook/handler.ts", import.meta.url),
+    "utf8",
+  );
+  const photo = handler.slice(handler.indexOf("async function handleReceiptPhoto"), handler.indexOf("/** Shows a draft with Save"));
+  assert.match(photo, /const canRead = assistantReady\(deps, connection\)/);
+  assert.match(photo, /if \(canRead && assistant\)/);
 });

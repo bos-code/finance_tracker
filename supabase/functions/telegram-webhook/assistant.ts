@@ -3,6 +3,12 @@ import {
   type AiSuggestion,
 } from "../../../src/features/assistant/ai-suggestions.ts";
 import {
+  buildReceiptRequest,
+  bytesToBase64,
+  validateReceiptReading,
+  type ReceiptReading,
+} from "../../../src/features/assistant/receipt-extraction.ts";
+import {
   buildHelpRequest,
   buildParseRequest,
   callGemini,
@@ -37,7 +43,11 @@ export type AssistantConfig = {
   model?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /** Reading a photo takes longer than a text reply. */
+  imageTimeoutMs?: number;
 };
+
+const DEFAULT_IMAGE_TIMEOUT_MS = 25_000;
 
 export interface AssistantPort {
   readonly enabled: boolean;
@@ -51,6 +61,14 @@ export interface AssistantPort {
     ownerUserId: string;
     question: string;
   }): Promise<string | null>;
+  /** Reads a receipt photo. Null when the AI is off, limited, slow, or wrong. */
+  readReceipt(input: {
+    ownerUserId: string;
+    image: { bytes: Uint8Array; mimeType: string };
+    categoryKeys: readonly string[];
+    baseCurrency: string;
+    now?: Date;
+  }): Promise<ReceiptReading | null>;
 }
 
 export function createAssistant(
@@ -67,6 +85,7 @@ export function createAssistant(
     feature: AiFeature,
     body: Parameters<typeof callGemini>[0]["body"],
     interpret: (text: string) => T | null,
+    timeoutMs: number | undefined = config.timeoutMs,
   ): Promise<T | null> {
     if (!enabled || !apiKey || !model) return null;
 
@@ -85,7 +104,7 @@ export function createAssistant(
         body,
         fetchImpl: config.fetchImpl,
         model,
-        timeoutMs: config.timeoutMs,
+        timeoutMs,
       });
       const interpreted = interpret(result.text);
       await quota
@@ -107,6 +126,26 @@ export function createAssistant(
         "assistant_help",
         buildHelpRequest(question),
         cleanAnswer,
+      );
+    },
+
+    readReceipt({ ownerUserId, image, categoryKeys, baseCurrency, now }) {
+      return run(
+        ownerUserId,
+        // A receipt is read as a transaction, so it shares that feature's quota.
+        "transaction_parser",
+        buildReceiptRequest({
+          base64: bytesToBase64(image.bytes),
+          categoryKeys,
+          mimeType: image.mimeType,
+        }),
+        (reply) =>
+          validateReceiptReading(parseJsonReply(reply), {
+            baseCurrency,
+            categoryKeys,
+            now,
+          }),
+        config.imageTimeoutMs ?? DEFAULT_IMAGE_TIMEOUT_MS,
       );
     },
 

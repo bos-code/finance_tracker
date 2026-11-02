@@ -88,9 +88,47 @@ Deno.serve(async (request) => {
     else removed += 1;
   }
 
+  // Receipt photos sent to the Telegram bot whose draft was deleted outside the
+  // bot, or has expired, and so will never become part of a transaction. The
+  // private file is removed before its record, so a failure is retried next run.
+  let photosRemoved = 0;
+  let photosFailed = 0;
+  const nowIso = new Date().toISOString();
+  const { data: deletedDrafts, error: deletedError } = await admin
+    .from("draft_receipts")
+    .select("id, storage_path")
+    .is("attached_at", null)
+    .is("draft_id", null)
+    .limit(BATCH_SIZE);
+  const { data: expiredDrafts, error: expiredError } = await admin
+    .from("draft_receipts")
+    .select("id, storage_path, transaction_drafts!inner(expires_at)")
+    .is("attached_at", null)
+    .lt("transaction_drafts.expires_at", nowIso)
+    .limit(BATCH_SIZE);
+  if (deletedError || expiredError) photosFailed += 1;
+
+  for (const photo of [...(deletedDrafts ?? []), ...(expiredDrafts ?? [])]) {
+    const { error: storageError } = await admin.storage
+      .from("transaction-receipts")
+      .remove([photo.storage_path]);
+    if (storageError) {
+      photosFailed += 1;
+      continue;
+    }
+    const { error: rowError } = await admin
+      .from("draft_receipts")
+      .delete()
+      .eq("id", photo.id);
+    if (rowError) photosFailed += 1;
+    else photosRemoved += 1;
+  }
+
   return json(200, {
     failed,
     inspected: stale?.length ?? 0,
+    photos_failed: photosFailed,
+    photos_removed: photosRemoved,
     removed,
     request_id: requestId,
   });

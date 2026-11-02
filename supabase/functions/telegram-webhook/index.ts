@@ -13,13 +13,21 @@ import {
   type ConfirmOutcome,
   type DiscardOutcome,
   type LinkOutcome,
+  type ReceiptImage,
+  type ReceiptPort,
   type TelegramUpdate,
 } from "./handler.ts";
+import {
+  MAX_RECEIPT_BYTES,
+  safeReceiptFilename,
+  sniffImageType,
+} from "../../../src/features/channels/telegram-media.ts";
 import type { ChatDraft } from "../../../src/features/drafts/chat-confirmation.ts";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const PROVIDER = "telegram";
 const REVIEWABLE_LIFECYCLES = ["draft", "pending_confirmation", "needs_review"];
+const RECEIPT_BUCKET = "transaction-receipts";
 const DRAFT_COLUMNS =
   "id, owner_user_id, workspace_id, lifecycle, extracted_fields, missing_fields, original_text, expires_at";
 
@@ -51,6 +59,125 @@ async function secretsMatch(provided: string, expected: string) {
     difference |= left[index] ^ right[index];
   }
   return difference === 0;
+}
+
+async function sha256Hex(bytes: Uint8Array) {
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Downloads a photo the person sent. The bot token is part of every Bot API URL,
+ * so nothing here logs a URL or an error object, only fixed text and a status.
+ */
+function createReceiptPort(botToken: string): ReceiptPort {
+  const unavailable = { ok: false, reason: "unavailable" } as const;
+  return {
+    async download(media) {
+      try {
+        const info = await fetch(
+          `https://api.telegram.org/bot${botToken}/getFile`,
+          {
+            body: JSON.stringify({ file_id: media.fileId }),
+            headers: JSON_HEADERS,
+            method: "POST",
+            signal: AbortSignal.timeout(8_000),
+          },
+        );
+        if (!info.ok) {
+          console.error("telegram getFile failed", info.status);
+          return unavailable;
+        }
+        const result = (await info.json())?.result;
+        if (typeof result?.file_path !== "string" || !result.file_path) {
+          return unavailable;
+        }
+        if (typeof result.file_size === "number" && result.file_size > MAX_RECEIPT_BYTES) {
+          return { ok: false, reason: "too_large" } as const;
+        }
+
+        const file = await fetch(
+          `https://api.telegram.org/file/bot${botToken}/${result.file_path}`,
+          { signal: AbortSignal.timeout(15_000) },
+        );
+        if (!file.ok) {
+          console.error("telegram file download failed", file.status);
+          return unavailable;
+        }
+        if (Number(file.headers.get("content-length") ?? 0) > MAX_RECEIPT_BYTES) {
+          return { ok: false, reason: "too_large" } as const;
+        }
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (bytes.length > MAX_RECEIPT_BYTES) {
+          return { ok: false, reason: "too_large" } as const;
+        }
+
+        // Trust the bytes, not the name or the type Telegram claimed.
+        const mimeType = sniffImageType(bytes);
+        if (!mimeType) return { ok: false, reason: "not_image" } as const;
+
+        return {
+          image: {
+            bytes,
+            filename: safeReceiptFilename(mimeType, media.filename),
+            mimeType,
+            providerMediaId: media.providerMediaId,
+            sha256: await sha256Hex(bytes),
+          },
+          ok: true,
+        } as const;
+      } catch {
+        console.error("telegram receipt download failed");
+        return unavailable;
+      }
+    },
+  };
+}
+
+/**
+ * Keeps a receipt photo in the private bucket and records it against the draft.
+ * It is attached to a transaction only when the draft is confirmed (a database
+ * trigger does that), and removed if the draft is discarded or abandoned.
+ */
+async function keepReceipt(
+  admin: ReturnType<typeof createClient>,
+  draft: { owner_user_id: string; workspace_id: string },
+  draftId: string,
+  receipt: ReceiptImage,
+) {
+  const attachmentId = crypto.randomUUID();
+  const path = `${draft.owner_user_id}/${draft.workspace_id}/${attachmentId}/${receipt.filename}`;
+
+  const { error: uploadError } = await admin.storage
+    .from(RECEIPT_BUCKET)
+    .upload(path, receipt.bytes, {
+      contentType: receipt.mimeType,
+      upsert: false,
+    });
+  if (uploadError) {
+    console.error("receipt upload failed");
+    return false;
+  }
+
+  const { error: rowError } = await admin.from("draft_receipts").insert({
+    draft_id: draftId,
+    file_hash: receipt.sha256,
+    file_size_bytes: receipt.bytes.length,
+    id: attachmentId,
+    mime_type: receipt.mimeType,
+    original_filename: receipt.filename,
+    owner_user_id: draft.owner_user_id,
+    provider_media_id: receipt.providerMediaId,
+    storage_path: path,
+    workspace_id: draft.workspace_id,
+  });
+  if (rowError) {
+    console.error("receipt record failed");
+    // Never leave a photo behind that nothing points to.
+    await admin.storage.from(RECEIPT_BUCKET).remove([path]);
+    return false;
+  }
+  return true;
 }
 
 function createStore(
@@ -150,17 +277,22 @@ function createStore(
       return (data?.length ?? 0) > 0;
     },
 
-    async insertDraft(draft) {
+    async insertDraft(draft, receipt) {
       const { data, error } = await admin
         .from("transaction_drafts")
         .insert(draft)
         .select("id")
         .single();
-      if (!error) return { draftId: data?.id ?? null, duplicate: false };
-      // The unique (owner, source, source_message_id) index makes a redelivered
-      // message a harmless duplicate rather than a second draft.
-      if (error.code === "23505") return { draftId: null, duplicate: true };
-      throw error;
+      if (error) {
+        // The unique (owner, source, source_message_id) index makes a redelivered
+        // message a harmless duplicate rather than a second draft.
+        if (error.code === "23505") return { draftId: null, duplicate: true };
+        throw error;
+      }
+      const draftId: string | null = data?.id ?? null;
+      const receiptStored =
+        receipt && draftId ? await keepReceipt(admin, draft, draftId, receipt) : false;
+      return { draftId, duplicate: false, receiptStored };
     },
 
     async getDraft(connection, draftId) {
@@ -225,6 +357,22 @@ function createStore(
       if (error) throw error;
       if (!connection) return "not_linked";
 
+      // A receipt photo held for this draft goes with it. Looked up first,
+      // because once the draft is gone nothing points to the photo any more.
+      let held: { id: string; storage_path: string } | null = null;
+      try {
+        const { data } = await admin
+          .from("draft_receipts")
+          .select("id, storage_path")
+          .eq("draft_id", draftId)
+          .eq("owner_user_id", connection.owner_user_id)
+          .is("attached_at", null)
+          .maybeSingle();
+        held = data;
+      } catch {
+        // Not being able to look must not stop the person discarding.
+      }
+
       const { data: removed, error: removeError } = await admin
         .from("transaction_drafts")
         .delete()
@@ -234,7 +382,19 @@ function createStore(
         .neq("lifecycle", "confirmed")
         .select("id");
       if (removeError) throw removeError;
-      if (removed && removed.length > 0) return "discarded";
+      if (removed && removed.length > 0) {
+        if (held) {
+          // If the photo cannot be removed now its record stays, and the
+          // scheduled cleanup removes both later.
+          const { error: storageError } = await admin.storage
+            .from(RECEIPT_BUCKET)
+            .remove([held.storage_path]);
+          if (!storageError) {
+            await admin.from("draft_receipts").delete().eq("id", held.id);
+          }
+        }
+        return "discarded";
+      }
 
       // Nothing was removed: it was already saved, or it is not this account's.
       const { data: remaining, error: readError } = await admin
@@ -413,6 +573,7 @@ Deno.serve(async (request) => {
         reply_markup: { inline_keyboard: [] },
         text,
       }),
+    receipts: createReceiptPort(botToken),
     sendMessage: (chatId, text, options) =>
       callTelegram("sendMessage", {
         chat_id: chatId,

@@ -20,7 +20,17 @@ the app (Profile → Connections → Telegram).
   in-app flow, so tapping twice, or confirming in the app too, can never save it twice. A draft
   that is missing a value, or is in a foreign currency with no exchange rate, offers only
   Discard and points to the app. Uncertain values are listed under "Please double-check".
-- Photos and documents get a polite "coming soon" reply (Backend Stage 8).
+- **Receipt photos** (a photo, or a JPEG/PNG/WebP image file, up to 8 MB): the bot downloads it,
+  checks from its bytes that it really is an image, and keeps it in the private
+  `transaction-receipts` bucket under the owner's own folder (`draft_receipts` holds the record).
+  If AI assistance is on for the chat, Gemini reads the total, date, shop and category; anything
+  typed in the caption wins over what the photo says. Every value the AI read is flagged
+  "Please double-check", and nothing is saved until the person taps Save. When the draft is
+  confirmed, from the bot or from the app, a database trigger attaches the photo to the new
+  transaction so it shows up like any other receipt. Discarding the draft removes the photo, and
+  `receipt-orphan-cleanup` removes photos from drafts that were deleted elsewhere or have expired.
+  With AI off, a photo needs a caption (for example "spent 2500 on groceries") and is attached to that
+  draft; without one the bot explains instead of guessing. PDFs, voice notes and video are declined.
 
 ## Gemini assistant (optional)
 
@@ -40,7 +50,9 @@ What it does, and what it is not allowed to do:
   "Please double-check", and nothing is saved until the person taps Save (or reviews it in the app).
 - Answers short "how do I use this?" questions. It is told it cannot see account data and must
   not give financial advice.
-- Only the text the user typed to the bot, plus a fixed list of category names, is sent to Google.
+- Only what the user sent to the bot is sent to Google: their text, or a receipt photo they sent
+  while AI assistance was on, plus a fixed list of category names. The `/ai on` consent message says
+  so. Photos are never sent when the chat has not opted in.
   No ids, balances, or history.
 - Every call is reserved against per-user and project-wide daily limits (`claim_ai_quota`) and
   logged with token counts in `ai_usage`. Five failures with no success in five minutes opens a
@@ -54,8 +66,9 @@ minute; failed link attempts are limited to 5 per 15 minutes per Telegram user.
 
 ## Deployment requirements
 
-1. Apply migrations `20261022000600_telegram_channel_connections.sql` and
-   `20261101000800_telegram_draft_confirmation.sql` (Save / Discard buttons).
+1. Apply migrations `20261022000600_telegram_channel_connections.sql`,
+   `20261101000800_telegram_draft_confirmation.sql` (Save / Discard buttons) and
+   `20261102000900_telegram_receipt_photos.sql` (receipt photos).
 2. Create a bot with [@BotFather](https://t.me/BotFather) and note its token and username.
 3. Set these Edge Function secrets (never as `EXPO_PUBLIC_*`):
    - `TELEGRAM_BOT_TOKEN` – the BotFather token.
