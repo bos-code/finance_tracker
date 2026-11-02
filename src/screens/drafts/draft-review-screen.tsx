@@ -28,12 +28,12 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 type DraftForm = {
   amount: string;

@@ -13,7 +13,8 @@ import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { THEME_IDS, THEMES, type ThemeId } from "@/theme/themes";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 // Fixed glyph sizes so the "A A A A" scale picker reads the same in every theme.
 const SCALE_GLYPH_SIZES: Record<FontScaleId, number> = {

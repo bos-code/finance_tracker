@@ -5,12 +5,12 @@ import type { ReactNode } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export function AuthShell({

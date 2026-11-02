@@ -4,7 +4,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Platform, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];

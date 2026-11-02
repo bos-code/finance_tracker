@@ -9,12 +9,12 @@ import {
   Easing,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,

@@ -7,7 +7,8 @@ import {
   type DisplayCurrency,
 } from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 export function LedgerEntryRow({
   currency,

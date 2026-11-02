@@ -79,3 +79,37 @@ test("every screen and component that draws text gets its styles from the theme"
     );
   }
 });
+
+// NativeWind v4 drops every style on a Pressable whose `style` is a function,
+// on Android and iOS only (the web build looks fine). The wrapper resolves the
+// function itself, so nothing may import Pressable straight from react-native.
+test("Pressable always comes from the safe wrapper, never straight from react-native", () => {
+  for (const file of sourceFiles) {
+    if (file.path === "src/components/ui/pressable.tsx") continue;
+    for (const match of file.text.matchAll(
+      /import\s*\{([^}]*)\}\s*from\s*"react-native";/g,
+    )) {
+      const names = match[1].split(",").map((name) => name.trim());
+      assert.ok(
+        !names.includes("Pressable"),
+        `${file.path} imports Pressable from react-native; use "@/components/ui/pressable"`,
+      );
+    }
+    if (/<Pressable\b/.test(file.text)) {
+      assert.match(
+        file.text,
+        /import \{ Pressable \} from "@\/components\/ui\/pressable";/,
+        `${file.path} uses Pressable without the safe wrapper`,
+      );
+    }
+  }
+});
+
+test("the wrapper never hands a function style to the native Pressable", () => {
+  const wrapper = sourceFiles.find((file) => file.path === "src/components/ui/pressable.tsx").text;
+  // The function is called here, with the pressed state, before rendering.
+  assert.match(wrapper, /style=\{typeof style === "function" \? style\(state\) : style\}/);
+  assert.match(wrapper, /typeof children === "function" \? children\(state\) : children/);
+  // It is the only place allowed to touch react-native's own Pressable.
+  assert.match(wrapper, /Pressable as NativePressable/);
+});

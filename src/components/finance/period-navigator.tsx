@@ -1,7 +1,8 @@
 import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 export function PeriodNavigator({
   label,

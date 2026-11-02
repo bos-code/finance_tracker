@@ -3,11 +3,11 @@ import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
   type ViewStyle,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 type ButtonTone = "primary" | "quiet" | "danger";
 

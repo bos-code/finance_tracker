@@ -18,12 +18,12 @@ import { router } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 function fieldText(draft: TransactionDraftContract, fieldName: string) {
   const value = draft.extracted_fields[fieldName]?.value;

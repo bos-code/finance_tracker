@@ -1,6 +1,7 @@
 import { type AppTheme, useStyles } from "@/theme/theme-context";
 
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 export type SegmentOption<T extends string> = {
   label: string;

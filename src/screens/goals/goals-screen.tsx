@@ -30,13 +30,13 @@ import { useMemo, useState } from "react";
 import {
   Alert,
   Modal,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 type GoalFilter = "all" | "active" | "completed";
 

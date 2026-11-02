@@ -9,12 +9,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function AppLockScreen() {

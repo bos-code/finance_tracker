@@ -4,7 +4,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
@@ -202,6 +203,9 @@ export function FloatingTabBar({
 const createStyles = ({ palette, fonts, fs }: AppTheme) =>
   StyleSheet.create({
   wrapper: {
+    // A solid strip behind the bar, so nothing scrolls into view in the gap
+    // beneath it.
+    backgroundColor: palette.canvas,
     bottom: 0,
     left: 0,
     paddingHorizontal: 12,

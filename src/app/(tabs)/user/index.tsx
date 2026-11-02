@@ -5,7 +5,8 @@ import { ROUTES } from "@/navigation/route-names";
 import { ProfileScreen } from "@/screens";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/components/ui/pressable";
 
 export default function ProfileRoute() {
   const { palette } = useTheme();
