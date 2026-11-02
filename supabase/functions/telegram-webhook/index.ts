@@ -213,12 +213,41 @@ function createStore(
     },
 
     async discardDraft(providerUserId, draftId) {
-      const { data, error } = await admin.rpc("telegram_discard_draft", {
-        p_draft_id: draftId,
-        p_provider_user_id: providerUserId,
-      });
+      // The same thing the app's own delete does, with the same limits: only an
+      // unconfirmed draft, only the one owned by this chat's linked account.
+      const { data: connection, error } = await admin
+        .from("channel_connections")
+        .select("owner_user_id, workspace_id")
+        .eq("provider", PROVIDER)
+        .eq("provider_user_id", providerUserId)
+        .eq("status", "active")
+        .maybeSingle();
       if (error) throw error;
-      return data as DiscardOutcome;
+      if (!connection) return "not_linked";
+
+      const { data: removed, error: removeError } = await admin
+        .from("transaction_drafts")
+        .delete()
+        .eq("id", draftId)
+        .eq("owner_user_id", connection.owner_user_id)
+        .eq("workspace_id", connection.workspace_id)
+        .neq("lifecycle", "confirmed")
+        .select("id");
+      if (removeError) throw removeError;
+      if (removed && removed.length > 0) return "discarded";
+
+      // Nothing was removed: it was already saved, or it is not this account's.
+      const { data: remaining, error: readError } = await admin
+        .from("transaction_drafts")
+        .select("lifecycle")
+        .eq("id", draftId)
+        .eq("owner_user_id", connection.owner_user_id)
+        .eq("workspace_id", connection.workspace_id)
+        .maybeSingle();
+      if (readError) throw readError;
+      return remaining?.lifecycle === "confirmed"
+        ? "already_confirmed"
+        : "not_found";
     },
 
     async countReviewableDrafts(connection) {

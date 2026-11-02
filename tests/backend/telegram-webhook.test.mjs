@@ -626,7 +626,13 @@ test("the entrypoint wires the confirm RPCs and keeps button taps enabled", asyn
     "utf8",
   );
   assert.match(entry, /telegram_confirm_draft/);
-  assert.match(entry, /telegram_discard_draft/);
+  // Discard is a scoped table delete: never a confirmed draft, never another
+  // account's draft, and always limited to a single row by id.
+  const discard = entry.slice(entry.indexOf("async discardDraft"));
+  assert.match(discard, /\.delete\(\)[\s\S]*?\.eq\("id", draftId\)/);
+  assert.match(discard, /\.eq\("owner_user_id", connection\.owner_user_id\)/);
+  assert.match(discard, /\.eq\("workspace_id", connection\.workspace_id\)/);
+  assert.match(discard, /\.neq\("lifecycle", "confirmed"\)/);
   assert.match(entry, /answerCallbackQuery/);
   assert.match(entry, /editMessageText/);
   // Drafts are always read scoped to the connection's own owner and workspace.

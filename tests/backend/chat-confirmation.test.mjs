@@ -152,15 +152,15 @@ const migration = await readFile(
   "utf8",
 );
 
-test("both functions run as the owner with an empty search path", () => {
+test("the function runs as the owner with an empty search path", () => {
   const definitions = migration.match(/create or replace function public\.telegram_\w+/g) ?? [];
-  assert.equal(definitions.length, 2);
-  assert.equal((migration.match(/security definer/g) ?? []).length, 2);
-  assert.equal((migration.match(/set search_path = ''/g) ?? []).length, 2);
+  assert.deepEqual(definitions, ["create or replace function public.telegram_confirm_draft"]);
+  assert.equal((migration.match(/security definer/g) ?? []).length, 1);
+  assert.equal((migration.match(/set search_path = ''/g) ?? []).length, 1);
 });
 
-test("only the service role may call them", () => {
-  for (const name of ["telegram_confirm_draft", "telegram_discard_draft"]) {
+test("only the service role may call it", () => {
+  for (const name of ["telegram_confirm_draft"]) {
     const revoke = new RegExp(
       `revoke all on function public\\.${name}\\([^)]*\\)\\s+from public, anon, authenticated, service_role`,
     );
@@ -182,10 +182,10 @@ test("confirming reuses mutate_transaction and the app's own idempotency key", (
 
 test("every lookup is scoped to the connection's own owner and workspace", () => {
   assert.match(migration, /c\.status = 'active'/);
-  assert.equal((migration.match(/d\.owner_user_id = v_owner/g) ?? []).length, 2);
-  assert.equal((migration.match(/d\.workspace_id = v_workspace/g) ?? []).length, 2);
-  // Rows are locked so a double tap, or a tap plus an in-app save, cannot race.
-  assert.equal((migration.match(/for update;/g) ?? []).length, 2);
+  assert.equal((migration.match(/d\.owner_user_id = v_owner/g) ?? []).length, 1);
+  assert.equal((migration.match(/d\.workspace_id = v_workspace/g) ?? []).length, 1);
+  // The row is locked so a double tap, or a tap plus an in-app save, cannot race.
+  assert.equal((migration.match(/for update;/g) ?? []).length, 1);
 });
 
 test("the impersonation of the owner is transaction-local and cleared", () => {
@@ -193,7 +193,7 @@ test("the impersonation of the owner is transaction-local and cleared", () => {
   assert.match(migration, /set_config\('request\.jwt\.claim\.sub', '', true\)/);
 });
 
-test("confirmed drafts are never deleted or re-confirmed", () => {
-  assert.match(migration, /v_lifecycle = 'confirmed'[\s\S]*?return 'already_confirmed'/);
+test("a confirmed draft is never confirmed twice", () => {
   assert.match(migration, /v_draft\.lifecycle = 'confirmed'/);
+  assert.match(migration, /'already_confirmed'/);
 });

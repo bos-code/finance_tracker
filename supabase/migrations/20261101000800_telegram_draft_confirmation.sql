@@ -1,11 +1,13 @@
 -- Finance Tracker Backend Stage 6b (confirm drafts from Telegram)
--- Purpose: let a linked Telegram chat save or discard one of its own drafts
--- with a button tap, without weakening any rule the in-app flow enforces.
+-- Purpose: let a linked Telegram chat save one of its own drafts with a button
+-- tap, without weakening any rule the in-app flow enforces. (Discarding needs no
+-- function: the webhook deletes the one unconfirmed row, scoped to the
+-- connection's owner and workspace, exactly as the app's own delete does.)
 -- Prerequisite: 20261022000600_telegram_channel_connections.sql and
 -- 20260805000500_transaction_review_drafts.sql.
--- Trust model: both functions are service_role only. The webhook has already
--- authenticated the request with Telegram's secret header; these functions
--- re-check that the Telegram user has an active connection and that the draft
+-- Trust model: the function is service_role only. The webhook has already
+-- authenticated the request with Telegram's secret header; the function
+-- re-checks that the Telegram user has an active connection and that the draft
 -- belongs to that connection's account and workspace, so a tampered button can
 -- never reach someone else's data.
 -- Reuse: the transaction is created by the existing mutate_transaction RPC, with
@@ -120,69 +122,19 @@ begin
 end;
 $$;
 
-create or replace function public.telegram_discard_draft(
-  p_provider_user_id text,
-  p_draft_id uuid
-)
-returns text
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_owner uuid;
-  v_workspace uuid;
-  v_lifecycle text;
-begin
-  select c.owner_user_id, c.workspace_id
-  into v_owner, v_workspace
-  from public.channel_connections c
-  where c.provider = 'telegram'
-    and c.provider_user_id = p_provider_user_id
-    and c.status = 'active';
-  if not found then
-    return 'not_linked';
-  end if;
-
-  select d.lifecycle into v_lifecycle
-  from public.transaction_drafts d
-  where d.id = p_draft_id
-    and d.owner_user_id = v_owner
-    and d.workspace_id = v_workspace
-  for update;
-  if not found then
-    return 'not_found';
-  end if;
-
-  -- Confirmed drafts are history, exactly as in the app.
-  if v_lifecycle = 'confirmed' then
-    return 'already_confirmed';
-  end if;
-
-  delete from public.transaction_drafts where id = p_draft_id;
-  return 'discarded';
-end;
-$$;
-
 -- Supabase grants EXECUTE to anon/authenticated by default; narrow it
 -- explicitly instead of relying on "revoke from public".
 revoke all on function public.telegram_confirm_draft(
   text, uuid, text, numeric, text, text, date, text, text, numeric, uuid
 ) from public, anon, authenticated, service_role;
-revoke all on function public.telegram_discard_draft(text, uuid)
-  from public, anon, authenticated, service_role;
 
 grant execute on function public.telegram_confirm_draft(
   text, uuid, text, numeric, text, text, date, text, text, numeric, uuid
 ) to service_role;
-grant execute on function public.telegram_discard_draft(text, uuid)
-  to service_role;
 
 comment on function public.telegram_confirm_draft(
   text, uuid, text, numeric, text, text, date, text, text, numeric, uuid
 ) is
   'Service role only. Creates the draft''s transaction through mutate_transaction and confirms the draft, for an active Telegram connection that owns it.';
-comment on function public.telegram_discard_draft(text, uuid) is
-  'Service role only. Deletes an unconfirmed draft owned by an active Telegram connection.';
 
 commit;
