@@ -1,7 +1,7 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ActionButton } from "@/components/finance/action-button";
 import type { Category } from "@/constants/categories";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
@@ -101,6 +101,8 @@ function IconChip({
   onPress: () => void;
   selected: boolean;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -151,6 +153,8 @@ function ColorChip({
   onPress: () => void;
   selected: boolean;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -196,6 +200,8 @@ export function CategoryEditor({
   onSave,
   onClose,
 }: CategoryEditorProps) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const insets = useSafeAreaInsets();
   const [local, setLocal] = useState<Category[]>(categories);
   const [selectedId, setSelectedId] = useState(categories[0]?.id ?? "");
@@ -390,7 +396,8 @@ export function CategoryEditor({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   modalRoot: {
     backgroundColor: withAlpha(palette.black, 0.74),
     flex: 1,
@@ -430,21 +437,21 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.72,
     marginBottom: 7,
   },
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
     letterSpacing: -0.25,
   },
   description: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
     marginTop: 6,
   },
   closeButton: {
@@ -471,14 +478,14 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.68,
     marginBottom: 10,
   },
   sectionValue: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     marginBottom: 10,
   },
   categoryList: { gap: 7 },
@@ -492,7 +499,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: 12,
   },
-  categoryRowSelected: { backgroundColor: withAlpha(palette.white, 0.025) },
+  categoryRowSelected: { backgroundColor: withAlpha(palette.tint, 0.025) },
   categoryThread: { alignSelf: "stretch", marginLeft: -12, marginRight: 11, width: 1 },
   categoryIcon: {
     alignItems: "center",
@@ -508,14 +515,14 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: "600",
   },
   categoryLabelSelected: { color: palette.text },
   categoryStatus: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 6,
+    fontSize: fs(6),
   },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   iconChip: {
@@ -541,7 +548,7 @@ const styles = StyleSheet.create({
     width: 55,
   },
   colorChipSelected: {
-    backgroundColor: withAlpha(palette.white, 0.035),
+    backgroundColor: withAlpha(palette.tint, 0.035),
     borderColor: palette.lineStrong,
   },
   colorSignal: { borderRadius: 999, height: 8, width: 8 },

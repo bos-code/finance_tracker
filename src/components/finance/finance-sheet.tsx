@@ -1,5 +1,5 @@
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,7 +30,10 @@ export function FinanceSheet({
   title: string;
   visible: boolean;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
@@ -61,12 +65,17 @@ export function FinanceSheet({
           <View
             style={[
               styles.sheet,
-              { paddingBottom: Math.max(insets.bottom, 18) },
+              {
+                // A real pixel cap: a percentage does nothing here because the
+                // parent has no fixed height, which let tall sheets run off screen.
+                maxHeight: Math.round(windowHeight * 0.92),
+                paddingBottom: Math.max(insets.bottom, 18),
+              },
             ]}>
             <View style={styles.handle} />
             <View style={styles.header}>
               <View style={styles.headerCopy}>
-                <Text style={styles.eyebrow}>FINANCE TRACKER / REVIEW</Text>
+                <Text style={styles.eyebrow}>FINANCE TRACKER</Text>
                 <Text style={styles.title}>{title}</Text>
                 {description ? (
                   <Text style={styles.description}>{description}</Text>
@@ -96,7 +105,8 @@ export function FinanceSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   modal: { flex: 1, justifyContent: "flex-end" },
   scrim: {
     ...StyleSheet.absoluteFillObject,
@@ -109,7 +119,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    maxHeight: "92%",
     overflow: "hidden",
   },
   handle: {
@@ -129,17 +138,17 @@ const styles = StyleSheet.create({
   },
   headerCopy: { flex: 1, gap: 5, paddingRight: 16 },
   eyebrow: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(11),
     letterSpacing: 0.8,
   },
-  title: { color: palette.text, fontFamily: fonts.display, fontSize: 24 },
+  title: { color: palette.text, fontFamily: fonts.display, fontSize: fs(24) },
   description: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(13),
+    lineHeight: lh(13, 19),
   },
   close: {
     alignItems: "center",

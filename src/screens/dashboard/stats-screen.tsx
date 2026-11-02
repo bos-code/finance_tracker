@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { PageHeading } from "@/components/finance/page-heading";
 import { PeriodNavigator } from "@/components/finance/period-navigator";
 import { SegmentedControl } from "@/components/finance/segmented-control";
@@ -15,8 +16,7 @@ import {
   type TransactionType,
 } from "@/services/supabase/transaction-service";
 import { useAppStore } from "@/store/use-app-store";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import {
   formatCompactMoney,
   formatMoney,
@@ -51,11 +51,11 @@ const FLOW_OPTIONS = [
 ] satisfies { label: string; value: TransactionType }[];
 
 const CATEGORY_SIGNALS = [
-  palette.signalAmber,
-  palette.signalViolet,
-  palette.signalCyan,
-  palette.signalMoss,
-];
+  "signalAmber",
+  "signalViolet",
+  "signalCyan",
+  "signalMoss",
+] as const;
 
 const EMPTY_TRANSACTIONS: Transaction[] = [];
 
@@ -123,6 +123,7 @@ function SectionHeading({
   index: string;
   label: string;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.sectionHeading}>
       <Text style={styles.sectionIndex}>{index}</Text>
@@ -141,6 +142,8 @@ function TrendStripes({
   currency: DisplayCurrency;
   data: TrendPoint[];
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const max = Math.max(...data.map((point) => point.value), 1);
   const maxIndex = data.reduce(
     (largest, point, index) =>
@@ -189,6 +192,8 @@ function TrendStripes({
 }
 
 export function StatsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const currency = useAppStore((state) => state.currency);
   const [periodMode, setPeriodMode] = useState<PeriodMode>("month");
   const [flowType, setFlowType] =
@@ -438,7 +443,7 @@ export function StatsScreen() {
                       key={item.category_id}
                       style={{
                         backgroundColor:
-                          CATEGORY_SIGNALS[index % CATEGORY_SIGNALS.length],
+                          palette[CATEGORY_SIGNALS[index % CATEGORY_SIGNALS.length]],
                         flex: item.percentage,
                       }}
                     />
@@ -457,7 +462,7 @@ export function StatsScreen() {
                           styles.categorySignal,
                           {
                             backgroundColor:
-                              CATEGORY_SIGNALS[index % CATEGORY_SIGNALS.length],
+                              palette[CATEGORY_SIGNALS[index % CATEGORY_SIGNALS.length]],
                           },
                         ]}
                       />
@@ -505,7 +510,8 @@ export function StatsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   content: {
     alignSelf: "center",
     maxWidth: 720,
@@ -525,13 +531,13 @@ const styles = StyleSheet.create({
   focusEyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.75,
   },
   focusAmount: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 42,
+    fontSize: fs(42),
     letterSpacing: -1,
     marginTop: 9,
   },
@@ -544,7 +550,7 @@ const styles = StyleSheet.create({
   focusMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
   },
   focusMetaRule: { backgroundColor: palette.lineStrong, height: 1, width: 18 },
   sectionHeading: {
@@ -556,13 +562,13 @@ const styles = StyleSheet.create({
   sectionIndex: {
     color: palette.signalCyan,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   sectionRule: { backgroundColor: palette.lineStrong, height: 1, width: 28 },
   sectionLabel: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.9,
   },
   trendPanel: {
@@ -591,7 +597,7 @@ const styles = StyleSheet.create({
   trendAmount: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 6,
+    fontSize: fs(6),
     height: 14,
     maxWidth: "96%",
   },
@@ -605,7 +611,7 @@ const styles = StyleSheet.create({
   trendLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     marginTop: 9,
   },
   distributionPanel: {
@@ -628,7 +634,7 @@ const styles = StyleSheet.create({
   categoryRank: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     width: 26,
   },
   categorySignal: { height: 30, marginRight: 12, width: 1 },
@@ -636,23 +642,23 @@ const styles = StyleSheet.create({
   categoryName: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "600",
   },
   categoryShare: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.25,
   },
   categoryAmount: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 10,
+    fontSize: fs(10),
     textAlign: "right",
   },
   readout: {
-    backgroundColor: withAlpha(palette.white, 0.025),
+    backgroundColor: withAlpha(palette.tint, 0.025),
     borderColor: palette.line,
     borderCurve: "continuous",
     borderRadius: 18,
@@ -668,14 +674,14 @@ const styles = StyleSheet.create({
   readoutTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 21,
+    fontSize: fs(21),
     marginBottom: 10,
   },
   readoutBody: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 19,
+    fontSize: fs(12),
+    lineHeight: lh(12, 19),
   },
   readoutDivider: {
     backgroundColor: palette.line,

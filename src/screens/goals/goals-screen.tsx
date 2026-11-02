@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
 import { FinanceSheet } from "@/components/finance/finance-sheet";
@@ -19,8 +20,7 @@ import {
 } from "@/hooks/use-goals";
 import { isMissingGoalsTableError } from "@/services/supabase/goal-service";
 import { CURRENCY_OPTIONS, useAppStore } from "@/store/use-app-store";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import type { Goal, GoalStatus, GoalType } from "@/types/domain/goal";
 import { fromLocalDateString, toLocalDateString } from "@/utils/date";
 import { formatMoney, type DisplayCurrency } from "@/utils/money";
@@ -87,13 +87,15 @@ const GOAL_ICON_OPTIONS = [
   "sofa-outline",
 ] as const;
 
+// Goal colours are saved with each goal, so they are fixed values that read on
+// every theme rather than tokens that change when the theme does.
 const GOAL_COLOR_OPTIONS = [
-  palette.signalMoss,
-  palette.signalViolet,
-  palette.signalCyan,
-  palette.signalAmber,
-  palette.income,
-  palette.expense,
+  "#7E9E78",
+  "#8E82C9",
+  "#63A6B3",
+  "#D99A61",
+  "#78B68C",
+  "#C77B70",
 ] as const;
 
 const QUICK_CONTRIBUTIONS = [25, 50, 100, 250, 500] as const;
@@ -181,6 +183,8 @@ function GoalLedgerRow({
   onEdit: () => void;
   onToggleStatus: () => void;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const progress = getGoalProgress(goal);
   const remaining = Math.max(goal.target_amount - goal.saved_amount, 0);
   const isComplete = goal.status === "completed";
@@ -274,7 +278,7 @@ function GoalLedgerRow({
               styles.goalPrimaryAction,
               { opacity: pressed ? 0.62 : 1 },
             ]}>
-            <MaterialCommunityIcons color={palette.black} name="plus" size={15} />
+            <MaterialCommunityIcons color={palette.onPrimary} name="plus" size={15} />
             <Text style={styles.goalPrimaryActionText}>Add funds</Text>
           </Pressable>
         ) : null}
@@ -319,6 +323,8 @@ function GoalLedgerRow({
 }
 
 export function GoalsScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { user } = useAuth();
   const currency = useAppStore((state) => state.currency);
   const { workspace } = useWorkspace();
@@ -663,7 +669,7 @@ export function GoalsScreen() {
               styles.addButton,
               { opacity: pressed ? 0.62 : 1 },
             ]}>
-            <MaterialCommunityIcons color={palette.black} name="plus" size={20} />
+            <MaterialCommunityIcons color={palette.onPrimary} name="plus" size={20} />
           </Pressable>
         </View>
 
@@ -889,7 +895,7 @@ export function GoalsScreen() {
                     selected ? styles.iconOptionSelected : null,
                   ]}>
                   <MaterialCommunityIcons
-                    color={selected ? palette.black : palette.textMuted}
+                    color={selected ? palette.onPrimary : palette.textMuted}
                     name={iconName as never}
                     size={19}
                   />
@@ -1042,7 +1048,8 @@ export function GoalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   content: {
     alignSelf: "center",
     maxWidth: 720,
@@ -1076,13 +1083,13 @@ const styles = StyleSheet.create({
   reserveLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   reserveAmount: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 42,
+    fontSize: fs(42),
     letterSpacing: -1,
     marginTop: 9,
   },
@@ -1095,7 +1102,7 @@ const styles = StyleSheet.create({
   reserveMetaText: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
   },
   reserveMetaRule: { backgroundColor: palette.lineStrong, height: 1, width: 18 },
   filterWrap: { marginTop: 12 },
@@ -1108,14 +1115,14 @@ const styles = StyleSheet.create({
   listHeaderText: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.9,
   },
   listHeaderRule: { backgroundColor: palette.line, flex: 1, height: 1 },
   listHeaderCount: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   goalLedger: { borderTopColor: palette.line, borderTopWidth: 1 },
   goalRow: {
@@ -1142,29 +1149,29 @@ const styles = StyleSheet.create({
   goalTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: fs(20),
   },
   goalStatus: {
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.55,
   },
   goalDateGroup: { alignItems: "flex-end", gap: 5 },
   goalDateLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
   },
   goalDate: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   goalNotes: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: fs(11),
+    lineHeight: lh(11, 17),
     marginTop: 14,
     maxWidth: 420,
   },
@@ -1177,14 +1184,14 @@ const styles = StyleSheet.create({
   amountLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.55,
     marginBottom: 5,
   },
   amountValue: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 11,
+    fontSize: fs(11),
   },
   progressTrack: {
     backgroundColor: palette.line,
@@ -1201,12 +1208,12 @@ const styles = StyleSheet.create({
   progressPercent: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   progressRemaining: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   goalActions: {
     alignItems: "center",
@@ -1224,16 +1231,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   goalPrimaryActionText: {
-    color: palette.black,
+    color: palette.onPrimary,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: "700",
   },
   goalTextAction: { minHeight: 38, justifyContent: "center" },
   goalTextActionLabel: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: "700",
   },
   goalDeleteAction: { marginLeft: "auto", padding: 8 },
@@ -1261,12 +1268,12 @@ const styles = StyleSheet.create({
   formPreviewTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 19,
+    fontSize: fs(19),
   },
   formPreviewMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.4,
   },
   amountFields: { flexDirection: "row", gap: 16 },
@@ -1282,19 +1289,19 @@ const styles = StyleSheet.create({
   controlLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.75,
   },
   controlValue: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
   },
   controlTextButton: { padding: 10 },
   controlTextButtonLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 10,
+    fontSize: fs(10),
     fontWeight: "700",
   },
   controlIconButton: {
@@ -1336,8 +1343,8 @@ const styles = StyleSheet.create({
   formError: {
     color: palette.expense,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(11),
+    lineHeight: lh(11, 16),
   },
   contributionSummary: {
     alignItems: "stretch",
@@ -1351,12 +1358,12 @@ const styles = StyleSheet.create({
   contributionTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 21,
+    fontSize: fs(21),
   },
   contributionMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   quickAmounts: { gap: 8 },
   quickAmount: {
@@ -1370,7 +1377,7 @@ const styles = StyleSheet.create({
   quickAmountText: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   calendarScrim: {
     alignItems: "center",

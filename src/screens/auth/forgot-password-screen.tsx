@@ -1,11 +1,11 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
 import { UI_PREVIEW_ENABLED } from "@/config/runtime";
 import { ROUTES } from "@/navigation/route-names";
 import { supabaseResetPassword } from "@/services/supabase/auth-service";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { isValidEmail } from "@/utils/validators";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
@@ -14,6 +14,8 @@ import { useState } from "react";
 import { Keyboard, StyleSheet, Text, View } from "react-native";
 
 export function ForgotPasswordScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -52,10 +54,10 @@ export function ForgotPasswordScreen() {
 
   return (
     <AuthShell
-      description="Request a time-limited recovery link. The response stays the same whether or not an account exists."
-      eyebrow="IDENTITY / RECOVERY"
+      description="Enter your email and we will send you a link to choose a new password."
+      eyebrow="RESET PASSWORD"
       onBack={() => router.back()}
-      title="Recover access.">
+      title="Forgot password?">
       {isSuccess ? (
         <>
           <View style={styles.successPanel}>
@@ -67,8 +69,8 @@ export function ForgotPasswordScreen() {
             />
             <Text style={styles.successTitle}>Check your inbox</Text>
             <Text style={styles.successCopy}>
-              If an account exists for {email.trim()}, recovery instructions are
-              on the way. The link may expire, so open it on this device.
+              If an account exists for {email.trim()}, a reset link is on its
+              way. It expires after a while, so open it on this device soon.
             </Text>
           </View>
           <ActionButton
@@ -95,13 +97,13 @@ export function ForgotPasswordScreen() {
             value={email}
           />
           <ActionButton
-            label="Send recovery link"
+            label="Send reset link"
             loading={isSubmitting}
             onPress={() => void submit()}
           />
           <Text style={styles.boundaryCopy}>
-            Finance Tracker never reveals whether an address is registered from
-            this screen.
+            For your privacy, this screen looks the same whether or not the
+            address has an account.
           </Text>
         </>
       )}
@@ -109,9 +111,10 @@ export function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   successPanel: {
-    backgroundColor: withAlpha(palette.white, 0.025),
+    backgroundColor: withAlpha(palette.tint, 0.025),
     borderColor: palette.line,
     borderRadius: 18,
     borderWidth: 1,
@@ -130,19 +133,19 @@ const styles = StyleSheet.create({
   successTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 22,
+    fontSize: fs(22),
   },
   successCopy: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 18,
+    fontSize: fs(14),
+    lineHeight: lh(14, 21),
   },
   boundaryCopy: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 15,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
     textAlign: "center",
   },
 });

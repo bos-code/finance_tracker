@@ -1,6 +1,10 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+import { THEMES } from "@/theme/themes";
+import { useAppearanceStore } from "@/store/use-appearance-store";
 import { AppLockSettingsPanel } from "@/components/auth/app-lock-settings-panel";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
+import { AppearancePanel } from "@/components/finance/appearance-panel";
 import { FinanceSheet } from "@/components/finance/finance-sheet";
 import { PageHeading } from "@/components/finance/page-heading";
 import { Screen } from "@/components/ui/screen";
@@ -12,8 +16,6 @@ import { useTelegramConnection } from "@/hooks/use-telegram-connection";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { ROUTES } from "@/navigation/route-names";
 import { CURRENCY_OPTIONS, useAppStore } from "@/store/use-app-store";
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
@@ -36,6 +38,7 @@ type ProfileSheet =
   | "name"
   | "currency"
   | "notifications"
+  | "appearance"
   | "security"
   | "connections"
   | "privacy"
@@ -63,6 +66,7 @@ function SettingsSection({
   children: ReactNode;
   label: string;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.settingsSection}>
       <View style={styles.sectionHeading}>
@@ -79,7 +83,7 @@ function SettingRow({
   icon,
   label,
   onPress,
-  signal = palette.textQuiet,
+  signal,
   tone = "default",
   value,
 }: {
@@ -91,6 +95,8 @@ function SettingRow({
   tone?: "default" | "danger";
   value?: string;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <Pressable
       accessibilityRole={onPress ? "button" : undefined}
@@ -100,7 +106,12 @@ function SettingRow({
         styles.settingRow,
         { opacity: pressed ? 0.58 : 1 },
       ]}>
-      <View style={[styles.settingSignal, { backgroundColor: signal }]} />
+      <View
+        style={[
+          styles.settingSignal,
+          { backgroundColor: signal ?? palette.textQuiet },
+        ]}
+      />
       <View style={styles.settingIcon}>
         <MaterialCommunityIcons
           color={tone === "danger" ? palette.expense : palette.textMuted}
@@ -141,6 +152,8 @@ function NotificationRow({
   onChange: (value: boolean) => void;
   value: boolean;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.toggleRow}>
       <View
@@ -181,6 +194,7 @@ function ReadinessRow({
   status: string;
   statusColor: string;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.readinessRow}>
       <View style={[styles.readinessSignal, { backgroundColor: statusColor }]} />
@@ -195,7 +209,9 @@ function ReadinessRow({
   );
 }
 
-export function ProfileScreen() {
+export function ProfileScreen({ topSlot }: { topSlot?: ReactNode }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { signOut, updateName, user } = useAuth();
   const currency = useAppStore((state) => state.currency);
   const {
@@ -215,6 +231,7 @@ export function ProfileScreen() {
   const { connection: telegramStatus } = useTelegramConnection();
   const telegramLinked = Boolean(telegramStatus.data);
 
+  const themeId = useAppearanceStore((state) => state.themeId);
   const [activeSheet, setActiveSheet] = useState<ProfileSheet>("none");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState(user?.fullName ?? "");
@@ -342,6 +359,8 @@ export function ProfileScreen() {
           title="Profile"
         />
 
+        {topSlot}
+
         <View style={styles.identityPanel}>
           <View style={styles.identityThread} />
           <Pressable
@@ -433,11 +452,12 @@ export function ProfileScreen() {
             value={`${enabledNotifications}/4`}
           />
           <SettingRow
-            description="The black, white, and graphite system is binding."
+            description="Theme, text size, font, and background effects."
             icon="palette-outline"
             label="Appearance"
+            onPress={() => openSheet("appearance")}
             signal={palette.signalViolet}
-            value="Obsidian"
+            value={THEMES[themeId].label}
           />
         </SettingsSection>
 
@@ -533,6 +553,14 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
+        description="Pick how the app looks. Changes apply immediately and are remembered on this device."
+        onClose={closeSheet}
+        title="Appearance"
+        visible={activeSheet === "appearance"}>
+        {activeSheet === "appearance" ? <AppearancePanel /> : null}
+      </FinanceSheet>
+
+      <FinanceSheet
         description="Changing the base affects new entries and display formatting. Historical records keep their original currency and amount."
         onClose={closeSheet}
         title="Currency"
@@ -560,7 +588,7 @@ export function ProfileScreen() {
                 {selected ? (
                   <View style={styles.currencySelected}>
                     <MaterialCommunityIcons
-                      color={palette.black}
+                      color={palette.onPrimary}
                       name="check"
                       size={14}
                     />
@@ -573,7 +601,7 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
-        description="These controls are a frontend preview until notification preferences are persisted by Backend Stage 9."
+        description="These switches are a preview. They are not saved yet, so they reset when you close the app."
         onClose={closeSheet}
         title="Notifications"
         visible={activeSheet === "notifications"}>
@@ -626,7 +654,7 @@ export function ProfileScreen() {
       </FinanceSheet>
 
       <FinanceSheet
-        description="Current guarantees and the controls still waiting on backend contracts."
+        description="What protects your data today, and what is still to come."
         onClose={closeSheet}
         title="Data controls"
         visible={activeSheet === "privacy"}>
@@ -637,21 +665,21 @@ export function ProfileScreen() {
           statusColor={palette.income}
         />
         <ReadinessRow
-          description="Images and PDFs will use private buckets and signed URLs."
+          description="Receipts are stored in a private bucket and opened through short-lived signed links."
           label="Private receipts"
-          status="Stage 4"
-          statusColor={palette.signalViolet}
+          status="Active"
+          statusColor={palette.income}
         />
         <ReadinessRow
-          description="Parser, OCR, and AI fields will require explicit confirmation."
+          description="Parsed and AI-suggested fields are saved as drafts that need your confirmation."
           label="Review before apply"
-          status="Stages 5–9"
-          statusColor={palette.signalAmber}
+          status="Active"
+          statusColor={palette.income}
         />
         <ReadinessRow
-          description="Portable export, retention, and account deletion require final security contracts."
+          description="Portable export, retention, and account deletion are not available yet."
           label="Export and deletion"
-          status="Stage 10"
+          status="Planned"
           statusColor={palette.textQuiet}
         />
       </FinanceSheet>
@@ -670,7 +698,8 @@ export function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   content: {
     alignSelf: "center",
     maxWidth: 720,
@@ -709,7 +738,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
   },
   avatarBadge: {
     alignItems: "center",
@@ -729,13 +758,13 @@ const styles = StyleSheet.create({
   displayName: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
   },
-  email: { color: palette.textMuted, fontFamily: fonts.body, fontSize: 11 },
+  email: { color: palette.textMuted, fontFamily: fonts.body, fontSize: fs(11) },
   avatarNote: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.45,
   },
   workspacePanel: {
@@ -751,25 +780,25 @@ const styles = StyleSheet.create({
   workspaceEyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.7,
   },
   workspaceStatus: {
     color: palette.income,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
   },
   workspaceTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 26,
+    fontSize: fs(26),
     marginTop: 12,
   },
   workspaceDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: fs(11),
+    lineHeight: lh(11, 17),
     marginTop: 8,
     maxWidth: 460,
   },
@@ -782,7 +811,7 @@ const styles = StyleSheet.create({
   workspaceMetaText: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.4,
   },
   workspaceMetaRule: { backgroundColor: palette.lineStrong, height: 1, width: 18 },
@@ -796,7 +825,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   sectionRule: { backgroundColor: palette.line, flex: 1, height: 1 },
@@ -824,20 +853,20 @@ const styles = StyleSheet.create({
   settingLabel: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "600",
   },
   settingLabelDanger: { color: palette.expense },
   settingDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
   },
   settingValue: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     marginRight: 6,
     maxWidth: 92,
     textAlign: "right",
@@ -847,7 +876,7 @@ const styles = StyleSheet.create({
   footerText: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.45,
   },
   currencyList: { borderTopColor: palette.line, borderTopWidth: 1 },
@@ -871,15 +900,15 @@ const styles = StyleSheet.create({
   currencySymbolText: {
     color: palette.textMuted,
     fontFamily: fonts.display,
-    fontSize: 16,
+    fontSize: fs(16),
   },
   currencyCopy: { flex: 1, gap: 4 },
   currencyCode: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
-  currencyName: { color: palette.textQuiet, fontFamily: fonts.body, fontSize: 9 },
+  currencyName: { color: palette.textQuiet, fontFamily: fonts.body, fontSize: fs(9) },
   currencySelected: {
     alignItems: "center",
     backgroundColor: palette.text,
@@ -900,14 +929,14 @@ const styles = StyleSheet.create({
   toggleLabel: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   toggleDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
   },
   readinessRow: {
     alignItems: "stretch",
@@ -922,19 +951,19 @@ const styles = StyleSheet.create({
   readinessLabel: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   readinessDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
   },
   readinessStatus: {
     alignSelf: "center",
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     maxWidth: 94,
     textAlign: "right",
   },

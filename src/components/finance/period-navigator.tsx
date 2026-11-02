@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -12,6 +12,8 @@ export function PeriodNavigator({
   onNext: () => void;
   onPrevious: () => void;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.container}>
       <Pressable
@@ -52,7 +54,8 @@ export function PeriodNavigator({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   container: {
     alignItems: "center",
     borderBottomColor: palette.line,
@@ -74,12 +77,12 @@ const styles = StyleSheet.create({
   overline: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 1.2,
   },
   label: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 18,
+    fontSize: fs(18),
   },
 });

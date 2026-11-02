@@ -1,8 +1,9 @@
+import { useTheme } from "@/theme/theme-context";
 import { FloatingTabBar } from "@/components/navigation/floating-tab-bar";
-import { palette } from "@/theme/colors";
 import { Tabs } from "expo-router";
 
 export function BottomTabs() {
+  const { palette } = useTheme();
   return (
     <Tabs
       screenOptions={{

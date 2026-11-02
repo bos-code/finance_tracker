@@ -1,3 +1,4 @@
+import { useTheme } from "@/theme/theme-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -10,9 +11,9 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useOffline } from "@/context/offline-context";
-import { palette } from "@/theme/colors";
 
 export function OfflineBanner() {
+  const { fs, palette } = useTheme();
   const {
     conflictCount,
     failedCount,
@@ -138,7 +139,7 @@ export function OfflineBanner() {
         size={18}
       />
       <Text
-        style={{ color: palette.text, flex: 1, fontSize: 13, fontWeight: "700" }}>
+        style={{ color: palette.text, flex: 1, fontSize: fs(13), fontWeight: "700" }}>
         {state.message}
       </Text>
       {state.action && state.actionLabel ? (
@@ -154,7 +155,7 @@ export function OfflineBanner() {
             paddingVertical: 6,
           })}>
           <Text
-            style={{ color: palette.text, fontSize: 10, fontWeight: "800" }}>
+            style={{ color: palette.text, fontSize: fs(10), fontWeight: "800" }}>
             {state.actionLabel.toUpperCase()}
           </Text>
         </Pressable>

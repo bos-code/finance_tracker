@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ActionButton } from "@/components/finance/action-button";
 import { FinanceField } from "@/components/finance/finance-field";
 import { FinanceSheet } from "@/components/finance/finance-sheet";
@@ -11,8 +12,7 @@ import { useFinalizeTransactionDraft } from "@/hooks/use-finalize-transaction-dr
 import { useTransactionDrafts } from "@/hooks/use-transaction-drafts";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { backendErrorMessage } from "@/services/backend/errors";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -45,6 +45,8 @@ function DraftReadyCard({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const currency = draftCurrency(draft);
   const crossCurrency = currency !== baseCurrency;
 
@@ -115,6 +117,8 @@ function DraftReadyCard({
 }
 
 export function DraftFinalizationScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { user } = useAuth();
   const { activeAccount, workspace } = useWorkspace();
   const { isOnline } = useOffline();
@@ -233,7 +237,7 @@ export function DraftFinalizationScreen() {
 
         <PageHeading
           description="Only reviewed drafts appear here. Finalization creates the permanent ledger record and links the draft to it using an idempotent write."
-          eyebrow="CONFIRM / STAGE 5"
+          eyebrow="CONFIRM / DRAFTS"
           title="Save ready drafts"
         />
 
@@ -353,7 +357,8 @@ export function DraftFinalizationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   content: {
     gap: 24,
     paddingBottom: 48,
@@ -374,7 +379,7 @@ const styles = StyleSheet.create({
   backLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.8,
   },
   connectionPanel: {
@@ -397,14 +402,14 @@ const styles = StyleSheet.create({
   connectionTitle: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "700",
   },
   connectionDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: fs(10),
+    lineHeight: lh(10, 15),
   },
   listHeading: {
     alignItems: "center",
@@ -414,7 +419,7 @@ const styles = StyleSheet.create({
   listTitle: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.9,
   },
   countBadge: {
@@ -431,7 +436,7 @@ const styles = StyleSheet.create({
   countText: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   list: { gap: 12 },
   card: {
@@ -458,13 +463,13 @@ const styles = StyleSheet.create({
   readyLabel: {
     color: palette.income,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.75,
   },
   sourceLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.6,
   },
   amountRow: {
@@ -476,18 +481,18 @@ const styles = StyleSheet.create({
   amount: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 25,
+    fontSize: fs(25),
   },
   type: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
   },
   originalText: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   detailGrid: { flexDirection: "row", gap: 10 },
   detailItem: {
@@ -502,13 +507,13 @@ const styles = StyleSheet.create({
   detailLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.7,
   },
   detailValue: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
   },
   cardFooter: {
     alignItems: "center",
@@ -521,7 +526,7 @@ const styles = StyleSheet.create({
   currencyStatus: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.6,
   },
   currencyStatusManual: { color: palette.signalAmber },
@@ -536,13 +541,13 @@ const styles = StyleSheet.create({
   stateTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: fs(20),
   },
   stateCopy: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   rateSummary: {
     backgroundColor: palette.surfaceRaised,
@@ -555,18 +560,18 @@ const styles = StyleSheet.create({
   rateAmount: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 22,
+    fontSize: fs(22),
   },
   rateDirection: {
     color: palette.signalAmber,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.7,
   },
   rateNotice: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: fs(11),
+    lineHeight: lh(11, 17),
   },
 });

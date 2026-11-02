@@ -377,6 +377,7 @@ test("a broken quota store never throws into the bot", async () => {
 
 const CONNECTION = {
   aiAssistEnabled: true,
+  defaultAccountId: "account-1",
   defaultCurrency: "NGN",
   id: "conn-1",
   ownerUserId: "user-1",
@@ -393,6 +394,8 @@ function botHarness({ assistant, connection = CONNECTION } = {}) {
     deps: {
       assistant,
       now: () => NOW,
+      answerCallback: async () => {},
+      editMessage: async () => {},
       sendMessage: async (chatId, text) => sent.push({ chatId, text }),
       store: {
         claimEvent: async () => "new",
@@ -403,7 +406,7 @@ function botHarness({ assistant, connection = CONNECTION } = {}) {
         findConnection: async () => state.connection,
         insertDraft: async (draft) => {
           drafts.push(draft);
-          return { duplicate: false };
+          return { draftId: "11111111-2222-4333-8444-555555555555", duplicate: false };
         },
         setAiAssist: async (userId, enabled) => {
           aiSwitch.push({ enabled, userId });
@@ -477,7 +480,10 @@ test("the AI fills only what the rules missed, and the reply says so", async () 
   const [draft] = h.drafts;
   assert.equal(draft.extracted_fields.category_key.value, "food");
   assert.equal(draft.lifecycle, "needs_review");
-  assert.match(h.sent[0].text, /The AI assistant suggested: category_key/);
+  assert.match(
+    h.sent[0].text,
+    /Please double-check: category \(suggested by the AI assistant\)/,
+  );
 });
 
 test("a complete message never calls the AI", async () => {

@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles } from "@/theme/theme-context";
+
 import { StyleSheet, Text, View } from "react-native";
 
 export function PageHeading({
@@ -11,6 +11,7 @@ export function PageHeading({
   eyebrow: string;
   title: string;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.container}>
       <View style={styles.eyebrowRow}>
@@ -23,7 +24,8 @@ export function PageHeading({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   container: { gap: 8, paddingBottom: 24, paddingTop: 12 },
   eyebrowRow: { alignItems: "center", flexDirection: "row", gap: 9 },
   signal: {
@@ -34,20 +36,20 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 1.2,
   },
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 38,
+    fontSize: fs(38),
     letterSpacing: -0.8,
   },
   description: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: fs(13),
+    lineHeight: lh(13, 19),
     maxWidth: 330,
   },
 });

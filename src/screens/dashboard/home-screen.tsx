@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { CategoryEditor } from "@/components/ui/category-editor";
 import { CustomCalendar } from "@/components/ui/custom-calendar";
 import { SaveFeedback } from "@/components/ui/save-feedback";
@@ -30,8 +31,7 @@ import {
   transactionsForBaseCurrency,
 } from "@/services/supabase/transaction-service";
 import { useAppStore } from "@/store/use-app-store";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { toLocalDateString } from "@/utils/date";
 import { displayCurrencyForCode, formatMoney } from "@/utils/money";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -80,6 +80,7 @@ function SectionHeading({
   label: string;
   onAction?: () => void;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.sectionHeading}>
       <View style={styles.sectionTitleRow}>
@@ -108,6 +109,8 @@ function Metric({
   label: string;
   tone: "income" | "expense";
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.metric}>
       <View
@@ -120,12 +123,20 @@ function Metric({
         ]}
       />
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{amount}</Text>
+      <Text
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        numberOfLines={1}
+        style={styles.metricValue}>
+        {amount}
+      </Text>
     </View>
   );
 }
 
 export function HomeScreen() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const { user } = useAuth();
   const currency = useAppStore((state) => state.currency);
   const { activeAccount, errorCode: workspaceError, workspace } = useWorkspace();
@@ -1017,7 +1028,8 @@ export function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   fill: { flex: 1 },
   scrollContent: {
     paddingBottom: 150,
@@ -1044,13 +1056,13 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 1.2,
   },
   greeting: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 18,
+    fontSize: fs(18),
   },
   networkStatus: {
     alignItems: "center",
@@ -1066,7 +1078,7 @@ const styles = StyleSheet.create({
   networkText: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 0.8,
   },
   hero: {
@@ -1096,26 +1108,26 @@ const styles = StyleSheet.create({
   heroLabel: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 10,
+    fontSize: fs(10),
     letterSpacing: 1.15,
   },
   heroCode: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 10,
+    fontSize: fs(10),
     letterSpacing: 1.15,
   },
   balance: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 44,
+    fontSize: fs(44),
     letterSpacing: -1.6,
     marginTop: 30,
   },
   balanceCaption: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     marginTop: 7,
   },
   metricsRow: {
@@ -1134,13 +1146,14 @@ const styles = StyleSheet.create({
   metricLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 1,
   },
   metricValue: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 13,
+    // Capped so a full amount stays on one line in a half-width column.
+    fontSize: Math.min(fs(13), 17),
   },
   metricDivider: {
     backgroundColor: palette.line,
@@ -1156,7 +1169,7 @@ const styles = StyleSheet.create({
   syncText: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
   },
   syncRule: { backgroundColor: palette.line, flex: 1, height: 1 },
   sectionHeading: {
@@ -1176,12 +1189,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: fs(20),
   },
   sectionAction: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   ledger: {
@@ -1217,18 +1230,18 @@ const styles = StyleSheet.create({
   transactionName: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "600",
   },
   transactionMeta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.35,
   },
   transactionAmount: {
     fontFamily: fonts.ledger,
-    fontSize: 11,
+    fontSize: fs(11),
     textAlign: "right",
   },
   stateRow: {
@@ -1243,19 +1256,19 @@ const styles = StyleSheet.create({
   stateText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
   },
   emptyLedger: { backgroundColor: palette.surface, gap: 7, padding: 20 },
   emptyTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 17,
+    fontSize: fs(17),
   },
   emptyBody: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: fs(12),
+    lineHeight: lh(12, 18),
   },
   captureSection: { marginTop: 18 },
   composer: {
@@ -1301,7 +1314,7 @@ const styles = StyleSheet.create({
   typeLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "700",
   },
   typeLabelActive: { color: palette.text },
@@ -1317,13 +1330,13 @@ const styles = StyleSheet.create({
   amountCurrency: {
     color: palette.textMuted,
     fontFamily: fonts.display,
-    fontSize: 24,
+    fontSize: fs(24),
   },
   amountInput: {
     color: palette.text,
     flex: 1,
     fontFamily: fonts.display,
-    fontSize: 39,
+    fontSize: fs(39),
     letterSpacing: -1,
   },
   amountPlaceholder: { color: palette.textQuiet },
@@ -1340,7 +1353,7 @@ const styles = StyleSheet.create({
   detailLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
     letterSpacing: 1,
     width: 76,
   },
@@ -1348,7 +1361,7 @@ const styles = StyleSheet.create({
     color: palette.textMuted,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     textAlign: "right",
   },
   receiptSelection: {
@@ -1375,13 +1388,13 @@ const styles = StyleSheet.create({
     color: palette.textQuiet,
     flex: 1,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.35,
   },
   receiptRemove: {
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.6,
   },
   categoryHeader: {
@@ -1394,7 +1407,7 @@ const styles = StyleSheet.create({
   editLabel: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   categoryList: { gap: 8, paddingBottom: 18, paddingTop: 12 },
@@ -1419,7 +1432,7 @@ const styles = StyleSheet.create({
   categoryLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: fs(11),
     fontWeight: "600",
   },
   categoryLabelActive: { color: palette.text },
@@ -1433,7 +1446,7 @@ const styles = StyleSheet.create({
   receiptProgressText: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.45,
   },
   saveButton: {
@@ -1450,7 +1463,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: palette.canvas,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "800",
   },
   centeredModal: {
@@ -1499,13 +1512,13 @@ const styles = StyleSheet.create({
   sheetEyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 1,
   },
   sheetTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 23,
+    fontSize: fs(23),
     marginTop: 3,
   },
   noteInput: {
@@ -1516,7 +1529,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 14,
+    fontSize: fs(14),
     minHeight: 132,
     padding: 15,
   },
@@ -1530,7 +1543,7 @@ const styles = StyleSheet.create({
   sheetConfirmText: {
     color: palette.canvas,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "800",
   },
 });

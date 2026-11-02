@@ -1,5 +1,5 @@
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+
 import {
   StyleSheet,
   Text,
@@ -22,6 +22,8 @@ export function FinanceField({
   label: string;
   trailing?: ReactNode;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label.toLocaleUpperCase()}</Text>
@@ -46,28 +48,35 @@ export function FinanceField({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   container: { gap: 8 },
   label: {
-    color: palette.textQuiet,
+    color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 8,
-    letterSpacing: 0.75,
+    fontSize: fs(11),
+    letterSpacing: 0.8,
   },
+  // A bordered box, so it is clear where to tap and type.
   inputRow: {
     alignItems: "center",
-    borderBottomColor: palette.lineStrong,
-    borderBottomWidth: 1,
+    backgroundColor: palette.surface,
+    borderColor: palette.lineStrong,
+    borderRadius: 12,
+    borderWidth: 1,
     flexDirection: "row",
-    minHeight: 50,
+    minHeight: 52,
+    paddingHorizontal: 14,
   },
-  inputRowError: { borderBottomColor: palette.expense },
+  inputRowError: { borderColor: palette.expense },
   input: {
     color: palette.text,
     flex: 1,
     fontFamily: fonts.body,
-    fontSize: 14,
-    minHeight: 49,
+    fontSize: fs(16),
+    // Lets the field shrink on narrow screens so the trailing icon keeps its gap.
+    minWidth: 0,
+    minHeight: 50,
     paddingHorizontal: 0,
     paddingVertical: 12,
   },
@@ -77,7 +86,7 @@ const styles = StyleSheet.create({
   error: {
     color: palette.expense,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: fs(13),
+    lineHeight: lh(13, 18),
   },
 });

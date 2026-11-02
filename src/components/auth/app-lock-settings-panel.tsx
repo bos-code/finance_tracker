@@ -1,8 +1,8 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ActionButton } from "@/components/finance/action-button";
 import { UnifiedNumpad } from "@/components/ui/unified-numpad";
 import { useAppLock } from "@/context/app-lock-context";
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
@@ -21,6 +21,8 @@ function SecurityRow({
   status: string;
   title: string;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <View style={styles.securityRow}>
       <View style={[styles.securitySignal, { backgroundColor: signal }]} />
@@ -53,6 +55,7 @@ function PinStage({
   label: string;
   value: string;
 }) {
+  const styles = useStyles(createStyles);
   return (
     <View
       style={[
@@ -86,6 +89,8 @@ export function AppLockSettingsPanel({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const {
     biometricLabel,
     disableLock,
@@ -401,10 +406,11 @@ export function AppLockSettingsPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   container: { gap: 16 },
   hero: {
-    backgroundColor: withAlpha(palette.white, 0.025),
+    backgroundColor: withAlpha(palette.tint, 0.025),
     borderColor: palette.line,
     borderRadius: 18,
     borderWidth: 1,
@@ -423,13 +429,13 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 21,
+    fontSize: fs(21),
   },
   heroCopy: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 16,
+    fontSize: fs(10),
+    lineHeight: lh(10, 16),
   },
   securityRow: {
     alignItems: "stretch",
@@ -454,19 +460,19 @@ const styles = StyleSheet.create({
   securityTitle: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   securityDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
   },
   securityStatus: {
     alignSelf: "center",
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
   },
   biometricToggle: {
     alignItems: "center",
@@ -479,25 +485,25 @@ const styles = StyleSheet.create({
   biometricToggleLabel: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   biometricToggleDescription: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   pinComposerHeading: { gap: 6, marginTop: 4 },
   composerEyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.65,
   },
   composerTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 21,
+    fontSize: fs(21),
   },
   pinStages: { flexDirection: "row", gap: 10 },
   pinStage: {
@@ -509,17 +515,17 @@ const styles = StyleSheet.create({
     padding: 13,
   },
   pinStageActive: { borderColor: palette.lineStrong },
-  pinStageComplete: { backgroundColor: withAlpha(palette.white, 0.025) },
+  pinStageComplete: { backgroundColor: withAlpha(palette.tint, 0.025) },
   pinStageTopline: { flexDirection: "row", justifyContent: "space-between" },
   pinStageLabel: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
   },
   pinStageCount: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
   },
   pinDots: { flexDirection: "row", justifyContent: "space-between" },
   pinDot: {
@@ -548,14 +554,14 @@ const styles = StyleSheet.create({
   activeTitle: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   activeCopy: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: fs(9),
+    lineHeight: lh(9, 14),
   },
   errorPanel: {
     borderColor: withAlpha(palette.expense, 0.3),
@@ -575,8 +581,8 @@ const styles = StyleSheet.create({
   errorText: {
     color: palette.expense,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: fs(10),
+    lineHeight: lh(10, 15),
   },
   actions: { gap: 10 },
   unavailable: {
@@ -598,12 +604,12 @@ const styles = StyleSheet.create({
   unavailableTitle: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 20,
+    fontSize: fs(20),
   },
   unavailableCopy: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 10,
-    lineHeight: 16,
+    fontSize: fs(10),
+    lineHeight: lh(10, 16),
   },
 });

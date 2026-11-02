@@ -8,12 +8,18 @@ the app (Profile → Connections → Telegram).
 
 - `/start <code>`, `/link <code>`: link this chat to the account that created the code.
 - `/status`, `/help`, `/disconnect`.
+- `/drafts`: shows up to five waiting drafts, each with its own Save and Discard buttons.
 - `/ask <question>` and plain questions: short help about using Finance Tracker (needs the Gemini assistant, below).
 - `/ai on|off`: per-chat consent switch. **Off by default**: nothing is sent to the AI provider
   until the user sends `/ai on`.
 - Any other private text message is parsed by the same deterministic parser the
-  app uses and saved as a **draft** (`source = telegram`). Drafts appear in the
-  app's Drafts review screen; nothing becomes a transaction without review.
+  app uses and saved as a **draft** (`source = telegram`). The bot replies with every value it
+  read and **Save** / **Discard** buttons. Tapping Save is the review: it creates the
+  transaction and confirms the draft in one database step (`telegram_confirm_draft`), reusing the
+  app's own rules (`src/features/drafts/chat-confirmation.ts`) and the same idempotency key as the
+  in-app flow, so tapping twice, or confirming in the app too, can never save it twice. A draft
+  that is missing a value, or is in a foreign currency with no exchange rate, offers only
+  Discard and points to the app. Uncertain values are listed under "Please double-check".
 - Photos and documents get a polite "coming soon" reply (Backend Stage 8).
 
 ## Gemini assistant (optional)
@@ -30,7 +36,8 @@ What it does, and what it is not allowed to do:
 - Fills in `amount`, `type`, or `category_key` **only** when the built-in parser could not read them.
   Suggestions are checked (the amount must appear in the user's text, the category must be a
   known one) and are stored with a confidence below the review threshold, so an AI-assisted
-  draft always still needs a human check in the app.
+  draft always needs a human check: the chat message names each AI-suggested value under
+  "Please double-check", and nothing is saved until the person taps Save (or reviews it in the app).
 - Answers short "how do I use this?" questions. It is told it cannot see account data and must
   not give financial advice.
 - Only the text the user typed to the bot, plus a fixed list of category names, is sent to Google.
@@ -47,7 +54,8 @@ minute; failed link attempts are limited to 5 per 15 minutes per Telegram user.
 
 ## Deployment requirements
 
-1. Apply migration `20261022000600_telegram_channel_connections.sql`.
+1. Apply migrations `20261022000600_telegram_channel_connections.sql` and
+   `20261101000800_telegram_draft_confirmation.sql` (Save / Discard buttons).
 2. Create a bot with [@BotFather](https://t.me/BotFather) and note its token and username.
 3. Set these Edge Function secrets (never as `EXPO_PUBLIC_*`):
    - `TELEGRAM_BOT_TOKEN` – the BotFather token.
@@ -60,9 +68,12 @@ minute; failed link attempts are limited to 5 per 15 minutes per Telegram user.
    curl -sS "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
      -d "url=https://<project-ref>.supabase.co/functions/v1/telegram-webhook" \
      -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
-     -d 'allowed_updates=["message"]'
+     -d 'allowed_updates=["message","callback_query"]'
    ```
 
+   `callback_query` is what delivers Save / Discard taps. A webhook registered earlier with only
+   `["message"]` is widened automatically the first time the function runs after a deploy
+   (`ensureButtonTapsAllowed` in `index.ts`).
 6. Set `EXPO_PUBLIC_TELEGRAM_BOT_USERNAME` (without `@`) in the app's EAS
    environments so the app can offer an "Open Telegram" button.
 

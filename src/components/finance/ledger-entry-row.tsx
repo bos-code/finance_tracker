@@ -1,7 +1,6 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ALL_CATEGORIES } from "@/constants/categories";
 import type { Transaction } from "@/services/supabase/transaction-service";
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
 import {
   displayCurrencyForCode,
   formatMoney,
@@ -19,6 +18,8 @@ export function LedgerEntryRow({
   onPress?: () => void;
   transaction: Transaction;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const category = ALL_CATEGORIES[transaction.category_id];
   const transactionCurrency = displayCurrencyForCode(
     transaction.currency_code || currency.code,
@@ -82,7 +83,8 @@ export function LedgerEntryRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   container: {
     alignItems: "center",
     borderBottomColor: palette.line,
@@ -106,18 +108,18 @@ const styles = StyleSheet.create({
   name: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "600",
   },
   meta: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
     letterSpacing: 0.35,
   },
   amount: {
     fontFamily: fonts.ledger,
-    fontSize: 11,
+    fontSize: fs(11),
     textAlign: "right",
   },
 });

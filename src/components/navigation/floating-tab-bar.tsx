@@ -1,13 +1,11 @@
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
-  Extrapolation,
-  interpolate,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -50,9 +48,9 @@ const TAB_META: Record<string, TabMeta> = {
   },
 };
 
-const ARC_INPUT = [0, 1, 2, 3, 4];
-const ARC_OUTPUT = [4, -2, -6, -2, 4];
-const ORBIT_SIZE = 48;
+// The circle sits exactly behind the icon and ends above the label, so the
+// active tab's name is never covered.
+const ORBIT_SIZE = 38;
 
 function resolveLabel(routeName: string, title?: string) {
   if (title?.trim()) return title;
@@ -74,6 +72,8 @@ function TabBarItem({
   onLongPress: () => void;
   onPress: () => void;
 }) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   return (
     <Pressable
       accessibilityLabel={label}
@@ -110,6 +110,7 @@ export function FloatingTabBar({
   navigation,
   state,
 }: BottomTabBarProps) {
+  const styles = useStyles(createStyles);
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const [layoutWidth, setLayoutWidth] = useState(0);
@@ -126,25 +127,14 @@ export function FloatingTabBar({
         });
   }, [position, reduceMotion, state.index]);
 
-  const orbitStyle = useAnimatedStyle(() => {
-    const arcY = interpolate(
-      position.value,
-      ARC_INPUT,
-      ARC_OUTPUT,
-      Extrapolation.CLAMP,
-    );
-
-    return {
-      opacity: layoutWidth > 0 ? 1 : 0,
-      transform: [
-        {
-          translateX:
-            position.value * slotWidth + (slotWidth - ORBIT_SIZE) / 2,
-        },
-        { translateY: arcY },
-      ],
-    };
-  });
+  const orbitStyle = useAnimatedStyle(() => ({
+    opacity: layoutWidth > 0 ? 1 : 0,
+    transform: [
+      {
+        translateX: position.value * slotWidth + (slotWidth - ORBIT_SIZE) / 2,
+      },
+    ],
+  }));
 
   return (
     <View
@@ -209,7 +199,8 @@ export function FloatingTabBar({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   wrapper: {
     bottom: 0,
     left: 0,
@@ -218,7 +209,7 @@ const styles = StyleSheet.create({
     right: 0,
   },
   shell: {
-    backgroundColor: withAlpha(palette.navigation, 0.98),
+    backgroundColor: palette.navigation,
     borderColor: palette.line,
     borderCurve: "continuous",
     borderRadius: 24,
@@ -253,15 +244,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     left: 4,
     position: "absolute",
-    top: 7,
+    // Centred on the icon (measured): its bottom edge stops just above the label.
+    top: 13,
     width: ORBIT_SIZE,
   },
   orbitInset: {
     borderColor: withAlpha(palette.canvas, 0.24),
-    borderRadius: 17,
+    borderRadius: 12,
     borderWidth: 1,
-    height: 34,
-    width: 34,
+    height: 24,
+    width: 24,
   },
   tabButton: {
     flex: 1,
@@ -270,7 +262,7 @@ const styles = StyleSheet.create({
   },
   itemInner: {
     alignItems: "center",
-    gap: 11,
+    gap: 9,
     justifyContent: "center",
     minHeight: 68,
     paddingHorizontal: 2,
@@ -278,8 +270,9 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: fonts.body,
-    fontSize: 10,
+    // Capped so all five labels fit one line even at the largest text size.
+    fontSize: Math.min(fs(11), 14),
     fontWeight: "700",
-    letterSpacing: 0.25,
+    letterSpacing: 0.2,
   },
 });

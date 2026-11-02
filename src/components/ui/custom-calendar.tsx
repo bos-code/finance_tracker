@@ -1,5 +1,5 @@
-import { palette, withAlpha } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
+import { withAlpha } from "@/theme/colors";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
@@ -40,6 +40,7 @@ function DayButton({
   isSelected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles(createStyles);
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -88,6 +89,8 @@ export function CustomCalendar({
   onSelectDate,
   onClose,
 }: CustomCalendarProps) {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const [currentMonth, setCurrentMonth] = useState(
     new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
   );
@@ -221,7 +224,8 @@ export function CustomCalendar({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs }: AppTheme) =>
+  StyleSheet.create({
   container: {
     backgroundColor: palette.surface,
     borderColor: palette.lineStrong,
@@ -245,14 +249,14 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     letterSpacing: 0.7,
     marginBottom: 6,
   },
   title: {
     color: palette.text,
     fontFamily: fonts.display,
-    fontSize: 21,
+    fontSize: fs(21),
   },
   navigation: { flexDirection: "row", gap: 8 },
   navigationButton: {
@@ -272,7 +276,7 @@ const styles = StyleSheet.create({
   weekday: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 7,
+    fontSize: fs(7),
     textAlign: "center",
     width: "14.2857%",
   },
@@ -306,11 +310,11 @@ const styles = StyleSheet.create({
   dayText: {
     color: palette.textMuted,
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: fs(12),
     fontWeight: "600",
   },
   dayTextOutside: { color: palette.textQuiet },
-  dayTextSelected: { color: palette.black, fontWeight: "800" },
+  dayTextSelected: { color: palette.onPrimary, fontWeight: "800" },
   legend: {
     alignItems: "center",
     borderTopColor: palette.line,
@@ -328,6 +332,6 @@ const styles = StyleSheet.create({
   legendText: {
     color: withAlpha(palette.text, 0.38),
     fontFamily: fonts.body,
-    fontSize: 8,
+    fontSize: fs(8),
   },
 });

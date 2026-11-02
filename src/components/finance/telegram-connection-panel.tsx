@@ -1,3 +1,4 @@
+import { type AppTheme, useStyles, useTheme } from "@/theme/theme-context";
 import { ActionButton } from "@/components/finance/action-button";
 import { TELEGRAM_BOT_USERNAME, UI_PREVIEW_ENABLED } from "@/config/runtime";
 import {
@@ -8,8 +9,6 @@ import {
 import { useTelegramConnection } from "@/hooks/use-telegram-connection";
 import { backendErrorMessage } from "@/services/backend/errors";
 import type { TelegramLinkCode } from "@/services/supabase/channel-service";
-import { palette } from "@/theme/colors";
-import { fonts } from "@/theme/typography";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import {
@@ -32,6 +31,8 @@ function formatLinkedDate(iso: string) {
 }
 
 export function TelegramConnectionPanel() {
+  const { palette } = useTheme();
+  const styles = useStyles(createStyles);
   const [linkCode, setLinkCode] = useState<TelegramLinkCode | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -238,19 +239,20 @@ export function TelegramConnectionPanel() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = ({ palette, fonts, fs, lh }: AppTheme) =>
+  StyleSheet.create({
   block: { gap: 14, paddingVertical: 6 },
   body: {
     color: palette.textQuiet,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: fs(11),
+    lineHeight: lh(11, 17),
   },
   centered: { alignItems: "center", paddingVertical: 28 },
   code: {
     color: palette.text,
     fontFamily: fonts.ledger,
-    fontSize: 30,
+    fontSize: fs(30),
     letterSpacing: 4,
   },
   codeBox: {
@@ -262,20 +264,20 @@ const styles = StyleSheet.create({
   codeCaption: {
     color: palette.textQuiet,
     fontFamily: fonts.ledger,
-    fontSize: 8,
+    fontSize: fs(8),
   },
   command: {
     backgroundColor: palette.surface,
     color: palette.textMuted,
     fontFamily: fonts.ledger,
-    fontSize: 12,
+    fontSize: fs(12),
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   countdown: {
     color: palette.signalAmber,
     fontFamily: fonts.ledger,
-    fontSize: 9,
+    fontSize: fs(9),
   },
   signal: { marginRight: 13, width: 1 },
   statusCopy: { flex: 1, gap: 5 },
@@ -283,13 +285,13 @@ const styles = StyleSheet.create({
   title: {
     color: palette.text,
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: fs(13),
     fontWeight: "600",
   },
   warning: {
     color: palette.warning,
     fontFamily: fonts.body,
-    fontSize: 11,
-    lineHeight: 17,
+    fontSize: fs(11),
+    lineHeight: lh(11, 17),
   },
 });
